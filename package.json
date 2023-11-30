@@ -1,0 +1,37 @@
+{
+  "name": "paradoxscript-tools",
+  "displayName": "Victorian ParadoxScript Tools",
+  "description": "Simple and lightweight extension that provides syntax highlighting features and code snippets for Victoria 2's code.",
+  "version": "1.0.0",
+	"icon": "images/Icon.png",
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Snippets",
+    "Themes"
+  ],
+  "contributes": {
+    "languages": [{
+      "id": "paradox",
+      "aliases": ["Paradox", "paradox"],
+      "extensions": [".txt", ".mod"],
+      "configuration": "./language-configuration.json"
+    }],
+    "grammars": [{
+      "language": "paradox",
+      "scopeName": "source.mod",
+      "path": "./syntaxes/paradox.tmLanguage.json"
+    }],
+    "snippets": [{
+      "language": "paradox",
+      "path": "./themes/paradox.snippets.json"
+  }],
+    "themes": [{
+        "label": "Victorian Dark+",
+        "uiTheme": "vs-dark",
+        "path": "./themes/victorian-dark+.tmtheme"
+    }]
+  }
+}

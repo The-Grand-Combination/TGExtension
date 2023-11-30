@@ -1,0 +1,610 @@
+{
+
+	"If emulation": {
+		"prefix": "if",
+		"body": [
+			"random_owned = {",
+			"	limit = {",
+			"		owner = {",
+			"			$1",
+			"		}",
+			"	}",
+			"	owner = {",
+			"		$2",
+			"	}"
+			"}"
+		],
+		"description": "Emulate the IF conditional by using the random_owned and owner scopes."
+	},
+
+	"Define General": {
+		"prefix": "define_general",
+		"body": [
+			"define_general = {",
+			"	name = \"$1\"",
+			"	personality = $2",
+			"	background = $3",
+			"}"
+		],
+		"description": "Effect that creates a general with the specified name, personality and background."
+	},
+
+	"Add Country Modifier": {
+		"prefix": "add_country_modifier",
+		"body": [
+			"add_country_modifier = { name = $1 duration = $2 }"
+		],
+		"description": "Creates a country-scope modifier."
+	},
+
+	"Add Province Modifier": {
+		"prefix": "add_province_modifier",
+		"body": [
+			"add_province_modifier = { name = $1 duration = $2 }"
+		],
+		"description": "Creates a province-scope modifier."
+	},
+
+	"Create Unit": {
+		"prefix": "sub_unit",
+		"body": [
+			"sub_unit = { type = $1 value = current }"
+		],
+		"description": "Spawns a unit. (Warning: may be slightly unstable.)"
+	},
+
+	"Upper House Composition": {
+		"prefix": "upper_house",
+		"body": [
+			"upper_house = { ideology = $1 value = $2 }"
+		],
+		"description": "Changes or checks the Upper House's compsition. In effects, the amount gained (U) is calculated by the following formula: U=1-1/(1+N) The other values will be multiplied by 1-U."
+	},
+
+	"Change Issue Value": {
+		"prefix": "dominant_issue",
+		"body": [
+			"dominant_issue = { factor = $1 value = $2 }"
+		],
+		"description": "Changes the dominant issue of a portion of the targeted pop to the given issue. Works the same way as Upper House."
+	},
+
+	"Issue Shift": {
+		"prefix": "move_issue_percentage",
+		"body": [
+			"move_issue_percentage = {",
+			"	from = $1",
+			"	to = $2",
+			"	value = $3",
+			"}"
+		],
+		"description": "Makes a certain percentage of people supporting issue A, switch to issue B. Usually used in CBs."
+	},
+
+	"Scaled Consciousness": {
+		"prefix": "scaled_consciousness",
+		"body": [
+			"scaled_consciousness = { factor = $1 ${ideology_issue} = $2 }"
+		],
+		"description": "Changes the consciousness of the targeted pops by the given value multiplied by the proportion of the pop that is of the given ideology or issue."
+	},
+
+	"Scaled Militancy": {
+		"prefix": "scaled_militancy",
+		"body": [
+			"scaled_militancy = { factor = $1 ${ideology_issue} = $2 }"
+		],
+		"description": "Changes the militancy of the targeted pops by the given value multiplied by the proportion of the pop that is of the given ideology or issue."
+	},
+
+	"Change Ideology Value": {
+		"prefix": "ideology",
+		"body": [
+			"ideology = { factor = $1 value = $2 }"
+		],
+		"description": "Change the proportion of the targeted pop that follows the specified ideology. Works the same way as Upper House."
+	},
+
+	"Add Casus Belli": {
+		"prefix": "add_casus_belli",
+		"body": [
+			"add_casus_belli = {",
+			"	target = $1",
+			"	type = $2",
+			"	months = $3",
+			"	state_province_id = $4",
+			"}"
+		],
+		"description": "NOT TO BE CONFUSED WITH casus_belli. Gives the target a casus belli against the country in scope for n months. state_province_id may only be used for state-specific CBs."
+	},
+
+	"Casus Belli": {
+		"prefix": "add_casus_belli",
+		"body": [
+			"add_casus_belli = {",
+			"	target = $1",
+			"	type = $2",
+			"	months = $3",
+			"	state_province_id = $4",
+			"}"
+		],
+		"description": "NOT TO BE CONFUSED WITH add_casus_belli. Grants the scoped country a casus belli against the target country for n months. state_province_id may only be used for state-specific CBs."
+	},
+
+	"Diplomatic Influence": {
+		"prefix": "influence",
+		"body": [
+			"diplomatic_influence = { who = $1 value = $2 }"
+		],
+		"description": "Changes or checks the influence that the scoped country has on the specified country."
+	},
+
+	"Relation": {
+		"prefix": "influence",
+		"body": [
+			"relation = { who = $1 value = $2 }"
+		],
+		"description": "Changes or checks the relation between the scoped country and the specified country."
+	},
+
+	"War": {
+		"prefix": "war",
+		"body": [
+			"war = {",
+			"	target = $1",
+			"	attacker_goal = {",
+			"		casus_belli = $2",
+			"		state_province_id = $3",
+			"	}",
+			"	defender_goal = {",
+			"		casus_belli = $4",
+			"		state_province_id = $5",
+			"	}",
+			"	call_ally = ${yes_no}",
+			"}"
+		],
+		"description": "Starts a war between the country for whom the event or decision fired and the given country. defender_goal, state_province_id and call_ally may be optional."
+	},
+
+	"Set Variable": {
+		"prefix": "set_variable",
+		"body": [
+			"set_variable = { which = $1 value = $2 }"
+		],
+		"description": "Creates a new variable and assigns it the value n."
+	},
+
+	"Check Variable": {
+		"prefix": "check_variable",
+		"body": [
+			"check_variable = { which = $1 value = $2 }"
+		],
+		"description": "Returns true if the variable has been set at an earlier stage and its value is greater than or equal to x."
+	},
+
+	"Change Variable": {
+		"prefix": "change_variable",
+		"body": [
+			"change_variable = { which = $1 value = $2 }"
+		],
+		"description": "Increases or decreases the value of an existing variable."
+	},
+
+	
+	"Fire Country Event": {
+		"prefix": "country_event_effect",
+		"body": [
+			"country_event = { id = $1 days = $2 }"
+		],
+		"description": "Fires the specified country event for the targeted country in a specified amount of days."
+	},
+
+	"Random": {
+		"prefix": "random",
+		"body": [
+			"random = {"
+			"	chance = $1",
+			"	$2",
+			"}"			
+		],
+		"description": "Specifies the probability n that the specified effects will occur."
+	},
+
+	"Random List": {
+		"prefix": "random_list",
+		"body": [
+			"random_list = {"
+			"	$1 = { $2 }",
+			"	$3 = { $4 }",
+			"}"			
+		],
+		"description": "Specifies the probability n that the specified effects will occur."
+	},
+
+	"Unemployment by PoP Type": {
+		"prefix": "unemployment_by_type",
+		"body": [
+			"unemployment_by_type = { type = $1 value = $2 }"
+		],
+		"description": "Change the proportion of the targeted pop that follows the specified ideology. Works the same way as Upper House."
+	},
+
+	"Work Available": {
+		"prefix": "work",
+		"body": [
+			"work_available = { worker = $0 }"
+		],
+		"description": "Returns true if there is any work available for the specified pop type—meaning specifically is it possible for that pop type to be employed, not whether they would actually find work there or whether there's any unemployment in the province. If a province has factories, this command will always return true for craftsmen and clerks. If the province produces coal, this command will always return true for labourers and false for farmers."
+	},
+
+	"Limit statement": {
+		"prefix": "limit",
+		"body": [
+			"limit = {",
+			"	$0",
+			"}"
+		]
+	},
+
+	"Immediate statement": {
+		"prefix": "immediate",
+		"body": [
+			"immediate = {",
+			"	$0",
+			"}"
+		],
+		"description": "Event-specific statement that fires an effect as soon as the event appears."
+	},
+
+	"Trigger statement": {
+		"prefix": "trigger",
+		"body": [
+			"trigger = {",
+			"	$0",
+			"}"
+		]
+	},
+
+	"Option statement": {
+		"prefix": "option",
+		"body": [
+			"option = {",
+			"	name = \"EVTOPT${letter}${id}\"",
+			"	$0",
+			"}"
+		]
+	},
+
+	"AI_chance statement": {
+		"prefix": "ai_chance",
+		"body": [
+			"ai_chance = {",
+			"	factor = $0"
+			"	modifier = {}",
+			"		factor = $1",
+			"	}",
+			"}"
+		],
+		"description":"AI weight modifiers for chosing options in events."
+	},
+
+	"ai_will_do statement": {
+		"prefix": "ai_chance",
+		"body": [
+			"ai_will_do = {",
+			"	factor = $0"
+			"	modifier = {",
+			"		factor = $1",
+			"	}",
+			"}"
+		],
+		"description":"AI weight modifiers for enacting decisions."
+	},
+
+	"Country event": {
+		"prefix": "country_event",
+		"body": [
+			"country_event = {",
+			"	id = ${Id}",
+			"	title = \"EVTNAME${Id}\"",
+			"	desc = \"EVTDESC${Id}\"",
+			"	picture = ${Picture}",
+			"	major = ${yes_no1}",
+			"	news = ${yes_no2}",
+			"	news_desc_long = \"EVTDESC${Id}_NEWS_LONG\"",
+			"	news_desc_medium = \"EVTDESC${Id}_NEWS_MEDIUM\"",
+			"	news_desc_short = \"EVTDESC${Id}_NEWS_SHORT\"",
+			"	is_triggered_only = ${yes_no3}",
+			"	",
+			"	trigger = {",
+			"		$1",
+			"	}",
+			"	",
+			"	mean_time_to_happen = {",
+			"		$2",
+			"	",
+			"	option = {",
+			"		name = \"EVTOPTA${Id}\"",
+			"		$3",
+			"	}",
+			"	",
+			"	option = {",
+			"		name = \"EVTOPTB${Id}\"",
+			"		$4",
+			"	}",
+			"	",
+			"	option = {",
+			"		name = \"EVTOPTC${Id}\"",
+			"		$5",
+			"	}",
+			"}"
+		],
+		"description":"A basic country event template."
+	},
+
+	"News Article": {
+		"prefix": "news",
+		"body": [
+			"news = yes",
+			"news_desc_long = \"EVTDESC${Id}_NEWS_LONG\"",
+			"news_desc_medium = \"EVTDESC${Id}_NEWS_MEDIUM\"",
+			"news_desc_short = \"EVTDESC${Id}_NEWS_SHORT\"",
+		]
+	},
+
+	"Standard decision": {
+		"prefix": "decision",
+		"body": [
+			"${decision_name} = {",
+			"	potential = { ",
+			"		$2",
+			"	}",
+			"",
+			"	allow = {",
+			"		$3",
+			"	}",
+			"",
+			"	effect = {",
+			"		$4",
+			"	}",
+			"",
+			"	ai_will_do = {",
+			"		factor = $5",
+			"	}",
+			"}"
+		],
+		"description": "Basic decision template."
+	},
+
+	"History Relationship": {
+		"prefix": "alliance",
+		"body": [
+			"${alliance-puppet_type} = {",
+			"	first = $1",
+			"	second = $2",
+			"	start_date = ${year1}.${month1}.${day1}",
+			"	end_date = ${year2}.${month2}.${day2}",
+			"}"
+		],
+		"description":"A template for pre-existing special relationships at the start of the game. Puppet type can be a vassal or a substate. Only for use inside the history files."
+	},
+
+	"History Relations": {
+		"prefix": "history relation",
+		"body": [
+			"${tag} = {",
+			"	value = $1",
+			"	level = $2",
+			"	influence_value = $3",
+			"}"
+		],
+		"description":"A template for pre-existing relations at the start of the game. Only for use inside the history files."
+	},
+
+	"History Leader": {
+		"prefix": "leader",
+		"body": [
+			"leader = {",
+			"	name = \"${leader_name}\"",
+			"	date = $2.$3.$4",
+			"	type = ${land_sea}",
+			"	personality = ${personality}",
+			"	background = ${background}",
+			"	prestige = ${value}",
+			"}"
+		],
+		"description":"A template for pre-existing leaders at the start of the game. Only for use inside the history files."
+	},
+
+	"History Army": {
+		"prefix": "army",
+		"body": [
+			"army = {",
+			"	name = \"${army_name}\"",
+			"	location = ${prov_id}",
+			"	",
+			"	regiment = {",
+			"		name = \"${name}\"",
+			"		type = ${unit_type}",
+			"		home = ${prov_id2}",
+			"	}",
+			"	regiment = {",
+			"		name = \"${name2}\"",
+			"		type = ${unit_type2}",
+			"		home = ${prov_id2}",
+			"	}",
+			"}"
+		],
+		"description":"A template for pre-existing armies at the start of the game. Only for use inside the history files."
+	},
+
+	"History Navy": {
+		"prefix": "navy",
+		"body": [
+			"navy = {",
+			"	name = \"${navy_name}\"",
+			"	location = ${prov_id}",
+			"	",
+			"	ship = {",
+			"		name = \"${name}\"",
+			"		type = ${ship_type}",
+			"	}",
+			"	ship = {",
+			"		name = \"${name2}\"",
+			"		type = ${ship_type2}",
+			"	}",
+			"}"
+		],
+		"description":"A template for pre-existing armies at the start of the game. Only for use inside the history files."
+	},
+
+	"History Province": {
+		"prefix": "province history",
+		"body": [
+			"owner = ${tag}",
+			"controller = ${tag}",
+			"add_core = ${tag}",
+			"trade_goods = ${good}",
+			"life_rating = ${value}",
+			"terrain = ${terrain}",
+			"is_slave = ${yes_no}",
+			"colonial = ${1-2}",
+			"",
+			"fort = ${value1}",
+			"naval_base = ${value2}",
+			"railroad = ${value3}",
+			"",
+			"party_loyalty = {",
+			"	ideology = ${ideology}",
+			"	loyalty_value = ${value4}",
+			"}",
+			"party_loyalty = {",
+			"	ideology = ${ideology2}",
+			"	loyalty_value = ${value5}",
+			"}",
+			"",
+			"state_building = {",
+			"	level = 2",
+			"	building = ${factory}",
+			"	upgrade = ${value6}",
+			"}",
+			""
+		],
+		"description":"A template for pre-existing provinces at the start of the game. Only for use inside the history files."
+	},
+
+	"History Country": {
+		"prefix": "country history",
+		"body": [
+			"capital = ${prov_id}",
+			"primary_culture = ${p_culture}",
+			"culture = ${culture}",
+			"religion = ${religion}",
+			"government = ${government_type}",
+			"plurality = ${pluralityvalue}",
+			"nationalvalue = ${nv}",
+			"literacy = ${percent}",
+			"civilized = ${yes}",
+			"schools = ${tech_school}",
+			"prestige = ${value}",
+			"",
+			"consciousness = ${con}",
+			"nonstate_consciousness = ${n_con}",
+			"",
+			"#Starting Politics",
+			"ruling_party = ${tag_party}",
+			"last_election = ${yyyy}.${mm}.${dd}",
+			"upper_house = {",
+			"	anarcho_liberal = 0",
+			"	anarchist = 0",
+			"	communist = 0",
+			"	conservative = 83",
+			"	fascist = 0",
+			"	liberal = 12",
+			"	reactionary = 5",
+			"	socialist = 0",
+			"}",
+			"",
+			"govt_flag = {",
+			"	government = ${gov_type}",
+			"	flag = ${flag_type}",
+			"",
+			"foreign_investment = {",
+			"	${f_tag1} = ${amount}",
+			"}",
+			"",
+			"oob = \"${TAG}_oob.txt\""
+			"#Political Reforms",
+			"${pol_reforms}",
+			"",
+			"#Social Reforms",
+			"${soc_reforms}",
+			"",
+			"#Technologies",
+			"${tech}",
+			"",
+			"#Inventions",
+			"${inv}",
+			"}",
+			""
+		],
+		"description":"A template for countries at the start of the game. Only for use inside the history files."
+	},
+
+	"Commons Country": {
+		"prefix": "country info",
+		"body": [
+			"color = { ${r}, ${g}, ${b} }",
+			"graphical_culture = ${g_culture}",
+			"",
+			"#${Localized Party Name}",
+			"party = {",
+			"	name = \"${tag}_${ideology}",
+			"	start_date = ${yyyy}.${mm}.{dd}",
+			"	end_date = ${yyyy}.${mm}.${dd}",
+			"	",
+			"	ideology = ${ideology}",
+			"	",
+			"	social_policy = ${s_policy}",
+			"	economic_policy = ${e_policy}",
+			"	trade_policy = ${t_policy}",
+			"	citizenship_policy = ${c_policy}",
+			"	war_policy = ${w_policy}",
+			"}",
+			"",
+			"unit_names = {",
+			"	dreadnought = {",
+			"		${names}",
+			"	}",
+			"	battleship = {",
+			"		${names}",
+			"	}",
+			"	cruiser = {",
+			"		${names}",
+			"	}",
+			"	monitor = {",
+			"		${names}",
+			"	}",
+			"	commerce_raider = {",
+			"		${names}",
+			"	}",
+			"	ironclad = {",
+			"		${names}",
+			"	}",
+			"	manowar = {",
+			"		${names}",
+			"	}",
+			"	frigate = {",
+			"		${names}",
+			"	}",
+			"	steam_transport = {",
+			"		${names}",
+			"	}",
+			"	clipper_transport = {",
+			"		${names}",
+			"	}",
+			"}"
+		],
+		"description":"A template for basic country data. Only for use inside the commons files."
+	}
+}

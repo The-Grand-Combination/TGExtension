@@ -1,0 +1,278 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "Paradox",
+	"scopeName": "source.mod",
+	"foldingStartMarker": "^\\s*#",
+	"foldingStopMarker": "(?!^[^#])",
+	"patterns": [
+		{
+			"include": "#namespace"
+		},
+		{
+			"include": "#metas"
+		}
+	],
+	"repository": {
+		"namespace": {
+			"patterns": [
+				{
+					"name": "meta.namespace.paradox",
+					"match": "^\\s*[^@]?((namespace)\\s[=]\\s([\\w.]+))",
+					"captures": {
+						"1": {
+							"name": "meta.namespace.identifier.txt"
+						},
+						"2": {
+							"name": "keyword.other.namespace.txt"
+						},
+						"3": {
+							"name": "entity.name.type.namespace.txt"
+						}
+					}
+				}
+			]
+		},
+		"keywords": {
+			"patterns": [
+				{
+					"name": "keyword.control.paradox",
+					"match": "\\b(AND|OR|NOT|limit)\\b"
+				},
+				{
+					"name": "variable.language.description.scope.paradox",
+					"match": "\\b(option|immediate|trigger|mean_time_to_happen)\\b"
+				},
+				{
+					"name": "variable.language.description.paradox",
+					"match": "\\b(id|title|desc|picture|is_triggered_only|name|ai_chance|ai_will_do|factor)\\b"
+				},
+				{
+					"name": "quoted.string.fallback.paradox",
+					"match": "(?<=\\s*(?:title|desc)\\s*=\\s*)\\b\\S.*\\b"
+				},
+				{
+					"name": "variable.which.paradox",
+					"match": "(?<=\\s*which\\s*=\\s*)\\S.*?\\b"
+				},
+				{
+					"name": "modifier.paradox",
+					"match": "(?<=\\s*(?:has_country_modifier|has_province_modifier|remove_country_modifier|remove_province_modifier)\\s*=\\s*)\\S.*?\\b"
+				},
+				{
+					"name": "modifier.which.paradox",
+					"match": "(?<!_)(?<=\\bname\\s*=\\s*)(?!\")\\S.*?\\b"
+				},
+				{
+					"name": "picture.paradox",
+					"match": "(?<=\\s*picture\\s*=\\s*)\\S.*|\"[A-Za-z!]\""
+				},
+				{
+					"name": "tag.paradox",
+					"match": "\\s*\\b(?!(?:AND|NOT))(THIS|FROM|[A-Z][A-Z0-9]{2})\\b"
+				},
+				{
+					"name": "culture.paradox",
+					"match": "(?<=\\s*(?:culture|group)\\s*=\\s*)(?!yes\\b|no\\b)\\S.*?\\b"
+				},
+				{
+					"name": "religion.paradox",
+					"match": "(?<=\\s*(?:religion)\\s*=\\s*)(?!yes\\b|no\\b)\\S.*?\\b"
+				},
+				{
+					"name": "reform.paradox",
+					"match": "(?<=_reform\\s*=\\s*)\\S.*?\\b"
+				},
+				{
+					"name": "ideology.name.paradox",
+					"match": "\\b(conservative|liberal|reactionary|anarcho_liberal|socialist|communist|fascist|anarchist|slave_ideology|servants|high_nobility|low_nobility|burgher|loremaster)\\b"
+				},
+				{
+					"name": "ideology.tag.paradox",
+					"match": "\\s*\\b[A-Z][A-Z0-9]{2}_(?:conservative|liberal|reactionary|anarcho_liberal|socialist|communist|fascist|anarchist|slave_ideology|servants|high_nobility|low_nobility|burgher|loremaster)(?:_[0-9]+)?\\b"
+				},
+				{
+					"name": "issue.name.paradox",
+					"match": "\\b(protectionism|free_trade|laissez_faire|interventionism|state_capitalism|planned_economy|pro_atheism|secularized|pluralism|moralism|residency|limited_citizenship|full_citizenship|jingoism|pro_military|anti_military|pacifism|no_state_interference|colonial_spending_policy|no_position_set|populist_welfare|welfare_state|yes_slavery|freedom_of_womb|no_slavery|none_voting|landed_voting|wealth_weighted_voting|wealth_voting|universal_weighted_voting|universal_voting|party_appointed|appointed|state_equal_weight|population_equal_weight|first_past_the_post|jefferson_method|proportional_representation|no_meeting|yes_meeting|state_press|censored_press|free_press|no_trade_unions|state_controlled|non_socialist|all_trade_unions|underground_parties|harassment|gerrymandering|non_secret_ballots|secret_ballots|mandatory_service|four_year_draft|two_year_draft|one_year_draft|no_draft|primary_culture_only|culture_voting_only|all_voting_pops|serfdom|peonage|debtors_prisons|bankruptcy|closed_borders|quota_immigration|open_borders|settlement|exploitation|civilizing|no_colonies|totalitarianism|confederalism|regionalism|federalism|unitary|no_minimum_wage|trinket_wage|low_minimum_wage|acceptable_minimum_wage|good_minimum_wage|no_work_hour_limit|fourteen_hours|twelve_hours|ten_hours|eight_hours|no_safety|trinket_safety|low_safety|acceptable_safety|good_safety|no_subsidies|trinket_subsidies|low_subsidies|acceptable_subsidies|good_subsidies|no_pensions|trinket_pensions|low_pensions|acceptable_pensions|good_pensions|no_health_care|trinket_health_care|low_health_care|acceptable_health_care|good_health_care|no_schools|low_schools|acceptable_schools|good_schools|capital_punishment|colonial_transportation|incarceration|rehabilitation|child_labor_legal|child_labor_restricted|child_labor_illegal|no_land_reform|yes_land_reform|no_admin_reform|yes_admin_reform|no_finance_reform|yes_finance_reform|finance_reform_two|yes_monetary_reform|monetary_reform_two|no_education_reform|yes_education_reform|no_research_reform|yes_research_reform|no_transport_improv|yes_transport_improv|no_firearms_production|yes_firearms_production|no_pre_indust|yes_pre_indust|no_industrial_construction|yes_industrial_construction|no_foreign_training|yes_foreign_training|no_foreign_weapons|yes_foreign_weapons|no_military_constructions|yes_military_constructions|no_foreign_officers|yes_foreign_officers|no_army_schools|yes_army_schools|no_foreign_naval_officers|yes_foreign_naval_officers|no_naval_schools|yes_naval_schools|no_foreign_navies|yes_foreign_navies|no_western_shipyards|yes_western_shipyards|no_foreign_artillery|yes_foreign_artillery|independent_guilds|oversight_guilds|controlled_guilds|all_peoples|alignment_acceptance|racial_unity|official_only|minority_toleration|regional_autonomy|isolationist|reactive|proactive|interactive|good_alignment_fake|neutral_alignment_fake|evil_alignment_fake|no_alignment|good_alignment|neutral_alignment|evil_alignment|alignment_borders|race_borders|meeting_curfew|large_noble_autonomy|medium_noble_autonomy|small_noble_autonomy|large_levy_contribution|medium_levy_contribution|small_levy_contribution|small_tax_contribution|medium_tax_contribution|large_tax_contribution|allowed_knighting_rights|restricted_knighting_rights|royal_knighting_rights|enforced_serfdom|discouraged_serfdom|banned_serfdom|five_land_ownership|ten_land_ownership|thirty_land_ownership|half_land_ownership|seventy_land_ownership|all_land_ownership|non_accepted_slavery|hard_labor|primary_voting|accepted_voting|all_vote|granted_exclusive_tr|limited_exclusive_tr|abolished_exclusive_tr|privileged_state_supplies|allowed_state_supplies|restricted_state_supplies|independent_cities|chartered_cities|territorial_cities|royal_cities|hereditary|appointment|guild_school|old_land|new_land|old_guilds|new_guilds|old_infrastructure|new_infrastructure|old_expansion|new_expansion|old_taxes|new_taxes|old_education|new_education|old_training|new_training|old_constructions|new_constructions|old_tactics|new_tactics|old_naval_theory|new_naval_theory|old_ships|new_ships|old_ports|new_ports)(?!\\s*=)\\b",
+					"comment": "There is no better way of doing this without implementing LSP functionality"
+				},
+				{
+					"name": "government.name.paradox",
+					"match": "\\b(?<=\\bgovernment\\b\\s*=\\s*)\\S.*?\\b"
+				},
+				{
+					"name": "trade_good.paradox",
+					"match": "\\b(?<=\\b(?:producer|produces|trade_goods)\\b\\s*=\\s*)\\S.*?\\b"
+				},
+				{
+					"name": "location.paradox",
+					"match": "(?<=\\b(?:region|state_id|capital|controls|is_core|owns|continent|province_id|state_province_id|terrain)\\b\\s*=\\s*)\\S.*?\\b"
+				},
+				{
+					"name": "location_block.paradox",
+					"match": "\\b\\d{1,5}(?=\\s*=\\s*{)"
+				},
+				{
+					"name": "tech.paradox",
+					"match": "(?<=\\s*(?:invention|tech_school|technology)\\s*=\\s*)\\S.*?\\b"
+				},
+				{
+					"name": "pop_type.name.paradox",
+					"match": "\\b(aristocrats|artisans|bureaucrats|capitalists|clergymen|clerks|craftsmen|farmers|labourers|officers|pioneers|post_revolt_bureau|serfs|slaves|soldiers|tribals|rich|middle|poor)\\b"
+				},
+				{
+					"name": "casus_belli.paradox",
+					"match": "(?<=\\s*(?:type|casus_belli)\\s*=\\s*)\\S.*?\\b"
+				},
+				{
+					"name": "leader_traits.paradox",
+					"match": "(?<=\\s*(?:personality|background)\\s*=\\s*)\\S.*?\\b"
+				},
+				{
+					"name": "national_value.paradox",
+					"match": "\\b(?<=\\s*(?:nationalvalue)\\s*=\\s*)\\S.*?\\b"
+				},
+				{
+					"name": "building.paradox",
+					"match": "\\b(?<=\\s*(?:build_factory_in_capital_state|can_build_factory_in_capital_state|has_building)\\s*=\\s*)\\S.*?\\b"
+				},
+				{
+					"name": "building_type.paradox",
+					"match": "\\b(?<=\\s*(?:fort|naval_base|infrastructure|bank|university)\\s*=\\s*)\\.*?\\b"
+				},
+				{
+					"name": "broken.language.key.paradox",
+					"match": "\\b(has_province_flag|set_province_flag|clr_province_flag|poor_strata_income_modifier|middle_strata_income_modifier|rich_strata_income_modifier)\\b\\s*=\\s*(\\S.*?\\b)|\\b(has_province_flag|set_province_flag|clr_province_flag|poor_strata_income_modifier|middle_strata_income_modifier|rich_strata_income_modifier)\\b",
+					"comment": "This one is for currently broken keywords that either do not work at all or produce unintended behavior."
+				}
+			]
+		},
+		"constants": {
+			"patterns": [
+				{
+					"name": "constant.boolean.paradox",
+					"match": "\\b(yes|no)\\b"
+				},
+				{
+					"name": "constant.number.paradox",
+					"match": "(?<!(?:region\\s*=\\s*|state_id\\s*=\\s*|capital\\s*=\\s*|controls\\s*=\\s*|is_core\\s*=\\s*|owns\\s*=\\s*|province_id\\s*=\\s*))-?\\b(([0-9]+\\.?[0-9]*)|(\\.[0-9]+))\\b"
+				},
+				{
+					"include": "#strings"
+				}
+			]
+		},
+		"comment": {
+			"patterns": [
+				{
+					"name": "comment_sign.paradox",
+					"begin": "#",
+					"captures": {
+						"1": {
+						"name": "comment.paradox"
+						}
+					},
+					"end": "$\\n?"
+				}
+			]
+		},
+		"block": {
+			"patterns": [
+				{
+				"begin": "(?!FROM|THIS)(?<![A-Z]{3})(?<==)\\s*{",
+				"beginCaptures": {
+					"0": {
+						"name": "block_begin.paradox"
+					}
+				},
+				"end": "}",
+				"endCaptures": {
+					"0": {
+						"name": "block_end.paradox"
+					}
+				},
+				"name": "meta.block.paradox",
+				"patterns": [
+					{
+						"include": "#metas"
+					}
+				]
+				}
+			]
+		},
+		"metas": {
+			"patterns": [
+				{
+					"include": "#keywords"
+				},
+				{
+					"include": "#constants"
+				},
+				{
+					"include": "#comment"
+				},
+				{
+					"include": "#block"
+				},
+				{
+					"include": "#variables"
+				},
+				{
+					"include": "#flag"
+				},
+				{
+					"include": "#strings"
+				}
+			]
+		},
+		"variables": {
+			"patterns": [
+				{
+					"begin": "[^\\S\\n]*(?<![A-Z]{3})(?=\\b\\w+\\b[^\\S\\n]*=[^\\S\\n]*[^{\\s])",
+					"end": "[^\\S\\n]*=",
+					"contentName": "variable.paradox",
+					"patterns": [
+						{
+							"include": "#keywords"
+						}
+					]
+				},
+				{
+					"begin": "(?!FROM|THIS)[^\\S\\n]*(?<![A-Z]{3})(?=\\b\\w+\\b[^\\S\\n]*=[^\\S\\n]*[{])",
+					"end": "[^\\S\\n]*=",
+					"contentName": "variable.scope.paradox",
+					"patterns": [
+						{
+							"include": "#keywords"
+						}
+					]
+				}
+			]
+		},
+		"flag": {
+			"patterns": [
+				{
+					"name": "flag.variable.paradox",
+					"begin": "(?<=\\s*(?:has_country_flag|set_country_flag|has_global_flag|set_global_flag|clr_country_flag|clr_global_flag|check_variable|set_variable)\\s*=\\s*)\\.*?\\b",
+					"end": "\\s*",
+					"contentName": "flag.variable.paradox",
+					"patterns": [
+						{
+							"include": "#variables"
+						}
+					]
+				}
+			]
+		},
+		"strings": {
+			"name": "string.quoted.double.paradox",
+			"begin": "(?<!\\s*first_names\\s*=\\s*{\\s*\\S.*?|\\s*last_names\\s*=\\s*{\\s*\\S.*?)\"",
+			"end": "\"",
+			"patterns": [
+				{
+					"name": "constant.character.escape.paradox",
+					"match": "\\\\."
+				}
+			]
+		}
+	}
+}
