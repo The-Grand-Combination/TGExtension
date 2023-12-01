@@ -2,7 +2,7 @@
 
 **Discover a new era in Victoria II modding with ParadoxScript Tools - a VSCode extension crafted by modders for modders, designed to improve your modding enviroment with colorful syntax highlighting and a library of snippets, providing a seamless and user-friendly approach that makes modding more accessible.**
 
-![Preview](https://github.com/ColdSlav/paradoxscript-tools/blob/30a86fdfe111a4ed7e3e81c288293c9eebcea9d9/images/preview.png)
+![preview](https://github.com/ColdSlav/paradoxscript-tools/assets/78610822/d59010ac-ce48-453b-9f78-62046db492fb)
 
 ## Readable and Intuitive Syntax Highlighting ##
 
