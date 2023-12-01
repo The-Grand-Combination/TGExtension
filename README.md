@@ -1,4 +1,4 @@
-# **ParadoxScript Tools - Intuitive and Fast Modding** #
+# **ParadoxScript Tools - An Intuitive and Fast Modding Tool** #
 
 **Discover a new era in Victoria II modding with ParadoxScript Tools - a VSCode extension crafted by modders for modders, designed to improve your modding enviroment with colorful syntax highlighting and a library of snippets, providing a seamless and user-friendly approach that makes modding more accessible.**
 
