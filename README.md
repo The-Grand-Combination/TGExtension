@@ -24,7 +24,7 @@ Created by modders, for modders, this extension caters specifically to the Victo
 
 To enable and make use of the syntax highlight features, you need to go to the lower right corner of the editor and click on the text next to the notifications icon, here, a dropdown menu will appear, letting you select the "Paradox" language.
 
-![How to enable](https://github.com/ColdSlav/paradoxscript-tools/blob/95037792e2d764dd16ce810d20afb4a4f99f9f24/images/snippets.gif)
+![How to enable](https://github.com/ColdSlav/paradoxscript-tools/blob/96dfc2685b6bcc7c73c4125d74cf0abacfa8bf56/images/enable.gif)
 
 ### **Community** ###
 
