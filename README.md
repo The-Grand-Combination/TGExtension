@@ -28,7 +28,7 @@ To enable and make use of the syntax highlight features, you need to go to the l
 
 ### **Community** ###
 
-Join the creator on Discord in [TGC] and [V2-MODDING] for assistance and discussion.
+Join the creator on Discord in [The Grand Combination](https://discord.gg/the-grand-combination-689466155978588176) and [Victoria 2 Modding Server](https://discord.gg/EbY7qaA) for assistance and discussion.
 
 **Download ParadoxScript Tools now and revolutionize your Victoria II modding journey!**
 
