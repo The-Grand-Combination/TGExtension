@@ -7,6 +7,15 @@
   "engines": {
     "vscode": "^1.84.0"
   },
+	"license": "SEE LICENSE IN LICENSE.txt",
+	"bugs": {
+		"url": "https://github.com/ColdSlav/paradoxscript-tools/issues"
+	},
+	"homepage": "https://github.com/ColdSlav/paradoxscript-tools#readme",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/ColdSlav/paradoxscript-tools.git"
+	},
   "categories": [
     "Programming Languages",
     "Snippets",
