@@ -2,19 +2,20 @@
   "name": "paradoxscript-tools",
   "displayName": "Victorian ParadoxScript Tools",
   "description": "Syntax highlighting features and code snippets for Victoria II modding.",
+  "publisher": "KiwiStars",
   "version": "1.0.0",
-	"icon": "/images/icon.png",
+	"icon": "/images/icon.PNG",
   "engines": {
     "vscode": "^1.84.0"
   },
-	"license": "SEE LICENSE IN LICENSE.txt",
-	"bugs": {
-		"url": "https://github.com/ColdSlav/paradoxscript-tools/issues"
-	},
-	"homepage": "https://github.com/ColdSlav/paradoxscript-tools#readme",
+  "homepage": "https://github.com/ColdSlav/paradoxscript-tools#readme",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/ColdSlav/paradoxscript-tools.git"
+	},
+	"license": "MIT",
+	"bugs": {
+		"url": "https://github.com/ColdSlav/paradoxscript-tools/issues"
 	},
   "categories": [
     "Programming Languages",
