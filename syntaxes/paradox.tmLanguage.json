@@ -64,7 +64,7 @@
 				},
 				{
 					"name": "picture.paradox",
-					"match": "(?<=\\s*picture\\s*=\\s*)\\S.*|\"[A-Za-z!]\""
+					"match": "(?<=\\s*picture\\s*=\\s*)\\S.*|\"[A-Za-z!]{^1}\""
 				},
 				{
 					"name": "tag.paradox",
@@ -121,7 +121,7 @@
 				},
 				{
 					"name": "casus_belli.paradox",
-					"match": "(?<=\\s*(?:type|casus_belli)\\s*=\\s*)\\S.*?\\b"
+					"match": "(?<=\\s*(?:\\btype|casus_belli)\\s*=\\s*)\\S.*?\\b"
 				},
 				{
 					"name": "leader_traits.paradox",

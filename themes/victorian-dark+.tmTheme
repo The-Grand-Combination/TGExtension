@@ -90,7 +90,7 @@
 			<key>name</key>
 			<string>Invalid Keyword</string>
 			<key>scope</key>
-			<string>broken.keyword</string>
+			<string>broken.language.key</string>
 			<key>settings</key>
 			<dict>
 				<key>fontStyle</key>

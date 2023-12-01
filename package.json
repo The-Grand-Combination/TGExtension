@@ -24,14 +24,14 @@
       "scopeName": "source.mod",
       "path": "./syntaxes/paradox.tmLanguage.json"
     }],
-    "snippets": [{
-      "language": "paradox",
-      "path": "./themes/paradox.snippets.json"
-  }],
     "themes": [{
         "label": "Victorian Dark+",
         "uiTheme": "vs-dark",
         "path": "./themes/victorian-dark+.tmtheme"
+    }],
+    "snippets": [{
+      "language": "paradox",
+      "path": "./snippets/paradox.snippets.code-snippets"
     }]
   }
 }

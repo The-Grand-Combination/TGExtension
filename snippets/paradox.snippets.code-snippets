@@ -1,17 +1,14 @@
 {
-
 	"If emulation": {
 		"prefix": "if",
 		"body": [
 			"random_owned = {",
 			"	limit = {",
 			"		owner = {",
-			"			$1",
+			"			${conditions}",
 			"		}",
 			"	}",
-			"	owner = {",
-			"		$2",
-			"	}"
+			"	${effects}",
 			"}"
 		],
 		"description": "Emulate the IF conditional by using the random_owned and owner scopes."
@@ -64,7 +61,7 @@
 	"Change Issue Value": {
 		"prefix": "dominant_issue",
 		"body": [
-			"dominant_issue = { factor = $1 value = $2 }"
+			"dominant_issue = { factor = $1 value = ${2} }"
 		],
 		"description": "Changes the dominant issue of a portion of the targeted pop to the given issue. Works the same way as Upper House."
 	},
@@ -73,9 +70,9 @@
 		"prefix": "move_issue_percentage",
 		"body": [
 			"move_issue_percentage = {",
-			"	from = $1",
-			"	to = $2",
-			"	value = $3",
+			"	from = ${issue_1}",
+			"	to = ${issue_2}",
+			"	value = ${value}",
 			"}"
 		],
 		"description": "Makes a certain percentage of people supporting issue A, switch to issue B. Usually used in CBs."
@@ -109,10 +106,10 @@
 		"prefix": "add_casus_belli",
 		"body": [
 			"add_casus_belli = {",
-			"	target = $1",
-			"	type = $2",
-			"	months = $3",
-			"	state_province_id = $4",
+			"	target = ${TAG}",
+			"	type = ${CB_TYPE}",
+			"	months = ${MONTHS}",
+			"	state_province_id = ${PROV}",
 			"}"
 		],
 		"description": "NOT TO BE CONFUSED WITH casus_belli. Gives the target a casus belli against the country in scope for n months. state_province_id may only be used for state-specific CBs."
@@ -122,10 +119,10 @@
 		"prefix": "add_casus_belli",
 		"body": [
 			"add_casus_belli = {",
-			"	target = $1",
-			"	type = $2",
-			"	months = $3",
-			"	state_province_id = $4",
+			"	target = ${TAG}",
+			"	type = ${CB_TYPE}",
+			"	months = ${MONTHS}",
+			"	state_province_id = ${PROV}",
 			"}"
 		],
 		"description": "NOT TO BE CONFUSED WITH add_casus_belli. Grants the scoped country a casus belli against the target country for n months. state_province_id may only be used for state-specific CBs."
@@ -134,7 +131,7 @@
 	"Diplomatic Influence": {
 		"prefix": "influence",
 		"body": [
-			"diplomatic_influence = { who = $1 value = $2 }"
+			"diplomatic_influence = { who = ${TAG} value = ${NUMBER}"
 		],
 		"description": "Changes or checks the influence that the scoped country has on the specified country."
 	},
@@ -142,7 +139,7 @@
 	"Relation": {
 		"prefix": "influence",
 		"body": [
-			"relation = { who = $1 value = $2 }"
+			"relation = { who = ${TAG} value = ${NUMBER} }"
 		],
 		"description": "Changes or checks the relation between the scoped country and the specified country."
 	},
@@ -151,14 +148,14 @@
 		"prefix": "war",
 		"body": [
 			"war = {",
-			"	target = $1",
+			"	target = ${TAG}",
 			"	attacker_goal = {",
-			"		casus_belli = $2",
-			"		state_province_id = $3",
+			"		casus_belli = ${CB_A}",
+			"		state_province_id = ${REGION_A}",
 			"	}",
 			"	defender_goal = {",
-			"		casus_belli = $4",
-			"		state_province_id = $5",
+			"		casus_belli = ${CB_D}",
+			"		state_province_id = ${REGION_D}",
 			"	}",
 			"	call_ally = ${yes_no}",
 			"}"
@@ -214,8 +211,8 @@
 		"prefix": "random_list",
 		"body": [
 			"random_list = {"
-			"	$1 = { $2 }",
-			"	$3 = { $4 }",
+			"	${CHANCE_1} = { ${EFFECT_1} }",
+			"	${CHANCE_2} = { ${EFFECT_2} }",
 			"}"			
 		],
 		"description": "Specifies the probability n that the specified effects will occur."
@@ -232,7 +229,7 @@
 	"Work Available": {
 		"prefix": "work",
 		"body": [
-			"work_available = { worker = $0 }"
+			"work_available = { worker = ${POP_TYPE} }"
 		],
 		"description": "Returns true if there is any work available for the specified pop type—meaning specifically is it possible for that pop type to be employed, not whether they would actually find work there or whether there's any unemployment in the province. If a province has factories, this command will always return true for craftsmen and clerks. If the province produces coal, this command will always return true for labourers and false for farmers."
 	},
@@ -349,7 +346,8 @@
 			"news_desc_long = \"EVTDESC${Id}_NEWS_LONG\"",
 			"news_desc_medium = \"EVTDESC${Id}_NEWS_MEDIUM\"",
 			"news_desc_short = \"EVTDESC${Id}_NEWS_SHORT\"",
-		]
+		],
+		"description": "New article structure for events and decisions."
 	},
 
 	"Standard decision": {
@@ -461,9 +459,9 @@
 	"History Province": {
 		"prefix": "province history",
 		"body": [
-			"owner = ${tag}",
-			"controller = ${tag}",
-			"add_core = ${tag}",
+			"owner = ${TAG}",
+			"controller = ${TAG}",
+			"add_core = ${TAG}",
 			"trade_goods = ${good}",
 			"life_rating = ${value}",
 			"terrain = ${terrain}",
@@ -559,7 +557,7 @@
 			"",
 			"#${Localized Party Name}",
 			"party = {",
-			"	name = \"${tag}_${ideology}",
+			"	name = \"${tag}_${ideology}\"",
 			"	start_date = ${yyyy}.${mm}.{dd}",
 			"	end_date = ${yyyy}.${mm}.${dd}",
 			"	",
