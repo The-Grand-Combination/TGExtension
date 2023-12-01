@@ -8,13 +8,13 @@
 
 Dive into the world of Victoria II modding with vibrant syntax highlighting. This extension ensures that every relevant keyword, variable, value, and modifier is assigned a unique color, enhancing readability and making your modding experience faster.
 
-[image1]
+![Syntax Showcase](images/syntax.png)
 
 ## Effortless Modding with a Robust Snippet Library ##
 
 Boost productivity with intelligent snippets covering common modifiers, scopes, and complex structures. Let the snippets do the heavy lifting by offering quick and efficient code completion, saving you time and effort.
 
-[image2]
+![Snippets showcase](images/snippets.gif)
 
 ## Beginner-Friendly Modding ##
 
