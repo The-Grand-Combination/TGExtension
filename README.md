@@ -28,4 +28,4 @@ Join the creator on Discord in [TGC] and [V2-MODDING] for assistance and discuss
 
 ### *License* ###
 
-ParadoxScript Tools is distributed under the MIT Permissive Free Software license. See [LICENSE](LICENSE.md) for more details.
+ParadoxScript Tools is distributed under the MIT Permissive Free Software license. See [LICENSE](LICENSE.txt) for more details.
