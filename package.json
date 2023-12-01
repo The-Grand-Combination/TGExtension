@@ -3,7 +3,7 @@
   "displayName": "Victorian ParadoxScript Tools",
   "description": "Syntax highlighting features and code snippets for Victoria II modding.",
   "version": "1.0.0",
-	"icon": "images/Icon.png",
+	"icon": "/images/icon.png",
   "engines": {
     "vscode": "^1.84.0"
   },
