@@ -20,6 +20,12 @@ Boost productivity with intelligent snippets covering common modifiers, scopes, 
 
 Created by modders, for modders, this extension caters specifically to the Victoria II community, whether you're a veteran modder or just starting your Victoria II modding journey, this extension provides a native and user-friendly modding experience.
 
+## Enabling Extension Features ##
+
+To enable and make use of the syntax highlight features, you need to go to the lower right corner of the editor and click on the text next to the notifications icon, here, a dropdown menu will appear, letting you select the "Paradox" language.
+
+![How to enable](https://github.com/ColdSlav/paradoxscript-tools/blob/30a86fdfe111a4ed7e3e81c288293c9eebcea9d9/images/enable.gif)
+
 ### **Community** ###
 
 Join the creator on Discord in [TGC] and [V2-MODDING] for assistance and discussion.
