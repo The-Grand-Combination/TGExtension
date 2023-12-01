@@ -1,7 +1,7 @@
 {
   "name": "paradoxscript-tools",
   "displayName": "Victorian ParadoxScript Tools",
-  "description": "Simple and lightweight extension that provides syntax highlighting features and code snippets for Victoria 2's code.",
+  "description": "Syntax highlighting features and code snippets for Victoria II modding.",
   "version": "1.0.0",
 	"icon": "images/Icon.png",
   "engines": {
