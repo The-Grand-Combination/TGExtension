@@ -11,4 +11,5 @@
 ### 1.0.2
 
 - Fixed missing brace in the mean_time_to_happen section of the Country Event snippet
+
 test1
