@@ -320,6 +320,7 @@
 			"	mean_time_to_happen = {",
 			"		$2",
 			"	",
+			"	}",
 			"	option = {",
 			"		name = \"EVTOPTA${Id}\"",
 			"		$3",
