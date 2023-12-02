@@ -3,45 +3,59 @@
   "displayName": "Victorian ParadoxScript Tools",
   "description": "Syntax highlighting features and code snippets for Victoria II modding.",
   "publisher": "KiwiStars",
-  "version": "1.0.0",
-	"icon": "/images/icon.PNG",
+  "version": "1.0.1",
+  "icon": "/images/icon.PNG",
   "engines": {
     "vscode": "^1.84.0"
   },
   "homepage": "https://github.com/ColdSlav/paradoxscript-tools#readme",
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/ColdSlav/paradoxscript-tools.git"
-	},
-	"license": "MIT",
-	"bugs": {
-		"url": "https://github.com/ColdSlav/paradoxscript-tools/issues"
-	},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ColdSlav/paradoxscript-tools.git"
+  },
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ColdSlav/paradoxscript-tools/issues"
+  },
   "categories": [
     "Programming Languages",
     "Snippets",
     "Themes"
   ],
   "contributes": {
-    "languages": [{
-      "id": "paradox",
-      "aliases": ["Paradox", "paradox"],
-      "extensions": [".txt", ".mod"],
-      "configuration": "./language-configuration.json"
-    }],
-    "grammars": [{
-      "language": "paradox",
-      "scopeName": "source.mod",
-      "path": "./syntaxes/paradox.tmLanguage.json"
-    }],
-    "themes": [{
+    "languages": [
+      {
+        "id": "paradox",
+        "aliases": [
+          "Paradox",
+          "paradox"
+        ],
+        "extensions": [
+          ".txt",
+          ".mod"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "paradox",
+        "scopeName": "source.mod",
+        "path": "./syntaxes/paradox.tmLanguage.json"
+      }
+    ],
+    "themes": [
+      {
         "label": "Victorian Dark+",
         "uiTheme": "vs-dark",
         "path": "./themes/victorian-dark+.tmtheme"
-    }],
-    "snippets": [{
-      "language": "paradox",
-      "path": "./snippets/paradox.snippets.code-snippets"
-    }]
+      }
+    ],
+    "snippets": [
+      {
+        "language": "paradox",
+        "path": "./snippets/paradox.snippets.code-snippets"
+      }
+    ]
   }
 }
