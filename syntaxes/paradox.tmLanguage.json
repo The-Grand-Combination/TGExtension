@@ -252,9 +252,9 @@
 			"patterns": [
 				{
 					"name": "flag.variable.paradox",
-					"begin": "(?<=\\s*(?:has_country_flag|set_country_flag|has_global_flag|set_global_flag|clr_country_flag|clr_global_flag|check_variable|set_variable)\\s*=\\s*)\\.*?\\b",
+					"begin": "(?<=\\s*(?:has_country_flag|set_country_flag|has_global_flag|set_global_flag|clr_country_flag|clr_global_flag|check_variable|set_variable)\\s*=\\s*)[\\w'-]+",
 					"end": "\\s*",
-					"contentName": "flag.variable.paradox",
+					"contentName": "flag.name.paradox",
 					"patterns": [
 						{
 							"include": "#variables"
