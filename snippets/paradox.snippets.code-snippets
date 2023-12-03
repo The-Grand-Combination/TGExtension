@@ -355,6 +355,8 @@
 		"prefix": "decision",
 		"body": [
 			"${decision_name} = {",
+			"	picture = picture",
+			"",
 			"	potential = { ",
 			"		$2",
 			"	}",
