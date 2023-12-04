@@ -218,6 +218,26 @@
 		"description": "Specifies the probability n that the specified effects will occur."
 	},
 
+	"Hidden Tooltip": {
+		"prefix": "hidden tooltip",
+		"body": [
+			"random = {"
+			"	chance = $1",
+			"	$2",
+			"}"			
+		],
+		"body": [
+			"set_country_flag = hidden_tooltip",
+			"random_owned = { limit = { owner = { has_country_flag = hidden_tooltip } }",
+			"			owner = {",
+			"				#Effects here will be hidden",
+			"			}",
+			"}",
+			"clr_country_flag = hidden_tooltip"			
+		],
+		"description": "Uses a clever assortment of if emulation and country flags to make an hidden tooltip, original method by Sir Runner."
+	},
+
 	"Unemployment by PoP Type": {
 		"prefix": "unemployment_by_type",
 		"body": [
