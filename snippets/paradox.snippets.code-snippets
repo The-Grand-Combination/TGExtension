@@ -326,12 +326,6 @@
 			"	title = \"EVTNAME${Id}\"",
 			"	desc = \"EVTDESC${Id}\"",
 			"	picture = ${Picture}",
-			"	major = ${yes_no1}",
-			"	news = ${yes_no2}",
-			"	news_desc_long = \"EVTDESC${Id}_NEWS_LONG\"",
-			"	news_desc_medium = \"EVTDESC${Id}_NEWS_MEDIUM\"",
-			"	news_desc_short = \"EVTDESC${Id}_NEWS_SHORT\"",
-			"	is_triggered_only = ${yes_no3}",
 			"	",
 			"	trigger = {",
 			"		$1",
@@ -351,10 +345,6 @@
 			"		$4",
 			"	}",
 			"	",
-			"	option = {",
-			"		name = \"EVTOPTC${Id}\"",
-			"		$5",
-			"	}",
 			"}"
 		],
 		"description":"A basic country event template."
