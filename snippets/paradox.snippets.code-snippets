@@ -137,7 +137,7 @@
 	},
 
 	"Relation": {
-		"prefix": "influence",
+		"prefix": "relation",
 		"body": [
 			"relation = { who = ${TAG} value = ${NUMBER} }"
 		],
