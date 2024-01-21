@@ -5,10 +5,10 @@
 			"random_owned = {",
 			"	limit = {",
 			"		owner = {",
-			"			${conditions}",
+			"			#${conditions}",
 			"		}",
 			"	}",
-			"	${effects}",
+			"	#${effects}",
 			"}"
 		],
 		"description": "Emulate the IF conditional by using the random_owned and owner scopes."
