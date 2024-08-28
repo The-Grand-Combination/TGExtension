@@ -1,27 +1,30 @@
 {
-  "name": "paradoxscript-tools",
-  "displayName": "Victorian ParadoxScript Tools",
+  "name": "victorian-tools",
+  "displayName": "Victorian Tools",
   "description": "Syntax highlighting features and code snippets for Victoria II modding.",
-  "publisher": "KiwiStars",
-  "main": "./src/built/extension.js",
+  "publisher": "TGC Modding Team",
+  "main": "./src/extension.js",
   "version": "1.0.1",
   "icon": "/images/icon.PNG",
   "engines": {
     "vscode": "^1.84.0"
   },
-  "homepage": "https://github.com/ColdSlav/paradoxscript-tools#readme",
+  "homepage": "https://discord.com/invite/rGfQAgwyST",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ColdSlav/paradoxscript-tools.git"
+    "url": "https://github.com/The-Grand-Combination/TGExtension"
   },
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/ColdSlav/paradoxscript-tools/issues"
+    "url": "https://github.com/The-Grand-Combination/TGExtension/issues"
   },
   "categories": [
     "Programming Languages",
     "Snippets",
-    "Themes"
+    "Themes",
+    "Victoria II",
+    "Victoria",
+    "Paradox"
   ],
   "contributes": {
     "languages": [
