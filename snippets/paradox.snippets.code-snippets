@@ -198,16 +198,16 @@
         "description": "Fires the specified country event for the targeted country in a specified amount of days."
     },
 
-    "Event Localization": {
-        "prefix": "event_localization",
-        "body": [
-            "EVTNAME${ID};    ;;;;;;;;;;;;;x",
-            "EVTDESC${ID};    ;;;;;;;;;;;;;x",
-            "EVTOPTA${ID};    ;;;;;;;;;;;;;x",
-            "EVTOPTB${ID};    ;;;;;;;;;;;;;x",
-        ],
-        "description": "Fires the specified country event for the targeted country in a specified amount of days."
-    },
+	"Event Localization": {
+		"prefix": "event_localization",
+		"body": [
+			"EVTNAME${1:ID};    ;;;;;;;;;;;;;x",
+			"EVTDESC${1};    ;;;;;;;;;;;;;x",
+			"EVTOPTA${1};    ;;;;;;;;;;;;;x",
+			"EVTOPTB${1};    ;;;;;;;;;;;;;x"
+		],
+		"description": "Fires the specified country event for the targeted country in a specified amount of days."
+	},
 
     "Random": {
         "prefix": "random",
