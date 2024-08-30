@@ -1,13 +1,37 @@
 { 
 	"Event Localization": {
-		"prefix": "event_localization",
+		"prefix": "country_event_localization",
 		"body": [
-			"EVTNAME${1:ID};    ;;;;;;;;;;;;;x",
-			"EVTDESC${1};    ;;;;;;;;;;;;;x",
-			"EVTOPTA${1};    ;;;;;;;;;;;;;x",
-			"EVTOPTB${1};    ;;;;;;;;;;;;;x"
+			"EVTNAME${1:ID}; ;;;;;;;;;;;;;x",
+			"EVTDESC${1}; ;;;;;;;;;;;;;x",
+			"EVTOPTA${1}; ;;;;;;;;;;;;;x",
+			"EVTOPTB${1}; ;;;;;;;;;;;;;x"
 		],
 		"description": "Localization for events"
 	},
-
+	"Decision Localization": {
+		"prefix": "decision_localization",
+		"body": [
+			"${1:decision name}_title; ;;;;;;;;;;;;;x",
+			"${1}_desc; ;;;;;;;;;;;;;x"
+		],
+		"description": "Localization for decisions"
+	},
+	"Modifier Localization": {
+		"prefix": "modifier_localization",
+		"body": [
+			"${1:(modifier name}; ;;;;;;;;;;;;;x",
+			"${1}_desc; ;;;;;;;;;;;;;x"
+		],
+		"description": "Localization for decisions"
+	},
+	"Event News Localization": {
+		"prefix": "event_localization",
+		"body": [
+            "EVTDESC${1:ID}_NEWS_LONG",
+            "EVTDESC${1}_NEWS_MEDIUM",
+            "EVTDESC${1}_NEWS_SHORT"
+		],
+		"description": "Localization for events"
+	},
 }
