@@ -36,6 +36,17 @@
           ".mod"
         ],
         "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "csv",
+        "aliases": [
+          "CSV",
+          "csv"
+        ],
+        "extensions": [
+          ".csv"
+        ],
+        "configuration": "./language-configuration.json"
       }
     ],
     "grammars": [
@@ -43,19 +54,28 @@
         "language": "paradox",
         "scopeName": "source.mod",
         "path": "./syntaxes/paradox.tmLanguage.json"
+      },
+      {
+        "language": "csv",
+        "scopeName": "source.csv",
+        "path": "./syntaxes/csv.tmLanguage.json"
       }
     ],
     "themes": [
       {
         "label": "Victorian Dark+",
         "uiTheme": "vs-dark",
-        "path": "./themes/victorian-dark+.tmtheme"
+        "path": "./themes/victorian-dark+.json"
       }
     ],
     "snippets": [
       {
         "language": "paradox",
         "path": "./snippets/paradox.snippets.code-snippets"
+      },
+      {
+        "language": "csv",
+        "path": "./snippets/csv.snippets.code-snippets"
       }
     ]
   },

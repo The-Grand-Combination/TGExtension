@@ -1,0 +1,48 @@
+{
+	"scopeName": "source.csv",
+	"fileTypes": ["csv"],
+	"name": "Semicolon CSV",
+	"patterns": [
+	  {
+		"name": "text.csv",
+		"patterns": [
+		  {
+			"name": "variable.parameter.csv.key",
+			"match": "^[^;]+(?=;)",
+			"captures": {
+			  "0": {
+				"name": "variable.parameter.csv.key"
+			  }
+			}
+		  },
+		  {
+			"name": "variable.parameter.csv.text",
+			"match": "(?<=^[^;]+;)[^;]*(?=;|$)",
+			"captures": {
+			  "0": {
+				"name": "variable.parameter.csv.text"
+			  }
+			}
+		  },
+		  {
+			"name": "variable.parameter.csv.gray",
+			"match": "[^;][^;](.*)",
+			"captures": {
+			  "0": {
+				"name": "variable.parameter.csv.gray"
+			  }
+			}
+		  },
+		  {
+			"name": "variable.parameter.csv.gray2",
+			"match": "[.;][.;](.*)",
+			"captures": {
+			  "0": {
+				"name": "variable.parameter.csv.gray"
+			  }
+			}
+		  }
+		]
+	  }
+	]
+}

@@ -1,0 +1,326 @@
+{
+  "name": "Victorian-Dark+",
+  "author": "The Grand Network",
+  "comment": "Victorian Dark+ by The Grand Network for Victoria II's code syntax and CSV highlighting.",
+  "colorSpaceName": "sRGB",
+  "semanticClass": "theme.dark.victorian_dark+",
+  "settings": [
+    {
+      "name": "Theme Settings",
+      "settings": {
+        "background": "#1E1E1E",
+        "caret": "#fc5604",
+        "foreground": "#C5C8C6",
+        "invisibles": "#4B4E55",
+        "lineHighlight": "#282A2E",
+        "selection": "#373B41"
+      }
+    },
+    {
+      "name": "Comment",
+      "scope": "comment_sign",
+      "settings": {
+        "fontStyle": "italic",
+        "foreground": "#628547"
+      }
+    },
+    {
+      "name": "String",
+      "scope": "string",
+      "settings": {
+        "fontStyle": "italic",
+        "foreground": "#a3cf3e"
+      }
+    },
+    {
+      "name": "Yes or No",
+      "scope": "constant.boolean",
+      "settings": {
+        "foreground": "#CE6700"
+      }
+    },
+    {
+      "name": "Number",
+      "scope": "constant.number",
+      "settings": {
+        "foreground": "#D08442"
+      }
+    },
+    {
+      "name": "Invalid Keyword",
+      "scope": "broken.language.key",
+      "settings": {
+        "fontStyle": "bold italic",
+        "foreground": "#FF0B00"
+      }
+    },
+    {
+      "name": "Variable",
+      "scope": "variable",
+      "settings": {
+        "foreground": "#7A9DB8"
+      }
+    },
+    {
+      "name": "Variable Scope",
+      "scope": "variable.scope",
+      "settings": {
+        "foreground": "#7A9DB8"
+      }
+    },
+    {
+      "name": "Keyword Control",
+      "scope": "keyword.control",
+      "settings": {
+        "foreground": "#a374a8",
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "String Fallback",
+      "scope": "quoted.string.fallback",
+      "settings": {
+        "foreground": "#a3cf3e",
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "Flag",
+      "scope": "flag.variable",
+      "settings": {
+        "foreground": "#9cdcfe"
+      }
+    },
+    {
+      "name": "Variable Stat",
+      "scope": "variable.which",
+      "settings": {
+        "foreground": "#9cdcfe"
+      }
+    },
+    {
+      "name": "Modifier",
+      "scope": "modifier",
+      "settings": {
+        "foreground": "#c2c5ff"
+      }
+    },
+    {
+      "name": "Modifier Which",
+      "scope": "modifier.which",
+      "settings": {
+        "foreground": "#c2c5ff"
+      }
+    },
+    {
+      "name": "Reform",
+      "scope": "reform",
+      "settings": {
+        "foreground": "#bad67e"
+      }
+    },
+    {
+      "name": "Tag",
+      "scope": "tag",
+      "settings": {
+        "foreground": "#fe9c9c",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Ideology",
+      "scope": "ideology.name",
+      "settings": {
+        "foreground": "#8df09a"
+      }
+    },
+    {
+      "name": "Tag Ideology Color",
+      "scope": "ideology.tag",
+      "settings": {
+        "foreground": "#8df09a"
+      }
+    },
+    {
+      "name": "Issue",
+      "scope": "issue.name",
+      "settings": {
+        "foreground": "#bad67e"
+      }
+    },
+    {
+      "name": "Government",
+      "scope": "government.name",
+      "settings": {
+        "foreground": "#b8b233"
+      }
+    },
+    {
+      "name": "Trade Good",
+      "scope": "trade_good",
+      "settings": {
+        "foreground": "#cfae99"
+      }
+    },
+    {
+      "name": "Location",
+      "scope": "location",
+      "settings": {
+        "foreground": "#de584e",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Location Block",
+      "scope": "location_block",
+      "settings": {
+        "foreground": "#de584e",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "name": "Technology",
+      "scope": "tech",
+      "settings": {
+        "foreground": "#5e5eff"
+      }
+    },
+    {
+      "name": "PoP Type",
+      "scope": "pop_type.name",
+      "settings": {
+        "foreground": "#d0429e"
+      }
+    },
+    {
+      "name": "Casus Belli",
+      "scope": "casus_belli",
+      "settings": {
+        "foreground": "#a557ad"
+      }
+    },
+    {
+      "name": "Leader Traits",
+      "scope": "leader_traits",
+      "settings": {
+        "foreground": "#cca578"
+      }
+    },
+    {
+      "name": "National Value",
+      "scope": "national_value",
+      "settings": {
+        "foreground": "#daa3ff"
+      }
+    },
+    {
+      "name": "Building",
+      "scope": "building",
+      "settings": {
+        "foreground": "#c4f0f5"
+      }
+    },
+    {
+      "name": "Building Type",
+      "scope": "building_type",
+      "settings": {
+        "foreground": "#c4f0f5"
+      }
+    },
+    {
+      "name": "Culture",
+      "scope": "culture",
+      "settings": {
+        "foreground": "#fec59c",
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "Religion",
+      "scope": "religion",
+      "settings": {
+        "foreground": "#cbd042",
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "Picture",
+      "scope": "picture",
+      "settings": {
+        "foreground": "#9ca3fe"
+      }
+    },
+    {
+      "name": "Meta",
+      "scope": "meta",
+      "settings": {}
+    },
+    {
+      "name": "Variable Other",
+      "scope": "variable.other",
+      "settings": {
+        "foreground": "#D0B344"
+      }
+    },
+    {
+      "name": "Variable Language Description Scope",
+      "scope": "variable.language.description.scope",
+      "settings": {
+        "foreground": "#7A9DB8"
+      }
+    },
+    {
+      "name": "Punct Section Block",
+      "scope": "block_begin",
+      "settings": {
+        "foreground": "#676867"
+      }
+    },
+    {
+      "name": "Entity",
+      "scope": "entity",
+      "settings": {
+        "foreground": "#51E058"
+      }
+    },
+    {
+      "name": "Entity Name",
+      "scope": "entity.name",
+      "settings": {
+        "foreground": "#14B84B"
+      }
+    },
+    {
+      "name": "Entity Other",
+      "scope": "entity.other",
+      "settings": {
+        "foreground": "#75F09E"
+      }
+    },
+    {
+      "name": "Keyword Operator",
+      "scope": "keyword.operator",
+      "settings": {
+        "foreground": "#A339EF"
+      }
+    },
+    {
+      "scope": "variable.parameter.csv.key",
+      "settings": {
+        "foreground": "#6ad663"
+      }
+    },
+    {
+      "scope": "variable.parameter.csv.text",
+      "settings": {
+        "foreground": "#d4e3d3"  
+      }
+    },
+    {
+      "scope": "variable.parameter.csv.other",
+      "settings": {
+        "foreground": "#4c4f4c" 
+      }
+    }
+  ]
+}

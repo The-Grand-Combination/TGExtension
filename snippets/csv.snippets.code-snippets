@@ -1,0 +1,13 @@
+{ 
+	"Event Localization": {
+		"prefix": "event_localization",
+		"body": [
+			"EVTNAME${1:ID};    ;;;;;;;;;;;;;x",
+			"EVTDESC${1};    ;;;;;;;;;;;;;x",
+			"EVTOPTA${1};    ;;;;;;;;;;;;;x",
+			"EVTOPTB${1};    ;;;;;;;;;;;;;x"
+		],
+		"description": "Localization for events"
+	},
+
+}
