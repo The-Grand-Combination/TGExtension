@@ -3,9 +3,9 @@
   "displayName": "Victorian Tools",
   "description": "Syntax highlighting features and code snippets for Victoria II modding.",
   "publisher": "TGCModdingTeam",
-  "main": "./src/extension.js",
+  "main": "./src/built/extension.js",
   "version": "1.0.1",
-  "icon": "/images/icon.PNG",
+  "icon": "/images/icon.png",
   "engines": {
     "vscode": "^1.84.0"
   },
@@ -60,12 +60,11 @@
     ]
   },
   "devDependencies": {
-    "@types/node": "^20.10.2",
+    "@types/node": "^20.16.2",
     "@types/vscode": "^1.84.2",
     "typescript": "^5.3.2"
   },
   "scripts": {
     "compile": "tsc"
-  },
-  "dependencies": { }
+  }
 }

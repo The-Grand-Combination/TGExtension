@@ -1,4 +1,4 @@
-# **ParadoxScript Tools - An Intuitive and Fast Modding Tool** #
+# **Victorian Tools - An Intuitive and Fast Modding Tool** #
 
 **Discover a new era in Victoria II modding with ParadoxScript Tools - a VSCode extension crafted by modders for modders, designed to improve your modding enviroment with colorful syntax highlighting and a library of snippets, providing a seamless and user-friendly approach that makes modding more accessible.**
 
@@ -28,10 +28,8 @@ To enable and make use of the syntax highlight features, you need to go to the l
 
 ### **Community** ###
 
-Join the creator on Discord in [The Grand Combination](https://discord.gg/the-grand-combination-689466155978588176) and [Victoria 2 Modding Server](https://discord.gg/EbY7qaA) for assistance and discussion.
-
-**Download ParadoxScript Tools now and revolutionize your Victoria II modding journey!**
+Join the creator on Discord in [The Grand Combination](https://discord.gg/the-grand-combination-689466155978588176).
 
 ### *License* ###
 
-ParadoxScript Tools is distributed under the MIT Permissive Free Software license. See [LICENSE](LICENSE.txt) for more details.
+The Victorian Tools Extension is distributed under the MIT Permissive Free Software license. See [LICENSE](LICENSE.txt) for more details.
