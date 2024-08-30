@@ -2,7 +2,7 @@
   "name": "victorian-tools",
   "displayName": "Victorian Tools",
   "description": "Syntax highlighting features and code snippets for Victoria II modding.",
-  "publisher": "TGC Modding Team",
+  "publisher": "TGCModdingTeam",
   "main": "./src/extension.js",
   "version": "1.0.1",
   "icon": "/images/icon.PNG",
@@ -21,10 +21,7 @@
   "categories": [
     "Programming Languages",
     "Snippets",
-    "Themes",
-    "Victoria II",
-    "Victoria",
-    "Paradox"
+    "Themes"
   ],
   "contributes": {
     "languages": [
