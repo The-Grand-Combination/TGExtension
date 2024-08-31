@@ -4,7 +4,7 @@
   "description": "Syntax highlighting features and code snippets for Victoria II modding.",
   "publisher": "TGCModdingTeam",
   "main": "./src/built/extension.js",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "icon": "/images/icon.png",
   "engines": {
     "vscode": "^1.84.0"
