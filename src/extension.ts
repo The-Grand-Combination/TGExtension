@@ -81,6 +81,16 @@ async function deleteAndOpenFile(scenarioErrorsPath: string, treeDataProvider: M
           checkFileExistence(scenarioErrorsPath, resolve, reject, progress, treeDataProvider);
         });
       });
+
+      // Open the file automatically after validation is complete
+      const lastErrorFilePath = treeDataProvider.getLastErrorFilePath();
+      if (lastErrorFilePath) {
+        vscode.workspace.openTextDocument(lastErrorFilePath)
+          .then(doc => vscode.window.showTextDocument(doc));
+      } else {
+        vscode.window.showErrorMessage('No error file found to open.');
+      }
+      
     } catch (error) {
       vscode.window.showErrorMessage(`Error during validation: ${(error as Error).message}`);
     }
