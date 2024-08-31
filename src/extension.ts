@@ -18,14 +18,6 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     const selectedFolder = this.context.workspaceState.get<string>('selectedExeFolder');
     const items: vscode.TreeItem[] = [];
 
-    const placeholder = new vscode.TreeItem('Run KatEngine Validation', vscode.TreeItemCollapsibleState.None);
-    placeholder.command = {
-      command: '',
-      title: ''
-    };
-    placeholder.tooltip = 'Click to select .mod files and validate them.';
-    items.push(placeholder);
-
     const selectFolderItem = new vscode.TreeItem(
       selectedFolder ? `Root folder: "/${path.basename(selectedFolder)}" (Click to change)` : 'Click to select your Victoria II root folder',
       vscode.TreeItemCollapsibleState.None
@@ -139,7 +131,7 @@ async function checkFileExistence(
         break;
       }
 
-      progress.report({ message: 'Waiting for the error log to be recreated. This may take a few moments.' });
+      progress.report({ message: '' });
       await new Promise(resolve => setTimeout(resolve, 1000)); // Retry after 1 second
     }
   }
