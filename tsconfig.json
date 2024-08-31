@@ -5,12 +5,17 @@
         "outDir": "./src/built",
         "rootDir": "./src",
         "types": ["vscode", "node"],
-        "strict": true
+        "typeRoots": [
+            "node_modules/@types"
+        ],
+        "strict": true,
+        "noImplicitAny": false
     },
     "include": [
         "./src/**/*.ts"
     ],
     "exclude": [
         "node_modules"
-    ]
+    ],
+     "moduleResolution": "node"
 }
