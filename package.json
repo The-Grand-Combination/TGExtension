@@ -81,19 +81,34 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "ke_validate_container",
-          "title": "KE's Validation",
-          "icon": "/images/ke.png"
+          "id": "victorian_tools_container",
+          "title": "Victorian Tools",
+          "icon": "/images/vicIItools.png"
         }
       ]
     },
     "views": {
-      "ke_validate_container": [
+      "victorian_tools_container": [
         {
-          "id": "ke_validate_view",
-          "name": "KE's Validation"
+          "id": "victorian_tools",
+          "name": "Victorian Tools"
         }
       ]
+    },
+    "configuration": {
+      "type": "object",
+      "title": "Victorian Tools Configurations",
+      "properties": {
+        "configs.vic2_root_folder": {
+          "title": "Victoria II Root Folder",
+          "type": "string",
+          "default": "",
+          "description": "Path to the default Victoria II root folder.",
+          "editor": {
+            "type": "folder"
+          }
+        }
+      }
     }
   },
   "devDependencies": {

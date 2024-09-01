@@ -6,7 +6,7 @@ import * as os from 'os';
 class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
   private _onDidChangeTreeData: vscode.EventEmitter<vscode.TreeItem | undefined> = new vscode.EventEmitter<vscode.TreeItem | undefined>();
   readonly onDidChangeTreeData: vscode.Event<vscode.TreeItem | undefined> = this._onDidChangeTreeData.event;
-  private lastErrorFilePath: string | undefined;
+  private lastErrorFilePath = path.join(os.homedir(), 'AppData', 'Local', 'Katerina Engine', 'scenario_errors.txt');
 
   constructor(private context: vscode.ExtensionContext) {}
 
@@ -15,21 +15,11 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
   }
 
   getChildren(element?: vscode.TreeItem): vscode.ProviderResult<vscode.TreeItem[]> {
-    const selectedFolder = this.context.workspaceState.get<string>('selectedExeFolder');
     const items: vscode.TreeItem[] = [];
 
-    const selectFolderItem = new vscode.TreeItem(
-      selectedFolder ? `Root folder: "/${path.basename(selectedFolder)}" (Click to change)` : 'Click to select your Victoria II root folder',
-      vscode.TreeItemCollapsibleState.None
-    );
-    selectFolderItem.command = {
-      command: 'extension.selectFolder',
-      title: 'Select Folder'
-    };
-    selectFolderItem.tooltip = 'Click to change your Victoria II root folder.';
-    selectFolderItem.iconPath = new vscode.ThemeIcon('folder');
-    items.push(selectFolderItem);
-
+    const config = vscode.workspace.getConfiguration('configs');
+    const rootFolder = config.get<string>('vic2_root_folder');
+    
     const runButton = new vscode.TreeItem('Run KatEngine Validation', vscode.TreeItemCollapsibleState.None);
     runButton.command = {
       command: 'extension.openFileSelection',
@@ -47,6 +37,16 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     openLastErrorButton.iconPath = new vscode.ThemeIcon('code-oss');
     items.push(openLastErrorButton);
 
+    const openConfigButton = new vscode.TreeItem('Open Extension Settings', vscode.TreeItemCollapsibleState.None);
+    openConfigButton.command = {
+      command: 'workbench.action.openSettings',
+      arguments: ['configs.vic2_root_folder'], // Opens the specific setting
+      title: 'Open Extension Settings'
+    };
+    openConfigButton.tooltip = 'Click to configure the extension settings.';
+    openConfigButton.iconPath = new vscode.ThemeIcon('gear'); // Uses the gear icon for settings
+    items.push(openConfigButton);
+
     return Promise.resolve(items);
   }
 
@@ -55,7 +55,7 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
   }
 
   setLastErrorFilePath(filePath: string): void {
-    this.lastErrorFilePath = (filePath);
+    this.lastErrorFilePath = filePath;
     this.refresh(); // Refresh to ensure UI reflects changes
   }
 
@@ -149,91 +149,65 @@ async function checkFileExistence(
 
 export function activate(context: vscode.ExtensionContext) {
   const treeDataProvider = new MyTreeDataProvider(context);
-  vscode.window.createTreeView('ke_validate_view', {
-    treeDataProvider,
-  });
-
   context.subscriptions.push(
-    vscode.commands.registerCommand('extension.selectFolder', async () => {
-      const folderUri = await vscode.window.showOpenDialog({
-        canSelectFolders: true,
-        canSelectMany: false,
-        openLabel: 'Select Folder'
-      });
-
-      if (folderUri && folderUri[0]) {
-        const folderPath = folderUri[0].fsPath;
-        vscode.window.showInformationMessage(`Selected folder: ${folderPath}`);
-        context.workspaceState.update('selectedExeFolder', folderPath);
-        treeDataProvider.refresh(); // Refresh the view to display the selected folder and the button
-      }
-    }),
-
+    vscode.window.registerTreeDataProvider('victorian_tools', treeDataProvider),
     vscode.commands.registerCommand('extension.openFileSelection', async () => {
-      const selectedFolder = context.workspaceState.get<string>('selectedExeFolder');
-      if (!selectedFolder) {
-        vscode.window.showErrorMessage('No folder selected.');
+      const config = vscode.workspace.getConfiguration('configs');
+      const vic2RootFolder = config.get<string>('vic2_root_folder');
+      if (!vic2RootFolder) {
+        vscode.window.showErrorMessage('No root folder configured in the settings.');
         return;
       }
 
-      const modFolderPath = path.join(selectedFolder, 'mod');
-      fs.readdir(modFolderPath, (err, files) => {
-        if (err) {
-          vscode.window.showErrorMessage('Error reading mod folder.');
-          return;
-        }
+      const modFolderPath = path.join(vic2RootFolder, 'mod');
+      const mods = await fs.promises.readdir(modFolderPath);
+      const modFiles = mods.filter(file => file.endsWith('.mod'));
 
-        const modFiles = files.filter(file => file.endsWith('.mod'));
-        if (modFiles.length === 0) {
-          vscode.window.showInformationMessage('No .mod files found in the mod folder.');
-          return;
-        }
+      if (modFiles.length === 0) {
+        vscode.window.showInformationMessage('No .mod files found in the mod folder.');
+        return;
+      }
 
-        vscode.window.showQuickPick(modFiles, {
-          placeHolder: 'Select .mod files to validate',
-          canPickMany: true
-        }).then(selectedMods => {
-          if (selectedMods) {
-            const katEnginePath = path.join(selectedFolder, 'KatEngine.exe');
-            const scenarioErrorsPath = path.join(os.homedir(), 'AppData', 'Local', 'Katerina Engine', 'scenario_errors.txt');
+      const selectedMods = await vscode.window.showQuickPick(modFiles, {
+        placeHolder: 'Select .mod files to validate',
+        canPickMany: true
+      });
+      if (!selectedMods) {
+        return;
+      }
 
-            fs.access(katEnginePath, fs.constants.F_OK, (err) => {
-              if (err) {
-                vscode.window.showErrorMessage(
-                  'KatEngine.exe not found in the selected folder.',
-                  'Download Katerina Engine',
-                  'OK'
-                ).then(selection => {
-                  if (selection === 'Download Katerina Engine') {
-                    vscode.env.openExternal(vscode.Uri.parse('https://github.com/Nivaturimika/Katerina-Engine/tree/0.0.11')); // Replace with your documentation link
-                  }
-                });
-                return;
-              }
+      const fsPromises = fs.promises;
 
-              const command = `.\\KatEngine.exe -validate -mod ${selectedMods.join(' ')}`;
-              const terminal = vscode.window.createTerminal('KatEngine Validation');
-              terminal.show();
-              terminal.sendText(`cd "${selectedFolder}"`);
-              terminal.sendText(command);
-
-              deleteAndOpenFile(scenarioErrorsPath, treeDataProvider);
-            });
+      const katEnginePath = path.join(vic2RootFolder, 'KatEngine.exe');
+      const scenarioErrorsPath = path.join(os.homedir(), 'AppData', 'Local', 'Katerina Engine', 'scenario_errors.txt');
+      
+      try {
+        await fsPromises.access(katEnginePath, fs.constants.F_OK);
+      } catch (error) {
+        vscode.window.showErrorMessage(
+          'KatEngine.exe not found in the selected folder.',
+          'Download Katerina Engine',
+          'OK'
+        ).then((selection?: string) => {
+          if (selection === 'Download Katerina Engine') {
+            vscode.env.openExternal(vscode.Uri.parse('https://github.com/Nivaturimika/Katerina-Engine/tree/0.0.11'));
           }
         });
-      });
+        return;
+      }
+
+      const terminal = vscode.window.createTerminal('KatEngine Validation');
+      terminal.show();
+      terminal.sendText(`cd "${vic2RootFolder}"`);
+      terminal.sendText(`.\\KatEngine.exe -validate -mod ${selectedMods.join(' ')}`);
+
+      deleteAndOpenFile(scenarioErrorsPath, treeDataProvider);
     }),
 
     vscode.commands.registerCommand('extension.openLastErrorFile', () => {
       const lastErrorFilePath = treeDataProvider.getLastErrorFilePath();
       if (!lastErrorFilePath) {
-        try { 
-          vscode.workspace.openTextDocument(path.join(os.homedir(), 'AppData', 'Local', 'Katerina Engine', 'scenario_errors.txt'))
-          .then(doc => vscode.window.showTextDocument(doc));
-        }
-        catch {
-          vscode.window.showErrorMessage('No error file to open.')
-        }  
+        vscode.window.showErrorMessage('No error file to open.');
         return;
       }
       vscode.workspace.openTextDocument(lastErrorFilePath)
