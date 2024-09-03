@@ -401,7 +401,7 @@ export function activate(context: vscode.ExtensionContext) {
   
   context.subscriptions.push(clickLoc);
 
-  const hoverProviderTagLoc = vscode.languages.registerHoverProvider({ scheme: 'file', language: 'paradox' }, {
+  const hoverTag = vscode.languages.registerHoverProvider({ scheme: 'file', language: 'paradox' }, {
     provideHover(document, position, token) {
       console.log('Hovering over: ', position); 
       // Updated regex to match title, desc, or name with or without quotes
@@ -444,9 +444,9 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
   
-  context.subscriptions.push(hoverProviderTagLoc);
+  context.subscriptions.push(hoverTag);
 
-  const clickTagProvider = vscode.languages.registerDefinitionProvider({ scheme: 'file', language: 'paradox' }, {
+  const clickTag = vscode.languages.registerDefinitionProvider({ scheme: 'file', language: 'paradox' }, {
     provideDefinition(document, position, token) {
         // Match any 3 uppercase letters or digits
         const range = document.getWordRangeAtPosition(position, /[A-Z0-9]{3}/);
@@ -475,7 +475,7 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  context.subscriptions.push(clickTagProvider);
+  context.subscriptions.push(clickTag);
 
 }
 
