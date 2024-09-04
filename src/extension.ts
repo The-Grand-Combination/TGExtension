@@ -241,7 +241,9 @@ export function activate(context: vscode.ExtensionContext) {
             }
           }
         }
-        return new vscode.Hover("No Source Found");
+        const no_source = 'No Source Found.'
+        const markdown = new vscode.MarkdownString(`${no_source}`);
+        return new vscode.Hover(markdown);
       }
   }
 
@@ -272,6 +274,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (fs.existsSync(localizationPath)) {
         const files = fs.readdirSync(localizationPath).filter(file => file.endsWith('.csv'));
 
+        let found = false;
         for (const file of files) {
           const filePath = path.join(localizationPath, file);
           const fileContent = fs.readFileSync(filePath, 'utf-8');
@@ -287,12 +290,68 @@ export function activate(context: vscode.ExtensionContext) {
           }
         }
 
+        const targetFile = path.join(localizationPath, 'vt_localization.csv');
+        if (!fs.existsSync(targetFile)) {
+          const loc_code = 'CODE;ENGLISH;FRENCH;GERMAN;POLISH;SPANISH;ITALIAN;SWEDISH;CZECH;HUNGARIAN;DUTCH;PORTUGUESE;RUSSIAN;FINNISH;x\n';
+          fs.writeFileSync(targetFile, loc_code);
+        }
+
+        const fileContent = fs.readFileSync(targetFile, 'utf-8');
+        const lines = fileContent.split('\n');
+        const targetUri = vscode.Uri.file(targetFile);
+        const targetPosition = new vscode.Position(lines.length, 0);
+        return new vscode.Location(targetUri, targetPosition);
+        
       }
     }
+
+
   });
   
   context.subscriptions.push(clickLoc);
 
+  const hoverTag = vscode.languages.registerHoverProvider({ scheme: 'file', language: 'paradox' }, {
+    provideHover(document, position) {
+      const regex = /\b(?!AND\b|NOT\b)[A-Z0-9]{3}\b/;
+      const range = document.getWordRangeAtPosition(position, regex);
+      const match = range ? document.getText(range).match(regex) : null;
+      const text = match ? match[0] : null;
+      return text ? searchLocation(text, document) : null;
+    }
+  });
+  
+  context.subscriptions.push(hoverTag);
+
+  const clickTag = vscode.languages.registerDefinitionProvider({ scheme: 'file', language: 'paradox' }, {
+    provideDefinition(document, position) {
+      const regex = /\b(?!AND\b|NOT\b)[A-Z0-9]{3}\b/;
+      const range = document.getWordRangeAtPosition(position, regex);
+      const match = range ? document.getText(range).match(regex) : null;
+      const text = match ? match[0] : null;
+  
+      if (text) {
+        const currentFilePath = document.uri.fsPath;
+        const parentDirectory = path.dirname(currentFilePath);
+        const historyCountryPath = path.join(parentDirectory, '../history/countries');
+  
+        if (fs.existsSync(historyCountryPath)) {
+          const files = fs.readdirSync(historyCountryPath).filter(file => file.startsWith(text));
+          
+          if (files.length > 0) {
+            const filePath = path.join(historyCountryPath, files[0]);
+            const uri = vscode.Uri.file(filePath);
+            const position = new vscode.Position(0, 0);
+            return new vscode.Location(uri, position);
+          }
+        }
+      }
+  
+      return null;
+    }
+  });
+  
+  context.subscriptions.push(clickTag);
+  
 }
 
 export function deactivate() {}
