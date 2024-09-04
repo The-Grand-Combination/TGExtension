@@ -371,6 +371,25 @@
         ],
         "description": "A basic triggered only country event template"
     },
+
+    "Country Event Barebones": {
+        "prefix": "country_event_barebones",
+        "body": [
+            "country_event = {",
+            "    id = ${1:ID}",
+            "    is_triggered_only = yes",
+            "    allow_multiple_instances = yes",
+            "    ",
+            "    immediate = { }",
+            "    ",
+            "    option = {",
+            "        name = \"\"",
+            "        ",
+            "    }",
+            "}"
+        ],
+        "description": "A barebones event template for mechanical stuff, for Bob"
+    },
     "News Article": {
         "prefix": "news",
         "body": [

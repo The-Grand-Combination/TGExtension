@@ -265,14 +265,18 @@
 		},
 		"strings": {
 		"name": "string.quoted.double.paradox",
-		"begin": "(?<!\\s*(?:first_names|last_names)\\s*=\\s*{\\s*\\S.*?)\"",
-		"end": "\"",
-		"patterns": [
-			{
-			"name": "constant.character.escape.paradox",
-			"match": "\\\\."
-			}
-		]
+			"begin": "(?<!\\s*(?:first_names|last_names)\\s*=\\s*{\\s*\\S.*?)\"",
+			"end": "\"",
+			"patterns": [
+				{
+				"name": "constant.character.escape.paradox",
+				"match": "\\\\."
+				}
+			]
+		},
+		"loc": {
+			"name": "keyword.loc.paradox",
+			"match": "/title\\s*=\\s*\\w+/"
 		}
 	}
 }

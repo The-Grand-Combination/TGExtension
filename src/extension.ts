@@ -219,263 +219,79 @@ export function activate(context: vscode.ExtensionContext) {
 
   var modifier = false;
 
-  const hoverModifiers = vscode.languages.registerHoverProvider({ scheme: 'file', language: 'paradox' }, {
-    provideHover(document, position, token) {
-        console.log('Hovering over for modifiers: ', position);
+  function searchLocation(text, document) {
 
-        // Regex to match `has_country_modifier = something`, `remove_country_modifier = something`, or `add_country_modifier = { name = something }`
-        const range = document.getWordRangeAtPosition(position, /\b(has_country_modifier|remove_country_modifier|add_country_modifier\s*=\s*{[^}]*name)\s*=\s*["']?[\w-]+["']?/);
+      const currentFilePath = document.uri.fsPath;
+      const localizationPath = path.join(path.dirname(currentFilePath), '../localisation');
 
-        if (range) {
-            console.log("Matched modifier regex");
-            const text = document.getText(range);
-            let modifierName;
-
-            if (text.startsWith('add_country_modifier')) {
-                const match = text.match(/name\s*=\s*["']?([\w-]+)["']?/);
-                if (match) {
-                    modifierName = match[1];
-                }
-            } else {
-                modifierName = text.split('=')[1].trim().replace(/['"]+/g, '');
-            }
-
-            if (modifierName) {
-                // Get the path of the current file and construct the common/modifiers.txt path
-                const currentFilePath = document.uri.fsPath;
-                const modifiersFilePath = path.join(path.dirname(currentFilePath), '../common/event_modifiers.txt');
-
-                console.log('modifiersFilePath: ', modifiersFilePath);
-
-                // Read and search the modifiers.txt file
-                if (fs.existsSync(modifiersFilePath)) {
-                    console.log("Modifiers file found");
-                    const fileContent = fs.readFileSync(modifiersFilePath, 'utf-8');
-                    
-                    // Regex to find the modifier block in the format `modifierName = { ... }`
-                    const modifierRegex = new RegExp(`${modifierName}\\s*=\\s*{([^}]*)}`, 's');
-                    const match = modifierRegex.exec(fileContent);
-                    if (match && match[1]) {
-                        // Extract the contents of the modifier block
-                        const modifierContent = match[1].trim().split('\n').map(line => line.trim()).filter(line => line.length > 0);
-                        if (modifierContent.length > 0) {
-                            // Display the modifier content in the hover tooltip
-                            const markdown = new vscode.MarkdownString(`**Modifier:** ${modifierName}\n\n**Contents:**\n${modifierContent.join('\n')}`);
-                            modifier = true;
-                            return new vscode.Hover(markdown);
-                        }
-                    }
-                }
-            }
-        }
-        return null;
-    }
-  });
-
-  context.subscriptions.push(hoverModifiers);
-
-  const clickModifierProvider = vscode.languages.registerDefinitionProvider({ scheme: 'file', language: 'paradox' }, {
-    provideDefinition(document, position, token) {
-        const range = document.getWordRangeAtPosition(position, /\b(has_country_modifier|remove_country_modifier|add_country_modifier\s*=\s*{[^}]*name)\s*=\s*["']?[\w-]+["']?/);
-        if (range) {
-            const text = document.getText(range);
-            let modifierName;
-
-            if (text.startsWith('add_country_modifier')) {
-                const match = text.match(/name\s*=\s*["']?([\w-]+)["']?/);
-                if (match) {
-                    modifierName = match[1];
-                }
-            } else {
-                modifierName = text.split('=')[1].trim().replace(/['"]+/g, '');
-            }
-
-            if (modifierName) {
-                const currentFilePath = document.uri.fsPath;
-                const modifiersFilePath = path.join(path.dirname(currentFilePath), '../common/event_modifiers.txt');
-
-                if (fs.existsSync(modifiersFilePath)) {
-                    const fileContent = fs.readFileSync(modifiersFilePath, 'utf-8');
-                    const lines = fileContent.split('\n');
-                    for (let i = 0; i < lines.length; i++) {
-                        if (lines[i].includes(`${modifierName} =`)) {
-                            const uri = vscode.Uri.file(modifiersFilePath);
-                            const position = new vscode.Position(i, 0);
-                            modifier = true;
-                            return new vscode.Location(uri, position);
-                        }
-                    }
-                }
-            }
-        }
-        return null;
-    }
-  });
-  
-  context.subscriptions.push(clickModifierProvider);
-
-  const hoverLoc = vscode.languages.registerHoverProvider({ scheme: 'file', language: 'paradox' }, {
-    provideHover(document, position, token) {
-      console.log('Hovering over: ', position);
-      if (modifier) { return null; };
-  
-      // Updated regex to match title, desc, or name with or without quotes
-      const range = document.getWordRangeAtPosition(position, /\b(has_country_modifier|remove_country_modifier|title|desc|name|news_desc_short|news_desc_medium|news_desc_long)\s*=\s*["']?[\w-]+["']?/);
-  
-      if (range) {
-        console.log("Matched regex");
-        const text = document.getText(range);
-        if (/^(title|desc|name|news_desc_short|news_desc_medium|news_desc_long)\s*=/.test(text)) {
-          // Extract the key type (title, desc, name) and the value, removing any quotes
-          const [keyType, key] = text.split('=').map(part => part.trim().replace(/['"]+/g, ''));
-  
-          // Get the path of the current file and construct the localization folder path
-          const currentFilePath = document.uri.fsPath;
-          const localizationPath = path.join(path.dirname(currentFilePath), '../localisation');
-  
-          console.log('localizationPath: ', localizationPath);
-  
-          // Read and search all CSV files in the localization folder
-          if (fs.existsSync(localizationPath)) {
-            console.log("Loc path found");
-            const files = fs.readdirSync(localizationPath).filter(file => file.endsWith('.csv'));
-            console.log(files[0]);
-            for (const file of files) {
-              const filePath = path.join(localizationPath, file);
-              const fileContent = fs.readFileSync(filePath, 'utf-8');
-              const lines = fileContent.split('\n');
-              for (const line of lines) {
-                const [csvKey, csvValue] = line.split(';');
-                if (csvKey === key) {
-                  // Display the matching line in the hover tooltip
-                  const markdown = new vscode.MarkdownString(`${csvValue}`);
-                  console.log(`Found localization for ${keyType}: `, key);
-                  return new vscode.Hover(markdown);
-                }
-              }
+      if (fs.existsSync(localizationPath)) {
+        console.log("Loc path found");
+        console.log("Searching for: " + text);
+        const files = fs.readdirSync(localizationPath).filter(file => file.endsWith('.csv'));
+        console.log(files[0]);
+        for (const file of files) {
+          const filePath = path.join(localizationPath, file);
+          const fileContent = fs.readFileSync(filePath, 'utf-8');
+          const lines = fileContent.split('\n');
+          for (const line of lines) {
+            const [csvKey, csvValue] = line.split(';');
+            if (csvKey === text) {
+              const markdown = new vscode.MarkdownString(`${csvValue}`);
+              return new vscode.Hover(markdown);
             }
           }
         }
+        return new vscode.Hover("No Source Found");
       }
-      return null;
+  }
+
+  const hoverLoc = vscode.languages.registerHoverProvider({ scheme: 'file', language: 'paradox' }, {
+    provideHover(document, position) {
+      const regex = /\b(?:has_country_flag|clr_country_flag|add_country_flag|remove_country_modifier|add_country_modifier|title|desc|name|news_desc_short|news_desc_medium|news_desc_long)\s*=\s*["']?([\w-]+)["']?/
+      const range = document.getWordRangeAtPosition(position, regex);
+      const match = range ? document.getText(range).match(regex) : null;
+      const text = match ? match[1] : null;
+      return text ? searchLocation(text, document) : null;
     }
+
   });
   
   context.subscriptions.push(hoverLoc);
 
   const clickLoc = vscode.languages.registerDefinitionProvider({ scheme: 'file', language: 'paradox' }, {
-    provideDefinition(document, position, token) {
+    provideDefinition(document, position) {
       if (modifier) { return null; };
 
-      const range = document.getWordRangeAtPosition(position, /\b(has_country_modifier|remove_country_modifiertitle|desc|name|news_desc_short|news_desc_medium|news_desc_long)\s*=\s*["']?[\w-]+["']?/);
+      const range = document.getWordRangeAtPosition(position, /\b(has_country_flag|clr_country_flag|add_country_flag|title|desc|name|news_desc_short|news_desc_medium|news_desc_long)\s*=\s*["']?[\w-]+["']?/);
       
-      if (range) {
-        const text = document.getText(range);
-        const key = text.split('=')[1].trim().replace(/['"]+/g, '');
-  
-        const currentFilePath = document.uri.fsPath;
-        const localizationPath = path.join(path.dirname(currentFilePath), '../localisation');
-  
-        if (fs.existsSync(localizationPath)) {
-          const files = fs.readdirSync(localizationPath).filter(file => file.endsWith('.csv'));
-  
-          for (const file of files) {
-            const filePath = path.join(localizationPath, file);
-            const fileContent = fs.readFileSync(filePath, 'utf-8');
-            const lines = fileContent.split('\n');
-  
-            for (let i = 0; i < lines.length; i++) {
-              const [csvKey] = lines[i].split(';');
-              if (csvKey === key) {
-                const targetUri = vscode.Uri.file(filePath);
-                const targetPosition = new vscode.Position(i, 0);
-                return new vscode.Location(targetUri, targetPosition);
-              }
+      if (!range) { return null; }
+
+      const key = document.getText(range).split('=')[1].trim().replace(/['"]+/g, '');
+      const localizationPath = path.join(path.dirname(document.uri.fsPath), '../localisation');
+
+      if (fs.existsSync(localizationPath)) {
+        const files = fs.readdirSync(localizationPath).filter(file => file.endsWith('.csv'));
+
+        for (const file of files) {
+          const filePath = path.join(localizationPath, file);
+          const fileContent = fs.readFileSync(filePath, 'utf-8');
+          const lines = fileContent.split('\n');
+
+          for (let i = 0; i < lines.length; i++) {
+            const [csvKey] = lines[i].split(';');
+            if (csvKey === key) {
+              const targetUri = vscode.Uri.file(filePath);
+              const targetPosition = new vscode.Position(i, 0);
+              return new vscode.Location(targetUri, targetPosition);
             }
           }
         }
+
       }
-      return null;
     }
   });
   
   context.subscriptions.push(clickLoc);
-
-  const hoverTag = vscode.languages.registerHoverProvider({ scheme: 'file', language: 'paradox' }, {
-    provideHover(document, position, token) {
-      console.log('Hovering over: ', position); 
-      // Updated regex to match title, desc, or name with or without quotes
-      const range = document.getWordRangeAtPosition(position, /[A-Z0-9]{3}/);
-  
-      if (range) {
-        console.log("Matched regex");
-        const text = document.getText(range);
-        if (text != "AND") {
-  
-          // Get the path of the current file and construct the localization folder path
-          const currentFilePath = document.uri.fsPath;
-          const localizationPath = path.join(path.dirname(currentFilePath), '../localisation');
-  
-          console.log('localizationPath: ', localizationPath);
-  
-          // Read and search all CSV files in the localization folder
-          if (fs.existsSync(localizationPath)) {
-            console.log("Loc path found");
-            const files = fs.readdirSync(localizationPath).filter(file => file.endsWith('.csv'));
-            console.log(files[0]);
-            for (const file of files) {
-              const filePath = path.join(localizationPath, file);
-              const fileContent = fs.readFileSync(filePath, 'utf-8');
-              const lines = fileContent.split('\n');
-              for (const line of lines) {
-                const [csvKey, csvValue] = line.split(';');
-                if (csvKey === text) {
-                  // Display the matching line in the hover tooltip
-                  const markdown = new vscode.MarkdownString(`${csvValue}`);
-                  console.log(`Found localization for ${text}: `, text);
-                  return new vscode.Hover(markdown);
-                }
-              }
-            }
-          }
-        }
-      }
-      return null;
-    }
-  });
-  
-  context.subscriptions.push(hoverTag);
-
-  const clickTag = vscode.languages.registerDefinitionProvider({ scheme: 'file', language: 'paradox' }, {
-    provideDefinition(document, position, token) {
-        // Match any 3 uppercase letters or digits
-        const range = document.getWordRangeAtPosition(position, /[A-Z0-9]{3}/);
-
-        if (range) {
-            const text = document.getText(range);
-            if (text !== "AND") {
-                // Get the path of the current file and construct the history/country folder path
-                const currentFilePath = document.uri.fsPath;
-                const historyCountryPath = path.join(path.dirname(currentFilePath), '../history/countries');
-
-                if (fs.existsSync(historyCountryPath)) {
-                    const files = fs.readdirSync(historyCountryPath).filter(file => file.startsWith(text));
-                    
-                    if (files.length > 0) {
-                        const filePath = path.join(historyCountryPath, files[0]);
-
-                        const uri = vscode.Uri.file(filePath);
-                        const position = new vscode.Position(0, 0); // Start at the beginning of the file
-                        return new vscode.Location(uri, position);
-                    }
-                }
-            }
-        }
-        return null;
-    }
-  });
-
-  context.subscriptions.push(clickTag);
 
 }
 
