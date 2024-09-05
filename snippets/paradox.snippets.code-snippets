@@ -277,12 +277,17 @@
         ]
     },
 
-    "Option statement": {
-        "prefix": "option",
+    "Option statement for decisions": {
+        "prefix": "option_decision",
         "body": [
             "option = {",
             "    name = \"EVTOPT${letter}${id}\"",
             "    $0",
+            "    ai_chance = {",
+            "        factor = $0",
+            "        modifier = {}",
+            "            factor = $1",
+            "    }",
             "}"
         ]
     },
@@ -334,11 +339,23 @@
             "    option = {",
             "        name = \"EVTOPTA${1}\"",
             "        $5",
+            "        ",
+            "        ai_chance = {",
+            "            factor = $0",
+            "            modifier = {}",
+            "                factor = $1",
+            "        }",
             "    }",
             "    ",
             "    option = {",
             "        name = \"EVTOPTB${1}\"",
             "        $6",
+            "        ",
+            "        ai_chance = {",
+            "            factor = $0",
+            "            modifier = {}",
+            "                factor = $1",
+            "        }",
             "    }",
             "    ",
             "}"
