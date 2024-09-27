@@ -26,7 +26,7 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
       title: 'Select .mod files'
     };
     runButton.tooltip = 'Click to select .mod files and validate them.';
-    runButton.iconPath = new vscode.ThemeIcon('play');
+    runButton.iconPath = new vscode.ThemeIcon('debug-alt');
     items.push(runButton);
 
     const openLastErrorButton = new vscode.TreeItem('Open Last Error File', vscode.TreeItemCollapsibleState.None);
@@ -37,14 +37,22 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     openLastErrorButton.iconPath = new vscode.ThemeIcon('code-oss');
     items.push(openLastErrorButton);
 
+    const launchGameButton = new vscode.TreeItem('Launch Game', vscode.TreeItemCollapsibleState.None);
+    launchGameButton.command = {
+      command: 'extension.launchGame',
+      title: 'Pick mods and launch game'
+    };
+    launchGameButton.iconPath = new vscode.ThemeIcon('play');
+    items.push(launchGameButton);
+
     const openConfigButton = new vscode.TreeItem('Open Extension Settings', vscode.TreeItemCollapsibleState.None);
     openConfigButton.command = {
       command: 'workbench.action.openSettings',
-      arguments: ['configs.vic2_root_folder'], // Opens the specific setting
+      arguments: ['configs.vic2_root_folder'],
       title: 'Open Extension Settings'
     };
     openConfigButton.tooltip = 'Click to configure the extension settings.';
-    openConfigButton.iconPath = new vscode.ThemeIcon('gear'); // Uses the gear icon for settings
+    openConfigButton.iconPath = new vscode.ThemeIcon('gear');
     items.push(openConfigButton);
 
     return Promise.resolve(items);
@@ -56,7 +64,7 @@ class MyTreeDataProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
 
   setLastErrorFilePath(filePath: string): void {
     this.lastErrorFilePath = filePath;
-    this.refresh(); // Refresh to ensure UI reflects changes
+    this.refresh();
   }
 
   getLastErrorFilePath(): string | undefined {
@@ -214,7 +222,54 @@ export function activate(context: vscode.ExtensionContext) {
       }
       vscode.workspace.openTextDocument(lastErrorFilePath)
         .then(doc => vscode.window.showTextDocument(doc));
+    }),
+
+    vscode.commands.registerCommand('extension.launchGame', async () => {
+      const config = vscode.workspace.getConfiguration('configs');
+      const vic2RootFolder = config.get<string>('vic2_root_folder');
+      if (!vic2RootFolder) {
+        vscode.window.showErrorMessage('No root folder configured in the settings.');
+        return;
+      }
+
+      const modFolderPath = path.join(vic2RootFolder, 'mod');
+      const mods = await fs.promises.readdir(modFolderPath);
+      const modFiles = mods.filter(file => file.endsWith('.mod'));
+
+      if (modFiles.length === 0) {
+        vscode.window.showInformationMessage('No .mod files found in the mod folder.');
+        return;
+      }
+
+      const selectedMods = await vscode.window.showQuickPick(modFiles, {
+        placeHolder: 'Select .mod files to run.',
+        canPickMany: true
+      });
+      if (!selectedMods) {
+        return;
+      }
+
+      const fsPromises = fs.promises;
+
+      const gamepath = path.join(vic2RootFolder, 'v2game.exe');
+      
+      try {
+        await fsPromises.access(gamepath, fs.constants.F_OK);
+      } catch (error) {
+        vscode.window.showErrorMessage(
+          'v2gamne.exe not found in the selected folder. Are you sure you got the correct root folder?',
+          'OK'
+        );
+        return;
+      }
+      const modifiedMods = selectedMods.map(mod => `'-mod=mod/${mod}'`);
+      const terminal = vscode.window.createTerminal('Game Launcher');
+      terminal.show();
+      terminal.sendText(`cd "${vic2RootFolder}"`);
+      terminal.sendText(`.\\v2game.exe ${modifiedMods.join(' ')}`);
+
     })
+
   );
 
   var modifier = false;
