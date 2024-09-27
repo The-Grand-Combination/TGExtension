@@ -137,6 +137,7 @@
     "buffer-to-arraybuffer": "^0.0.6",
     "dds-ktx-parser": "^1.0.1",
     "pngjs": "^7.0.0",
-    "sdds": "^0.0.2"
+    "sdds": "^0.0.2",
+    "vsce": "^2.15.0"
   }
 }
