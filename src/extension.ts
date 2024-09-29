@@ -209,7 +209,8 @@ export function activate(context: vscode.ExtensionContext) {
       const terminal = vscode.window.createTerminal('KatEngine Validation');
       terminal.show();
       terminal.sendText(`cd "${vic2RootFolder}"`);
-      terminal.sendText(`.\\KatEngine.exe -validate -mod ${selectedMods.join(' ')}`);
+      const modifiedMods = selectedMods.map(mod => `-mod=mod/${mod}`);
+      terminal.sendText(`.\\KatEngine.exe -validate ${modifiedMods.join(' ')}`);
 
       deleteAndOpenFile(scenarioErrorsPath, treeDataProvider);
     }),
