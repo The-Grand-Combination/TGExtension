@@ -2,8 +2,7 @@ node_modules
 *.vsix
 
 # Ignore everything in src except built files
-src/*
-!src/built/**
+src/built/**
 
 # Ignore node_modules but include necessary types
 node_modules/
