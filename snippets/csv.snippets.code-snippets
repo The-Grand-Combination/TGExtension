@@ -2,26 +2,26 @@
 	"Event Localization": {
 		"prefix": "country_event_localization",
 		"body": [
-			"EVTNAME${1:ID}; ;;;;;;;;;;;;;x",
-			"EVTDESC${1}; ;;;;;;;;;;;;;x",
-			"EVTOPTA${1}; ;;;;;;;;;;;;;x",
-			"EVTOPTB${1}; ;;;;;;;;;;;;;x"
+			"EVTNAME${1:ID};Localization;;;;;;;;;;;;;x",
+			"EVTDESC${1};Localization;;;;;;;;;;;;;x",
+			"EVTOPTA${1};Localization;;;;;;;;;;;;;x",
+			"EVTOPTB${1};Localization;;;;;;;;;;;;;x"
 		],
 		"description": "Localization for events"
 	},
 	"Decision Localization": {
 		"prefix": "decision_localization",
 		"body": [
-			"${1:decision name}_title; ;;;;;;;;;;;;;x",
-			"${1}_desc; ;;;;;;;;;;;;;x"
+			"${1:decision name}_title;Localization;;;;;;;;;;;;;x",
+			"${1}_desc;Localization;;;;;;;;;;;;;x"
 		],
 		"description": "Localization for decisions"
 	},
 	"Modifier Localization": {
 		"prefix": "modifier_localization",
 		"body": [
-			"${1:(modifier name}; ;;;;;;;;;;;;;x",
-			"${1}_desc; ;;;;;;;;;;;;;x"
+			"${1:(modifier name)};Localization;;;;;;;;;;;;;x",
+			"${1}_desc;Localization;;;;;;;;;;;;;x"
 		],
 		"description": "Localization for decisions"
 	},
@@ -33,5 +33,62 @@
             "EVTDESC${1}_NEWS_SHORT"
 		],
 		"description": "Localization for events"
+	},
+	"Ideology Localization": {
+		"prefix": "ideology_localization",
+		"body": [
+            "${1:(ideology name)};Localization;;;;;;;;;;;;;x",
+			"${1}_uh;Localization;;;;;;;;;;;;;x"
+		],
+		"description": "Localization for ideologies"
+	},
+	"Issue Localization": {
+		"prefix": "issue_localization",
+		"body": [
+            "${1:(issue name)};Localization;;;;;;;;;;;;;x",
+			"${1}_desc;Localization;;;;;;;;;;;;;x",
+			"${1}_l;Localization;;;;;;;;;;;;;x"
+		],
+		"description": "Localization for issues"
+	},
+	"Reform Movement Localization": {
+		"prefix": "reform_localization",
+		"body": [
+            "${1:(issue name)};Localization;;;;;;;;;;;;;x",
+			"${1}_desc;Localization;;;;;;;;;;;;;x",
+			"${1}_l;Localization;;;;;;;;;;;;;x"
+		],
+		"description": "Localization for reforms"
+	},
+	"Rebels Localization": {
+		"prefix": "rebels_localization",
+		"body": [
+            "${1:(issue name)}_army;Localization;;;;;;;;;;;;;x",
+			"${1}_desc;Localization;;;;;;;;;;;;;x",
+			"${1}_name;Localization;;;;;;;;;;;;;x",
+			"${1}_title;Localization;;;;;;;;;;;;;x"
+		],
+		"description": "Localization for rebels"
+	},
+	"Single Line Localization": {
+		"prefix": "other_localization",
+		"body": [
+			"Key;Localization;;;;;;;;;;;;;x"
+		],
+		"description": "Localization for other things"
+	},
+	"Province Definitions": {
+		"prefix": "definition_prov",
+		"body": [
+			"ProvID;RED;GREEN;BLUE;provName;x"
+		],
+		"description": "Defining Provinces"
+	},
+	"Province Adjacencies": {
+		"prefix": "adjacency_prov",
+		"body": [
+			"FromProvID;ToProvID;sea|land|impassable|canal;ThroughProvID;Data;Comment"
+		],
+		"description": "Defining Adjacencies"
 	},
 }
