@@ -614,7 +614,7 @@
             "#${Localized Party Name}",
             "party = {",
             "    name = \"${tag}_${ideology}\"",
-            "    start_date = ${yyyy}.${mm}.{dd}",
+            "    start_date = ${yyyy}.${mm}.${dd}",
             "    end_date = ${yyyy}.${mm}.${dd}",
             "    ",
             "    ideology = ${ideology}",
@@ -702,5 +702,38 @@
             "}"
         ],
         "description": "A template for a casus belli that is only ever given out by events/decisions or in scripted wars. Causes minimal lag."
+    },
+
+    "Renaming Format - Province Only": {
+        "prefix": "rename_prov",
+        "body": [
+            "any_country = {",
+            "    limit = {",
+            "        owns = ${1:ProvID}",
+            "        is_culture_group = ${Culture_Group}",
+            "        primary_culture = ${Primary_Culture}",
+            "    }",
+            "    ${1} = { change_province_name = \"${Rename}\" }",
+            "}"
+        ],
+        "description": "Standard IF emulation for renames for provs in the renaming event."
+    },
+
+    "Renaming Format - Province + State": {
+        "prefix": "rename_capital",
+        "body": [
+            "any_country = {",
+            "    limit = {",
+            "        owns = ${1:ProvID}",
+            "        is_culture_group = ${Culture_Group}",
+            "        primary_culture = ${Primary_Culture}",
+            "    }",
+            "    ${1} = {",
+            "        change_province_name = \"${Rename}\"",
+            "        state_scope = { change_region_name = \"${Region_Rename}\" }",
+            "    }",
+            "}"
+        ],
+        "description": "Standard IF emulation for renames for capital provs in the renaming event."
     }
 }
