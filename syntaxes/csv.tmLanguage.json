@@ -7,6 +7,16 @@
 		"name": "text.csv",
 		"patterns": [
 		  {
+			"name": "comment_sign.paradox",
+			"begin": "#",
+			"captures": {
+				"1": {
+				"name": "comment.paradox"
+				}
+			},
+			"end": "$\\n?"
+		  },
+		  {
 			"name": "variable.parameter.csv.key",
 			"match": "^[^;]+(?=;)",
 			"captures": {
