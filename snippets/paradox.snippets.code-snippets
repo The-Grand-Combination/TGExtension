@@ -104,8 +104,8 @@
         "description": "Change the proportion of the targeted pop that follows the specified ideology. Works the same way as Upper House."
     },
 
-    "Add Casus Belli": {
-        "prefix": "add_casus_belli",
+    "Add Casus Belli - Effect": {
+        "prefix": "add_casus_belli_effect",
         "body": [
             "add_casus_belli = {",
             "    target = ${TAG}",
@@ -117,8 +117,8 @@
         "description": "NOT TO BE CONFUSED WITH casus_belli. Gives the target a casus belli against the country in scope for n months. state_province_id may only be used for state-specific CBs."
     },
 
-    "Casus Belli": {
-        "prefix": "add_casus_belli",
+    "Casus Belli - Effect": {
+        "prefix": "add_casus_belli_effect",
         "body": [
             "add_casus_belli = {",
             "    target = ${TAG}",
@@ -178,7 +178,7 @@
         "body": [
             "check_variable = { which = $1 value = $2 }"
         ],
-        "description": "Returns true if the variable has been set at an earlier stage and its value is greater than or equal to x."
+        "description": "Returns true if the variable has been set at an earlier stage and its value is greater than x. NOTE: Unlike other conditions, check_variable will *only* be true if the variable's actual value is greater than the value in the condition. Likewise, NOT = { check_variable } will *only* be true if the variable's actual value is less than the value in the condition."
     },
 
     "Change Variable": {
@@ -197,6 +197,7 @@
         ],
         "description": "Fires the specified country event for the targeted country in a specified amount of days."
     },
+
     "Random": {
         "prefix": "random",
         "body": [
@@ -230,7 +231,7 @@
             "}",
             "clr_country_flag = hidden_tooltip"            
         ],
-        "description": "Uses a clever assortment of if emulation and country flags to make an hidden tooltip, original method by Sir Runner."
+        "description": "Uses a clever assortment of if emulation and country flags to make an hidden tooltip, original method by SirRunner."
     },
 
     "Unemployment by PoP Type": {
@@ -331,6 +332,7 @@
             "    }",
             "",
             "    #fire_only_once = yes",
+            "",
             "    option = {",
             "        name = \"EVTOPTA${1}\"",
             "        $5",
@@ -343,7 +345,7 @@
             "    ",
             "}"
         ],
-        "description": "A basic country event template."
+        "description": "A basic country event template. Note that it can only have a maximum of 5 options without looking bad."
     },
 
     "Country Event Triggered": {
@@ -369,7 +371,7 @@
             "    ",
             "}"
         ],
-        "description": "A basic triggered only country event template"
+        "description": "A basic triggered only country event template. Note that it can only have a maximum of 5 options without looking bad."
     },
 
     "Country Event Barebones": {
@@ -390,6 +392,7 @@
         ],
         "description": "A barebones event template for mechanical stuff, for Bob"
     },
+
     "News Article": {
         "prefix": "news",
         "body": [
@@ -424,7 +427,7 @@
             "    }",
             "}"
         ],
-        "description": "Basic decision template."
+        "description": "Basic decision template. Note that all decisions in a file *must* be within 'political_decisions = {}'."
     },
 
     "History Relationship": {
@@ -657,5 +660,47 @@
             "}"
         ],
         "description":"A template for basic country data. Only for use inside the commons files."
+    },
+    
+    "Casus Belli - Defining": {
+        "prefix": "casus_belli_defining",
+        "body": [
+            "CB_name = {",
+            "    sprite_index = Number",
+            "    is_triggered_only = yes",
+            "    months = 12",
+            "    crisis = no",
+            "    constructing_cb = no",
+            "",
+            "    badboy_factor = 0",
+            "    prestige_factor = 0.5",
+            "    peace_cost_factor = 35",
+            "    penalty_factor = 1",
+            "",
+            "    break_truce_prestige_factor = 1",
+            "    break_truce_infamy_factor = 1",
+            "    break_truce_militancy_factor = 1",
+            "    truce_months = 48",
+            "",
+            "    good_relation_prestige_factor = 1",
+            "    good_relation_infamy_factor = 1",
+            "    good_relation_militancy_factor = 1",
+            "",
+            "    always = no",
+            "",
+            "    can_use = {} # This part must be empty, or the CB will cause lag",
+            "",
+            "    # po_effects",
+            "",
+            "    on_po_accepted = {",
+            "        # effects",
+            "    }",
+            "",
+            "    on_add = {}",
+            "",
+            "    war_name = INSERT_NAME_HERE",
+            "}"
+        ],
+        "description": "A template for a casus belli that is only ever given out by events/decisions or in scripted wars. Causes minimal lag."
     }
 }
