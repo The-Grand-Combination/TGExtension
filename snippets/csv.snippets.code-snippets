@@ -91,4 +91,41 @@
 		],
 		"description": "Defining Adjacencies: 'Data' will always be '0' unless it is a canal; for impassable, use '0;0'"
 	},
+	"Country Government Types Localization": {
+		"prefix": "govt_types_localization",
+		"body": [
+			"${1:TAG}_absolute_monarchy;Localization;;;;;;;;;;;;;x",
+			"${1}_absolute_monarchy2;Localization;;;;;;;;;;;;;x",
+			"${1}_prussian_constitutionalism;Localization;;;;;;;;;;;;;x",
+			"${1}_prussian_constitutionalism2;Localization;;;;;;;;;;;;;x",
+			"${1}_hms_government;Localization;;;;;;;;;;;;;x",
+			"${1}_hms_government2;Localization;;;;;;;;;;;;;x",
+			"${1}_colonial_company;Localization;;;;;;;;;;;;;x",
+			"${1}_dominion;Localization;;;;;;;;;;;;;x",
+			"${1}_dominion2;Localization;;;;;;;;;;;;;x",
+			"${1}_dominion3;Localization;;;;;;;;;;;;;x",
+			"${1}_democracy;Localization;;;;;;;;;;;;;x",
+			"${1}_democracy2;Localization;;;;;;;;;;;;;x",
+			"${1}_bourgeois_dictatorship;Localization;;;;;;;;;;;;;x",
+			"${1}_fascist_dictatorship;Localization;;;;;;;;;;;;;x",
+			"${1}_presidential_dictatorship;Localization;;;;;;;;;;;;;x",
+			"${1}_proletarian_dictatorship;Localization;;;;;;;;;;;;;x",
+			"${1}_theocracy;Localization;;;;;;;;;;;;;x",
+			"${1}_trade_unions_congress;Localization;;;;;;;;;;;;;x"
+		],
+		"description": "Localization for Government Types: delete portions as necessary"
+	},
+	"Country Party Types Localization": {
+		"prefix": "party_types_localization",
+		"body": [
+			"${1:TAG}_anarcho_liberal;Localization;;;;;;;;;;;;;x",
+			"${1}_communist;Localization;;;;;;;;;;;;;x",
+			"${1}_conservative;Localization;;;;;;;;;;;;;x",
+			"${1}_fascist;Localization;;;;;;;;;;;;;x",
+			"${1}_liberal;Localization;;;;;;;;;;;;;x",
+			"${1}_reactionary;Localization;;;;;;;;;;;;;x",
+			"${1}_socialist;Localization;;;;;;;;;;;;;x",
+		],
+		"description": "Localization for Parties: add and delete portions as necessary"
+	}
 }
