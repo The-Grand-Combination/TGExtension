@@ -1,9 +1,10 @@
 {
     "compilerOptions": {
-        "target": "es6",
+        "target": "ES2020",
         "module": "commonjs",
         "outDir": "./src/built",
         "rootDir": "./src",
+        "sourceMap": true,
         "types": ["vscode", "node"],
         "typeRoots": [
             "node_modules/@types"
@@ -13,7 +14,8 @@
     },
     "include": [
         "./src/**/*.ts",
-        "./src/*.ts"
+        "./src/*.ts",
+        "src"
     ],
     "exclude": [
         "node_modules"

@@ -44,6 +44,16 @@ export class ToolbarProvider implements vscode.TreeDataProvider<vscode.TreeItem>
                 iconName: 'code-oss'
             },
             {
+                label: 'Run Map Validation',
+                collapsibleState: vscode.TreeItemCollapsibleState.None,
+                command: {
+                    command: 'extension.openFileSelectionMap',
+                    title: 'Select .mod files'
+                },
+                tooltip: 'Click to select .mod files and validate them.',
+                iconName: 'globe'
+            },
+            {
                 label: 'Launch Game',
                 collapsibleState: vscode.TreeItemCollapsibleState.None,
                 command: {
