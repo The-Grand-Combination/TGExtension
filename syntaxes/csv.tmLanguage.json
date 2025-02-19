@@ -7,6 +7,20 @@
 		"name": "text.csv",
 		"patterns": [
 		  {
+		    "name": "location.codesnippet.paradox",
+		    "match": "\\b(ProvID|FromProvID|ToProvID)\\b"
+		  },
+		  {
+			"name": "comment_sign.paradox",
+			"begin": "#",
+			"captures": {
+				"1": {
+				"name": "comment.paradox"
+				}
+			},
+			"end": "$\\n?"
+		  },
+		  {
 			"name": "variable.parameter.csv.key",
 			"match": "^[^;]+(?=;)",
 			"captures": {

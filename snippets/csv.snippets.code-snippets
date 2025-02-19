@@ -2,26 +2,26 @@
 	"Event Localization": {
 		"prefix": "country_event_localization",
 		"body": [
-			"EVTNAME${1:ID}; ;;;;;;;;;;;;;x",
-			"EVTDESC${1}; ;;;;;;;;;;;;;x",
-			"EVTOPTA${1}; ;;;;;;;;;;;;;x",
-			"EVTOPTB${1}; ;;;;;;;;;;;;;x"
+			"EVTNAME${1:ID};Localization;;;;;;;;;;;;;x",
+			"EVTDESC${1};Localization;;;;;;;;;;;;;x",
+			"EVTOPTA${1};Localization;;;;;;;;;;;;;x",
+			"EVTOPTB${1};Localization;;;;;;;;;;;;;x"
 		],
 		"description": "Localization for events"
 	},
 	"Decision Localization": {
 		"prefix": "decision_localization",
 		"body": [
-			"${1:decision name}_title; ;;;;;;;;;;;;;x",
-			"${1}_desc; ;;;;;;;;;;;;;x"
+			"${1:decision name}_title;Localization;;;;;;;;;;;;;x",
+			"${1}_desc;Localization;;;;;;;;;;;;;x"
 		],
 		"description": "Localization for decisions"
 	},
 	"Modifier Localization": {
 		"prefix": "modifier_localization",
 		"body": [
-			"${1:(modifier name}; ;;;;;;;;;;;;;x",
-			"${1}_desc; ;;;;;;;;;;;;;x"
+			"${1:(modifier name)};Localization;;;;;;;;;;;;;x",
+			"${1}_desc;Localization;;;;;;;;;;;;;x"
 		],
 		"description": "Localization for decisions"
 	},
@@ -34,4 +34,98 @@
 		],
 		"description": "Localization for events"
 	},
+	"Ideology Localization": {
+		"prefix": "ideology_localization",
+		"body": [
+            "${1:(ideology name)};Localization;;;;;;;;;;;;;x",
+			"${1}_uh;Localization;;;;;;;;;;;;;x"
+		],
+		"description": "Localization for ideologies"
+	},
+	"Issue Localization": {
+		"prefix": "issue_localization",
+		"body": [
+            "${1:(issue name)};Localization;;;;;;;;;;;;;x",
+			"${1}_desc;Localization;;;;;;;;;;;;;x",
+			"${1}_l;Localization;;;;;;;;;;;;;x"
+		],
+		"description": "Localization for issues"
+	},
+	"Reform Movement Localization": {
+		"prefix": "reform_localization",
+		"body": [
+            "${1:(issue name)};Localization;;;;;;;;;;;;;x",
+			"${1}_desc;Localization;;;;;;;;;;;;;x",
+			"${1}_l;Localization;;;;;;;;;;;;;x"
+		],
+		"description": "Localization for reforms"
+	},
+	"Rebels Localization": {
+		"prefix": "rebels_localization",
+		"body": [
+            "${1:(issue name)}_army;Localization;;;;;;;;;;;;;x",
+			"${1}_desc;Localization;;;;;;;;;;;;;x",
+			"${1}_name;Localization;;;;;;;;;;;;;x",
+			"${1}_title;Localization;;;;;;;;;;;;;x"
+		],
+		"description": "Localization for rebels"
+	},
+	"Single Line Localization": {
+		"prefix": "other_localization",
+		"body": [
+			"Key;Localization;;;;;;;;;;;;;x"
+		],
+		"description": "Localization for other things"
+	},
+	"Province Definitions": {
+		"prefix": "definition_prov",
+		"body": [
+			"ProvID;RED;GREEN;BLUE;provName;x"
+		],
+		"description": "Defining Provinces: remember to define it in continent.txt, climate.txt, regions.txt, add prov + pop history files in history/provinces and history/pops, increase max_provinces by 1 for every new prov in default.map, and add it to the all_land_provs region"
+	},
+	"Province Adjacencies": {
+		"prefix": "adjacency_prov",
+		"body": [
+			"FromProvID;ToProvID;sea|land|impassable|canal;ThroughProvID;Data;Comment"
+		],
+		"description": "Defining Adjacencies: 'Data' will always be '0' unless it is a canal; for impassable, use '0;0'"
+	},
+	"Country Government Types Localization": {
+		"prefix": "govt_types_localization",
+		"body": [
+			"${1:TAG}_absolute_monarchy;Localization;;;;;;;;;;;;;x",
+			"${1}_absolute_monarchy2;Localization;;;;;;;;;;;;;x",
+			"${1}_prussian_constitutionalism;Localization;;;;;;;;;;;;;x",
+			"${1}_prussian_constitutionalism2;Localization;;;;;;;;;;;;;x",
+			"${1}_hms_government;Localization;;;;;;;;;;;;;x",
+			"${1}_hms_government2;Localization;;;;;;;;;;;;;x",
+			"${1}_colonial_company;Localization;;;;;;;;;;;;;x",
+			"${1}_dominion;Localization;;;;;;;;;;;;;x",
+			"${1}_dominion2;Localization;;;;;;;;;;;;;x",
+			"${1}_dominion3;Localization;;;;;;;;;;;;;x",
+			"${1}_democracy;Localization;;;;;;;;;;;;;x",
+			"${1}_democracy2;Localization;;;;;;;;;;;;;x",
+			"${1}_bourgeois_dictatorship;Localization;;;;;;;;;;;;;x",
+			"${1}_fascist_dictatorship;Localization;;;;;;;;;;;;;x",
+			"${1}_presidential_dictatorship;Localization;;;;;;;;;;;;;x",
+			"${1}_proletarian_dictatorship;Localization;;;;;;;;;;;;;x",
+			"${1}_theocracy;Localization;;;;;;;;;;;;;x",
+			"${1}_trade_unions_congress;Localization;;;;;;;;;;;;;x"
+		],
+		"description": "Localization for Government Types: delete portions as necessary"
+	},
+	"Country Party Types Localization": {
+		"prefix": "party_types_localization",
+		"body": [
+			"${1:TAG}_anarcho_liberal;Localization;;;;;;;;;;;;;x",
+			"${1}_communist;Localization;;;;;;;;;;;;;x",
+			"${1}_conservative;Localization;;;;;;;;;;;;;x",
+			"${1}_fascist;Localization;;;;;;;;;;;;;x",
+			"${1}_liberal;Localization;;;;;;;;;;;;;x",
+			"${1}_reactionary;Localization;;;;;;;;;;;;;x",
+			"${1}_socialist;Localization;;;;;;;;;;;;;x",
+		],
+		"description": "Localization for Parties: add and delete portions as necessary"
+	}
 }
