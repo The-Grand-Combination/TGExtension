@@ -112,6 +112,10 @@
 					"match": "\\b\\d{1,5}(?=\\s*=\\s*{)"
 				},
 				{
+					"name": "location.codesnippet.paradox",
+					"match": "ProvID"
+				},
+				{
 					"name": "tech.paradox",
 					"match": "(?<=\\s*(?:invention|tech_school|technology)\\s*=\\s*)\\S.*?\\b"
 				},

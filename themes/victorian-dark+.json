@@ -179,6 +179,14 @@
       }
     },
     {
+      "name": "Location Code Snippet",
+      "scope": "location.codesnippet.paradox",
+      "settings": {
+        "foreground": "#de584e",
+        "fontStyle": "bold"
+      }
+    },
+    {
       "name": "Technology",
       "scope": "tech",
       "settings": {
