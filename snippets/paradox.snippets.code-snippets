@@ -293,7 +293,7 @@
         "body": [
             "ai_chance = {",
             "    factor = $0",
-            "    modifier = {}",
+            "    modifier = {",
             "        factor = $1",
             "    }",
             "}"
