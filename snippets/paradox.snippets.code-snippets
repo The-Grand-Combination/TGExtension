@@ -735,5 +735,26 @@
             "}"
         ],
         "description": "Standard IF emulation for renames for capital provs in the renaming event."
-    }
+    },
+
+    "Song": {
+        "prefix": "song",
+        "body": [
+            "song = {",
+            "    name = \"$1\"",
+            "    chance = {",
+            "        modifier = { factor = $2 }",
+            "    }",
+            "}"
+        ],
+        "description": "Effect that sets up the chances for a specific piece of music to play."
+    },
+
+    "Song Modifier": {
+        "prefix": "modifier_song",
+        "body": [
+            "modifier = { factor = $2 $3 }"
+        ],
+        "description": "Effect that adds a modifier to the chance of a specific piece of music playing."
+    },
 }
