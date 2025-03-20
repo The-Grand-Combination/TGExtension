@@ -2,8 +2,8 @@
 	"Event Localization": {
 		"prefix": "country_event_localization",
 		"body": [
-			"EVTNAME${1:ID};Localization;;;;;;;;;;;;;x",
-			"EVTDESC${1};Localization;;;;;;;;;;;;;x",
+			"EVTDESC${1:ID};Localization;;;;;;;;;;;;;x",
+			"EVTNAME${1};Localization;;;;;;;;;;;;;x",
 			"EVTOPTA${1};Localization;;;;;;;;;;;;;x",
 			"EVTOPTB${1};Localization;;;;;;;;;;;;;x"
 		],
