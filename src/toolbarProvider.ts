@@ -18,7 +18,7 @@ export class ToolbarProvider implements vscode.TreeDataProvider<vscode.TreeItem>
 
     constructor(private context: vscode.ExtensionContext) {
         this.lastErrorFilePath = path.join(os.homedir(), 'AppData', 'Local', 'Katerina Engine', 'scenario_errors.txt');
-        this.lastMapErrorFilePath = path.join(os.homedir(), 'AppData', 'Local', 'Katerina Engine', 'province_validation_report.txt');
+        this.lastMapErrorFilePath = path.join(os.homedir(), 'AppData', 'Local', 'province_validation_report.txt');
     }
 
     getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
