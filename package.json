@@ -99,6 +99,10 @@
       {
         "command": "extension.launchGame",
         "title": "Launch Game"
+      },
+      {
+        "command": "extension.openRenameGenerator",
+        "title": "Open Province Rename Generator"
       }
     ],
     "configuration": {
@@ -120,6 +124,7 @@
       "onLanguage:paradox",
       "onCommand:extension.openFileSelection",
       "onCommand:extension.openFileSelectionMap",
+      "onCommand:extension.openRenameGenerator",
       "onCommand:extension.launchGame",
       "onView:victorian_tools"
     ]

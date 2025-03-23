@@ -17,7 +17,6 @@ export class ToolbarProvider implements vscode.TreeDataProvider<vscode.TreeItem>
     private lastMapErrorFilePath: string;
 
     constructor(private context: vscode.ExtensionContext) {
-        // Definir caminhos padrão para os arquivos de log
         this.lastErrorFilePath = path.join(os.homedir(), 'AppData', 'Local', 'Katerina Engine', 'scenario_errors.txt');
         this.lastMapErrorFilePath = path.join(os.homedir(), 'AppData', 'Local', 'Katerina Engine', 'province_validation_report.txt');
     }
@@ -67,6 +66,16 @@ export class ToolbarProvider implements vscode.TreeDataProvider<vscode.TreeItem>
                 },
                 tooltip: 'Opens the last map validation report.',
                 iconName: 'map'
+            },
+            {
+                label: 'Rename Generator',
+                collapsibleState: vscode.TreeItemCollapsibleState.None,
+                command: {
+                    command: 'extension.openRenameGenerator',
+                    title: 'Open Province Rename Generator'
+                },
+                tooltip: 'Generate province rename code snippets.',
+                iconName: 'edit'
             },
             {
                 label: 'Launch Game',
