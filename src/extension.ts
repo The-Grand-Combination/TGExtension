@@ -29,6 +29,16 @@ export function activate(context: vscode.ExtensionContext) {
             await vscode.window.showTextDocument(doc);
         }),
 
+        vscode.commands.registerCommand('extension.openLastMapErrorFile', async () => {
+            const errorPath = toolbarProvider.getLastMapErrorFilePath();
+            if (!errorPath || !await FileUtils.fileExists(errorPath)) {
+                vscode.window.showErrorMessage('No map validation file to open.');
+                return;
+            }
+            const doc = await vscode.workspace.openTextDocument(errorPath);
+            await vscode.window.showTextDocument(doc);
+        }),
+
         vscode.commands.registerCommand('extension.openFileSelectionMap', () => 
             ValidationMapManager.validateMap(toolbarProvider)
         ),

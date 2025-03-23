@@ -9,13 +9,17 @@ interface ToolbarItem {
     tooltip?: string;
     iconName: string;
 }
+
 export class ToolbarProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<vscode.TreeItem | undefined>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
     private lastErrorFilePath: string;
+    private lastMapErrorFilePath: string;
 
     constructor(private context: vscode.ExtensionContext) {
+        // Definir caminhos padrão para os arquivos de log
         this.lastErrorFilePath = path.join(os.homedir(), 'AppData', 'Local', 'Katerina Engine', 'scenario_errors.txt');
+        this.lastMapErrorFilePath = path.join(os.homedir(), 'AppData', 'Local', 'Katerina Engine', 'province_validation_report.txt');
     }
 
     getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
@@ -41,6 +45,7 @@ export class ToolbarProvider implements vscode.TreeDataProvider<vscode.TreeItem>
                     command: 'extension.openLastErrorFile',
                     title: 'Open the last Error Log'
                 },
+                tooltip: 'Opens the last game validation error log.',
                 iconName: 'code-oss'
             },
             {
@@ -50,8 +55,18 @@ export class ToolbarProvider implements vscode.TreeDataProvider<vscode.TreeItem>
                     command: 'extension.openFileSelectionMap',
                     title: 'Select .mod files'
                 },
-                tooltip: 'Click to select .mod files and validate them.',
+                tooltip: 'Click to select .mod files and validate their maps.',
                 iconName: 'globe'
+            },
+            {
+                label: 'Open Last Map Error File',
+                collapsibleState: vscode.TreeItemCollapsibleState.None,
+                command: {
+                    command: 'extension.openLastMapErrorFile',
+                    title: 'Open the last Map Validation Report'
+                },
+                tooltip: 'Opens the last map validation report.',
+                iconName: 'map'
             },
             {
                 label: 'Launch Game',
@@ -95,5 +110,14 @@ export class ToolbarProvider implements vscode.TreeDataProvider<vscode.TreeItem>
 
     getLastErrorFilePath(): string {
         return this.lastErrorFilePath;
+    }
+
+    setLastMapErrorFilePath(filePath: string): void {
+        this.lastMapErrorFilePath = filePath;
+        this.refresh();
+    }
+
+    getLastMapErrorFilePath(): string {
+        return this.lastMapErrorFilePath;
     }
 }

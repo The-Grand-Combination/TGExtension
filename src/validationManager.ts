@@ -51,7 +51,7 @@ export class ValidationManager {
             title: 'Validating... This can take a minute.',
             cancellable: false
         }, async () => {
-            const errorFilePath = toolbarProvider.getLastErrorFilePath();
+            const errorFilePath = path.join(ConfigManager.getRootFolder()!, 'error.log');
             try {
                 await ValidationManager.waitForErrorFile(errorFilePath, toolbarProvider);
                 const doc = await vscode.workspace.openTextDocument(errorFilePath);
@@ -70,6 +70,7 @@ export class ValidationManager {
             try {
                 await fs.promises.access(filePath, fs.constants.F_OK);
                 const content = await FileUtils.readFile(filePath);
+                // Use setLastErrorFilePath, not setLastMapErrorFilePath
                 toolbarProvider.setLastErrorFilePath(filePath);
                 return;
             } catch {

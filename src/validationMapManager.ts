@@ -20,34 +20,57 @@ interface ColorPosition {
     positions: Array<{ x: number; y: number }>;
 }
 
+interface DuplicateValidationResult {
+    duplicateIds: Array<{
+        id: string;
+        lines: number[];
+    }>;
+    duplicateColors: Array<{
+        color: string;
+        provinces: Array<{
+            id: string;
+            name: string;
+            lineNumber: number;
+        }>;
+    }>;
+}
+
 interface ColorValidationResult {
     undefinedColors: ColorPosition[];
     unusedColors: ProvinceDefinition[];
     provinceCountValid: boolean;
     maxProvinces: number;
     definitionCount: number;
+    duplicates: DuplicateValidationResult;
 }
 
 export class ValidationMapManager {
     static async validateMap(toolbarProvider: ToolbarProvider): Promise<void> {
         if (!await ConfigManager.validateRootFolder()) return;
-
+    
         const modFiles = await FileUtils.getModFiles();
         if (modFiles.length === 0) {
             vscode.window.showInformationMessage('No .mod files found in the mod folder.');
             return;
         }
-
+    
         const selectedMods = await vscode.window.showQuickPick(modFiles, {
             placeHolder: 'Select .mod files to validate',
             canPickMany: true
         });
         if (!selectedMods) return;
-
-        const rootFolder = ConfigManager.getRootFolder()!;
-        const mapPaths = await ValidationMapManager.extractMapPaths(selectedMods, rootFolder);
-        const validationResults = await ValidationMapManager.validateProvinceColors(mapPaths);
-        await ValidationMapManager.generateValidationReport(validationResults, toolbarProvider);
+    
+        // Use vscode.window.withProgress para mostrar a mensagem de progresso
+        return vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: 'Validating map... This can take a minute.',
+            cancellable: false
+        }, async () => {
+            const rootFolder = ConfigManager.getRootFolder()!;
+            const mapPaths = await ValidationMapManager.extractMapPaths(selectedMods, rootFolder);
+            const validationResults = await ValidationMapManager.validateProvinceColors(mapPaths);
+            await ValidationMapManager.generateValidationReport(validationResults, toolbarProvider);
+        });
     }
 
     private static async extractMapPaths(modFiles: string[], rootFolder: string): Promise<string[]> {
@@ -125,14 +148,33 @@ export class ValidationMapManager {
                 console.log('Expected max_provinces should be:', highestProvinceId + 1);
 
                 const definitionColors = new Map<string, ProvinceDefinition>();
+                const idMap = new Map<string, number[]>();
+                const colorMap = new Map<string, Array<{id: string; name: string; lineNumber: number}>>();
+
+                const duplicates: DuplicateValidationResult = {
+                    duplicateIds: [],
+                    duplicateColors: []
+                };
+
                 definitionsContent
                     .split('\n')
+                    .slice(1)
                     .map(line => line.trim())
-                    .filter(line => line && !line.startsWith(';'))
                     .forEach((line, index) => {
                         const [id, red, green, blue, name] = line.split(';');
-                        if (id && red && green && blue) {
+                        
+                        if (red && green && blue) {
                             const colorKey = `${red},${green},${blue}`;
+                            
+                            if (!colorMap.has(colorKey)) {
+                                colorMap.set(colorKey, []);
+                            }
+                            colorMap.get(colorKey)!.push({
+                                id,
+                                name,
+                                lineNumber: index + 2
+                            });
+
                             definitionColors.set(colorKey, {
                                 id,
                                 red: parseInt(red),
@@ -143,6 +185,24 @@ export class ValidationMapManager {
                             });
                         }
                     });
+
+                idMap.forEach((lines, id) => {
+                    if (lines.length > 1) {
+                        duplicates.duplicateIds.push({
+                            id,
+                            lines
+                        });
+                    }
+                });
+
+                colorMap.forEach((provinces, color) => {
+                    if (provinces.length > 1) {
+                        duplicates.duplicateColors.push({
+                            color,
+                            provinces
+                        });
+                    }
+                });
 
                 const undefinedColors: ColorPosition[] = [];
                 imageColors.forEach((positions, color) => {
@@ -173,7 +233,8 @@ export class ValidationMapManager {
                     unusedColors,
                     provinceCountValid: maxProvinces === highestProvinceId + 1,
                     maxProvinces,
-                    definitionCount: highestProvinceId
+                    definitionCount: highestProvinceId,
+                    duplicates
                 });
             } catch (error) {
                 console.error('Validation error:', error);
@@ -188,14 +249,32 @@ export class ValidationMapManager {
         let reportContent = '';
 
         results.forEach((result, index) => {
-            if (result.provinceCountValid) {
-                reportContent += `? Province count is valid (max_provinces = ${result.maxProvinces}, highest province ID = ${result.definitionCount})\n\n`;
-            } else {
+            if (!result.provinceCountValid) {
                 reportContent += `Province count mismatch:\n`;
                 reportContent += `   - max_provinces in default.map: ${result.maxProvinces}\n`;
                 reportContent += `   - Highest province ID in definition.csv: ${result.definitionCount}\n`;
                 reportContent += `   - Expected max_provinces value: ${result.definitionCount + 1}\n\n`;
             }
+
+            if (result.duplicates.duplicateIds.length > 0) {
+                reportContent += 'Duplicate Province IDs found:\n';
+                result.duplicates.duplicateIds.forEach(duplicate => {
+                    reportContent += `- ID "${duplicate.id}" appears at lines: ${duplicate.lines.join(', ')}\n`;
+                });
+                reportContent += '\n';
+            }
+
+            if (result.duplicates.duplicateColors.length > 0) {
+                reportContent += 'Duplicate RGB colors found:\n';
+                result.duplicates.duplicateColors.forEach(duplicate => {
+                    reportContent += `- RGB(${duplicate.color}) is used by multiple provinces:\n`;
+                    duplicate.provinces.forEach(province => {
+                        reportContent += `  * Province ${province.id} (${province.name}) at line ${province.lineNumber}\n`;
+                    });
+                });
+                reportContent += '\n';
+            }
+
             reportContent += '\n';
             if (result.undefinedColors.length > 0) {
                 reportContent += 'Colors found in provinces.bmp but not defined in definition.csv:\n';
@@ -222,7 +301,9 @@ export class ValidationMapManager {
 
             if (result.undefinedColors.length === 0 && 
                 result.unusedColors.length === 0 && 
-                result.provinceCountValid) {
+                result.provinceCountValid &&
+                result.duplicates.duplicateIds.length === 0 &&
+                result.duplicates.duplicateColors.length === 0) {
                 reportContent += 'All validations passed successfully.\n\n';
             }
         });
@@ -233,7 +314,8 @@ export class ValidationMapManager {
             await fs.promises.writeFile(reportPath, reportContent);
             const doc = await vscode.workspace.openTextDocument(reportPath);
             await vscode.window.showTextDocument(doc);
-            toolbarProvider.setLastErrorFilePath(reportPath);
+            // Use setLastMapErrorFilePath instead of setLastErrorFilePath
+            toolbarProvider.setLastMapErrorFilePath(reportPath);
         } catch (error) {
             vscode.window.showErrorMessage(`Failed to generate validation report: ${(error as Error).message}`);
         }
