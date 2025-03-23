@@ -265,6 +265,45 @@ export class RenameGeneratorWebview {
                     let provinceGroupCounter = 0;
                     let renameCounter = 0;
                     
+                    // Setup event delegation for condition buttons
+                    document.addEventListener('click', function(event) {
+                        // Check if clicked element is a condition button
+                        if (event.target.classList.contains('condition-button')) {
+                            const button = event.target;
+                            const targetId = button.getAttribute('data-target');
+                            const textToInsert = button.getAttribute('data-text');
+                            const cursorOffset = parseInt(button.getAttribute('data-cursor-offset') || '0');
+                            
+                            const textarea = document.getElementById(targetId);
+                            if (textarea) {
+                                const startPos = textarea.selectionStart;
+                                const endPos = textarea.selectionEnd;
+                                const text = textarea.value;
+                                
+                                // Add a space if the cursor is not at the beginning and the last character is not a space
+                                const needsSpace = startPos > 0 && text.charAt(startPos - 1) !== ' ' && text.charAt(startPos - 1) !== '\\n';
+                                const prefix = needsSpace ? ' ' : '';
+                                
+                                // Insert the text
+                                textarea.value = text.substring(0, startPos) + prefix + textToInsert + text.substring(endPos);
+                                
+                                // Set cursor position
+                                if (cursorOffset > 0) {
+                                    // For logical operators, place cursor inside brackets
+                                    const newPosition = startPos + prefix.length + textToInsert.length - cursorOffset;
+                                    textarea.setSelectionRange(newPosition, newPosition);
+                                } else {
+                                    // For condition operators, place cursor at the end
+                                    const newPosition = startPos + prefix.length + textToInsert.length;
+                                    textarea.setSelectionRange(newPosition, newPosition);
+                                }
+                                
+                                // Focus the textarea
+                                textarea.focus();
+                            }
+                        }
+                    });
+                    
                     function addProvinceGroup() {
                         const container = document.getElementById('provincesContainer');
                         const provinceGroupId = provinceGroupCounter++;
@@ -302,9 +341,11 @@ export class RenameGeneratorWebview {
                         
                         addRenameItem(provinceGroupId);
                         
+                        // Set up event listeners for the new province group
                         provinceGroup.querySelector('.province-group-header').addEventListener('click', function(e) {
                             if (!e.target.classList.contains('province-group-remove')) {
-                                toggleProvinceGroup(provinceGroupId);
+                                const id = this.getAttribute('data-id');
+                                toggleProvinceGroup(id);
                             }
                         });
                         
@@ -394,6 +435,7 @@ export class RenameGeneratorWebview {
                         
                         container.appendChild(renameItem);
                         
+                        // Set up event listeners for the new rename item
                         renameItem.querySelector('#renameRegion-' + renameId).addEventListener('change', function() {
                             const regionNameGroup = document.getElementById('regionNameGroup-' + renameId);
                             regionNameGroup.style.display = this.checked ? 'block' : 'none';
@@ -445,48 +487,6 @@ export class RenameGeneratorWebview {
                             item.classList.add('expanded');
                             toggle.textContent = '-';
                         }
-                    }
-                    
-                    function setupConditionButtons(container = document) {
-                        // First remove any existing event listeners by cloning and replacing elements
-                        container.querySelectorAll('.condition-button').forEach(button => {
-                            const newButton = button.cloneNode(true);
-                            button.parentNode.replaceChild(newButton, button);
-                            
-                            newButton.addEventListener('click', function() {
-                                const targetId = this.getAttribute('data-target');
-                                const textToInsert = this.getAttribute('data-text');
-                                const cursorOffset = parseInt(this.getAttribute('data-cursor-offset') || '0');
-                                
-                                const textarea = document.getElementById(targetId);
-                                if (textarea) {
-                                    const startPos = textarea.selectionStart;
-                                    const endPos = textarea.selectionEnd;
-                                    const text = textarea.value;
-                                    
-                                    // Add a space if the cursor is not at the beginning and the last character is not a space
-                                    const needsSpace = startPos > 0 && text.charAt(startPos - 1) !== ' ' && text.charAt(startPos - 1) !== '\\n';
-                                    const prefix = needsSpace ? ' ' : '';
-                                    
-                                    // Insert the text
-                                    textarea.value = text.substring(0, startPos) + prefix + textToInsert + text.substring(endPos);
-                                    
-                                    // Set cursor position
-                                    if (cursorOffset > 0) {
-                                        // For logical operators, place cursor inside brackets
-                                        const newPosition = startPos + prefix.length + textToInsert.length - cursorOffset;
-                                        textarea.setSelectionRange(newPosition, newPosition);
-                                    } else {
-                                        // For condition operators, place cursor at the end
-                                        const newPosition = startPos + prefix.length + textToInsert.length;
-                                        textarea.setSelectionRange(newPosition, newPosition);
-                                    }
-                                    
-                                    // Focus the textarea
-                                    textarea.focus();
-                                }
-                            });
-                        });
                     }
                     
                     function updateProvinceGroupTitles() {
@@ -623,8 +623,6 @@ export class RenameGeneratorWebview {
                     // Set up global event listeners
                     document.getElementById('addProvince').addEventListener('click', function() {
                         addProvinceGroup();
-                        // Setup condition buttons after adding a new province group
-                        setupConditionButtons();
                     });
                     
                     document.getElementById('generate').addEventListener('click', function() {
@@ -636,9 +634,6 @@ export class RenameGeneratorWebview {
                             });
                         }
                     });
-                    
-                    // Initialize condition buttons for the first time
-                    setupConditionButtons();
                 })();
             </script>
         </body>
