@@ -222,6 +222,25 @@ export class RenameGeneratorWebview {
                 .rename-item.expanded .rename-item-content {
                     display: block;
                 }
+                .condition-buttons {
+                    margin-bottom: 8px;
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 5px;
+                }
+                .condition-button {
+                    display: inline-block;
+                    padding: 2px 6px;
+                    background-color: var(--vscode-button-secondaryBackground);
+                    color: var(--vscode-button-secondaryForeground);
+                    border-radius: 3px;
+                    font-size: 0.9em;
+                    cursor: pointer;
+                    user-select: none;
+                }
+                .condition-button:hover {
+                    background-color: var(--vscode-button-secondaryHoverBackground);
+                }
             </style>
         </head>
         <body>
@@ -332,6 +351,11 @@ export class RenameGeneratorWebview {
                                 
                                 <div class="form-group">
                                     <label for="provinceConditions-\${renameId}">Province Conditions:</label>
+                                    <div class="condition-buttons">
+                                        <span class="condition-button" data-target="provinceConditions-\${renameId}" data-text="NOT = {  }" data-cursor-offset="2">NOT = { }</span>
+                                        <span class="condition-button" data-target="provinceConditions-\${renameId}" data-text="OR = {  }" data-cursor-offset="2">OR = { }</span>
+                                        <span class="condition-button" data-target="provinceConditions-\${renameId}" data-text="AND = {  }" data-cursor-offset="2">AND = { }</span>
+                                    </div>
                                     <textarea id="provinceConditions-\${renameId}" class="input-field" 
                                         placeholder="e.g. is_capital = yes" rows="2"></textarea>
                                     <div class="info-text">Conditions that must be met by the province (leave empty for no conditions)</div>
@@ -339,6 +363,15 @@ export class RenameGeneratorWebview {
                                 
                                 <div class="form-group">
                                     <label for="ownerConditions-\${renameId}">Owner Conditions:</label>
+                                    <div class="condition-buttons">
+                                        <span class="condition-button" data-target="ownerConditions-\${renameId}" data-text="NOT = {  }" data-cursor-offset="2">NOT = { }</span>
+                                        <span class="condition-button" data-target="ownerConditions-\${renameId}" data-text="OR = {  }" data-cursor-offset="2">OR = { }</span>
+                                        <span class="condition-button" data-target="ownerConditions-\${renameId}" data-text="AND = {  }" data-cursor-offset="2">AND = { }</span>
+                                        <span class="condition-button" data-target="ownerConditions-\${renameId}" data-text="primary_culture = ">primary_culture = </span>
+                                        <span class="condition-button" data-target="ownerConditions-\${renameId}" data-text="tag = ">tag = </span>
+                                        <span class="condition-button" data-target="ownerConditions-\${renameId}" data-text="has_country_flag = ">has_country_flag = </span>
+                                        <span class="condition-button" data-target="ownerConditions-\${renameId}" data-text="is_culture_group = ">is_culture_group = </span>
+                                    </div>
                                     <textarea id="ownerConditions-\${renameId}" class="input-field" 
                                         placeholder="e.g. tag = ENG" rows="2"></textarea>
                                     <div class="info-text">Conditions that must be met by the province owner (leave empty for no conditions)</div>
@@ -412,6 +445,48 @@ export class RenameGeneratorWebview {
                             item.classList.add('expanded');
                             toggle.textContent = '-';
                         }
+                    }
+                    
+                    function setupConditionButtons(container = document) {
+                        // First remove any existing event listeners by cloning and replacing elements
+                        container.querySelectorAll('.condition-button').forEach(button => {
+                            const newButton = button.cloneNode(true);
+                            button.parentNode.replaceChild(newButton, button);
+                            
+                            newButton.addEventListener('click', function() {
+                                const targetId = this.getAttribute('data-target');
+                                const textToInsert = this.getAttribute('data-text');
+                                const cursorOffset = parseInt(this.getAttribute('data-cursor-offset') || '0');
+                                
+                                const textarea = document.getElementById(targetId);
+                                if (textarea) {
+                                    const startPos = textarea.selectionStart;
+                                    const endPos = textarea.selectionEnd;
+                                    const text = textarea.value;
+                                    
+                                    // Add a space if the cursor is not at the beginning and the last character is not a space
+                                    const needsSpace = startPos > 0 && text.charAt(startPos - 1) !== ' ' && text.charAt(startPos - 1) !== '\\n';
+                                    const prefix = needsSpace ? ' ' : '';
+                                    
+                                    // Insert the text
+                                    textarea.value = text.substring(0, startPos) + prefix + textToInsert + text.substring(endPos);
+                                    
+                                    // Set cursor position
+                                    if (cursorOffset > 0) {
+                                        // For logical operators, place cursor inside brackets
+                                        const newPosition = startPos + prefix.length + textToInsert.length - cursorOffset;
+                                        textarea.setSelectionRange(newPosition, newPosition);
+                                    } else {
+                                        // For condition operators, place cursor at the end
+                                        const newPosition = startPos + prefix.length + textToInsert.length;
+                                        textarea.setSelectionRange(newPosition, newPosition);
+                                    }
+                                    
+                                    // Focus the textarea
+                                    textarea.focus();
+                                }
+                            });
+                        });
                     }
                     
                     function updateProvinceGroupTitles() {
@@ -542,9 +617,15 @@ export class RenameGeneratorWebview {
                         };
                     }
                     
+                    // Initialize the first province group
                     addProvinceGroup();
                     
-                    document.getElementById('addProvince').addEventListener('click', addProvinceGroup);
+                    // Set up global event listeners
+                    document.getElementById('addProvince').addEventListener('click', function() {
+                        addProvinceGroup();
+                        // Setup condition buttons after adding a new province group
+                        setupConditionButtons();
+                    });
                     
                     document.getElementById('generate').addEventListener('click', function() {
                         const data = collectData();
@@ -555,6 +636,9 @@ export class RenameGeneratorWebview {
                             });
                         }
                     });
+                    
+                    // Initialize condition buttons for the first time
+                    setupConditionButtons();
                 })();
             </script>
         </body>
