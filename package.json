@@ -103,6 +103,10 @@
       {
         "command": "extension.openRenameGenerator",
         "title": "Open Province Rename Generator"
+      },
+      {
+        "command": "extension.openProvinceHistoryGenerator",
+        "title": "Open Province History Generator"
       }
     ],
     "configuration": {

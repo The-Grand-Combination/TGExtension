@@ -5,6 +5,7 @@ import { ValidationMapManager } from './validationMapManager';
 import { GameLauncher } from './gameLauncher';
 import { ToolbarProvider } from './toolbarProvider';
 import { RenameGeneratorWebview } from './renameGeneratorWebView';
+import { ProvinceHistoryGeneratorWebview } from './provinceHistoryGeneratorWebView';
 import { hoverProviders } from './hoverProviders';
 import { definitionProviders } from './definitionProviders';
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from 'vscode-languageclient/node';
@@ -46,6 +47,10 @@ export function activate(context: vscode.ExtensionContext) {
         
         vscode.commands.registerCommand('extension.openRenameGenerator', () => 
             RenameGeneratorWebview.open(context)
+        ),
+
+        vscode.commands.registerCommand('extension.openProvinceHistoryGenerator', () => 
+            ProvinceHistoryGeneratorWebview.open(context)
         ),
         
         vscode.commands.registerCommand('extension.launchGame', () => 
