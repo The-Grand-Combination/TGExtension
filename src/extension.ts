@@ -5,6 +5,7 @@ import { ValidationMapManager } from './validationMapManager';
 import { GameLauncher } from './gameLauncher';
 import { ToolbarProvider } from './toolbarProvider';
 import { RenameGeneratorWebview } from './renameGeneratorWebView';
+import { PopulationDataGenerator } from './provincePopGeneratorWebView';
 import { ProvinceHistoryGeneratorWebview } from './provinceHistoryGeneratorWebView';
 import { hoverProviders } from './hoverProviders';
 import { definitionProviders } from './definitionProviders';
@@ -52,6 +53,11 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('extension.openProvinceHistoryGenerator', () => 
             ProvinceHistoryGeneratorWebview.open(context)
         ),
+
+        vscode.commands.registerCommand('extension.openProvincePopGenerator', () => 
+            PopulationDataGenerator.open(context)
+        ),
+        
         
         vscode.commands.registerCommand('extension.launchGame', () => 
             GameLauncher.launchGame()

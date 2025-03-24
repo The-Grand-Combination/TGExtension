@@ -107,6 +107,10 @@
       {
         "command": "extension.openProvinceHistoryGenerator",
         "title": "Open Province History Generator"
+      },
+      {
+        "command": "extension.openProvincePopGenerator",
+        "title": "Open Province Pop Generator"
       }
     ],
     "configuration": {
