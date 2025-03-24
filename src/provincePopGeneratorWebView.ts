@@ -198,8 +198,14 @@ export class PopulationDataGenerator {
                     border-radius: 5px;
                     border-left: 4px solid var(--vscode-button-background);
                 }
-                .pop-group[data-locked="true"] {
-                    border-left: 4px solid var(--vscode-button-secondaryBackground);
+                .pop-group[data-locked="true"] input:disabled {
+                    background-color: var(--vscode-input-background);
+                    opacity: 0.7;
+                    cursor: not-allowed;
+                }
+
+                .pop-group[data-locked="true"] .percentage-input:disabled {
+                    opacity: 0.7;
                 }
                 .pop-group:last-child {
                     margin-bottom: 0;
@@ -250,35 +256,44 @@ export class PopulationDataGenerator {
                     align-items: center;
                     gap: 10px;
                 }
+                .combined-size-controls {
+                    display: flex;
+                    align-items: center;
+                    gap: 15px;
+                    margin-bottom: 12px;
+                    width: 100%;
+                }
+
+                .size-input-container {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    min-width: 200px;
+                    flex-shrink: 0;
+                }
+
                 .slider-with-controls {
                     display: flex;
                     align-items: center;
                     gap: 8px;
-                    flex: 1;
                 }
-                .percentage-input {
-                    width: 150px;
-                }
-                .control-buttons {
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                    min-width: 80px;
-                }
-                .size-value {
-                    width: 100px;
-                    text-align: right;
-                }
+
                 .percentage-display {
                     font-weight: bold;
                     color: var(--vscode-button-background);
                     min-width: 45px;
-                    text-align: right;
                 }
+
+                .percentage-input {
+                    width: 250px;
+                }
+
                 .lock-label {
                     display: flex;
                     align-items: center;
+                    gap: 5px;
                     cursor: pointer;
+                    white-space: nowrap;
                 }
                 .lock-icon {
                     display: inline-block;
@@ -289,21 +304,27 @@ export class PopulationDataGenerator {
                     border-radius: 2px;
                     position: relative;
                 }
+
                 .pop-lock {
                     position: absolute;
                     opacity: 0;
                 }
+
                 .pop-lock:checked + .lock-icon {
                     background-color: var(--vscode-button-secondaryBackground);
                     border-color: var(--vscode-button-secondaryBackground);
                 }
-                .pop-lock:checked + .lock-icon::after {
-                    content: '?';
-                    color: var(--vscode-button-secondaryForeground);
+
+                .pop-lock:checked + .lock-icon::before {
+                    content: '';
                     position: absolute;
-                    top: -2px;
-                    left: 2px;
-                    font-size: 12px;
+                    left: 5px;
+                    top: 2px;
+                    width: 5px;
+                    height: 10px;
+                    border: solid var(--vscode-button-secondaryForeground);
+                    border-width: 0 2px 2px 0;
+                    transform: rotate(45deg);
                 }
                 .pop-summary {
                     display: flex;
@@ -520,44 +541,40 @@ export class PopulationDataGenerator {
                                     <div class="form-group">
                                         <label for="pop-type-\${popId}">Type:</label>
                                         <input type="text" id="pop-type-\${popId}" class="input-field" 
-                                            placeholder="e.g. aristocrats" required>
+                                            placeholder="Check your poptypes/ folder - Vanilla: farmers, labourers, soldiers, artisans, craftsmen, slaves, aristocrats, bureaucrats, capitalists, clergymen, clerks, officers. Common in mods: serfs. Rare in mods: pioneers, post_revolt_bureau, tribals [...]" required>
                                     </div>
                                     
                                     <div class="form-group">
                                         <label for="pop-culture-\${popId}">Culture:</label>
                                         <input type="text" id="pop-culture-\${popId}" class="input-field" 
-                                            placeholder="e.g. british" required>
+                                            placeholder="Check your commons/cultures.txt file - e.g. british, irish, scottish, [...]" required>
                                     </div>
                                     
                                     <div class="form-group">
                                         <label for="pop-religion-\${popId}">Religion:</label>
                                         <input type="text" id="pop-religion-\${popId}" class="input-field" 
-                                            placeholder="e.g. protestant" required>
+                                            placeholder="Check your commons/religion.txt file - e.g. catholic, protestant, mormon, orthodox, coptic, jewish, animist, sunni, shiite, ibadi, druze, bektashi, yazidi, mahayana, gelugpa, theravada, hindu, shinto, sikh, confucian [...]" required>
                                     </div>
                                     
                                     <div class="form-group">
-                                        <div class="size-header">
+                                        <div class="combined-size-controls">
                                             <div class="size-input-container">
                                                 <label for="pop-size-\${popId}">Population:</label>
                                                 <input type="number" id="pop-size-\${popId}" class="input-field size-value" 
                                                     placeholder="e.g. 5000" min="1" required>
                                             </div>
-                                        </div>
-                                        <div class="size-controls">
-                                            <div class="control-buttons">
+                                            
+                                            <div class="slider-with-controls">
                                                 <span class="percentage-display">100%</span>
+                                                <input type="range" id="pop-percentage-\${popId}" class="percentage-input"
+                                                    min="0.1" max="100" value="100" step="0.1">
                                                 <label class="lock-label">
-                                                    <input type="checkbox" id="pop-lock-\${popId}" class="pop-lock">
+                                                    Lock: &nbsp;<input type="checkbox" id="pop-lock-\${popId}" class="pop-lock">
                                                     <span class="lock-icon"></span>
                                                 </label>
                                             </div>
-                                            <div class="slider-with-controls">
-                                                <input type="range" id="pop-percentage-\${popId}" class="percentage-input"
-                                                    min="0.1" max="100" value="100" step="0.1">
-                                            </div>
                                         </div>
                                     </div>
-                                </div>
                             \`;
                             
                             popsList.appendChild(popItem);
@@ -645,9 +662,9 @@ export class PopulationDataGenerator {
                             
                             percentageInput.addEventListener('input', function() {
                                 let percentage = parseFloat(this.value);
-                                if (isNaN(percentage) || percentage < 0.1) {
-                                    percentage = 0.1;
-                                    this.value = "0.1";
+                                if (isNaN(percentage) || percentage < 0.01) {
+                                    percentage = 0.01;
+                                    this.value = "0.01";
                                 } else if (percentage > 100) {
                                     percentage = 100;
                                     this.value = "100";
@@ -674,19 +691,33 @@ export class PopulationDataGenerator {
                                 updateSliderMaxValues(provinceGroupId);
                             });
                             
-                            lockCheckbox.addEventListener('change', function() {
-                                popItem.dataset.locked = this.checked.toString();
+                        lockCheckbox.addEventListener('change', function() {
+                            popItem.dataset.locked = this.checked.toString();
+                            
+                            if (this.checked) {
+                                const currentSize = parseInt(sizeInput.value);
+                                popItem.dataset.lockedSize = currentSize;
                                 
-                                if (this.checked) {
-                                    popItem.dataset.lockedSize = sizeInput.value;
-                                } else {
-                                    delete popItem.dataset.lockedSize;
-                                    redistributePercentages(provinceGroupId);
-                                }
+                                typeInput.disabled = true;
+                                cultureInput.disabled = true;
+                                religionInput.disabled = true;
+                                sizeInput.disabled = true;
+                                percentageInput.disabled = true;
+                            } else {
+                                delete popItem.dataset.lockedSize;
                                 
-                                updatePopSummary(provinceGroupId);
-                                updateSliderMaxValues(provinceGroupId);
-                            });
+                                typeInput.disabled = false;
+                                cultureInput.disabled = false;
+                                religionInput.disabled = false;
+                                sizeInput.disabled = false;
+                                percentageInput.disabled = false;
+                                
+                                redistributePercentages(provinceGroupId);
+                            }
+                            
+                            updatePopSummary(provinceGroupId);
+                            updateSliderMaxValues(provinceGroupId);
+                        });
                             
                             updatePopTitle(popId);
                             return popItem;
@@ -713,12 +744,12 @@ export class PopulationDataGenerator {
                                 const percentageInput = pop.querySelector('.percentage-input');
                                 totalOtherLockedPercentage += parseFloat(percentageInput.value);
                             } else {
-                                minRequiredPercentage += 0.1;
+                                minRequiredPercentage += 0.01;
                             }
                         });
                         
                         const maxAvailable = 100 - totalOtherLockedPercentage - minRequiredPercentage;
-                        return Math.max(0.1, Math.min(100, maxAvailable));
+                        return Math.max(0.01, Math.min(100, maxAvailable));
                     }
                     
                     function updateSliderMaxValues(provinceId) {
@@ -774,7 +805,7 @@ export class PopulationDataGenerator {
                         
                         let targetTotal = 100 - newPercentage - totalLockedPercentage;
                         
-                        const minPercentageNeeded = unlockedPops.length * 0.1;
+                        const minPercentageNeeded = unlockedPops.length * 0.01;
                         if (targetTotal < minPercentageNeeded) {
                             targetTotal = minPercentageNeeded;
                         }
@@ -793,10 +824,10 @@ export class PopulationDataGenerator {
                                         return sum + parseFloat(p.querySelector('.percentage-input').value);
                                     }, newPercentage + totalLockedPercentage);
                                     
-                                    newPercentageValue = Math.max(0.1, (100 - usedPercentage)).toFixed(1);
+                                    newPercentageValue = Math.max(0.01, (100 - usedPercentage)).toFixed(1);
                                 } else {
                                     const ratio = currentPercentage / totalUnlockedPercentage;
-                                    newPercentageValue = Math.max(0.1, (ratio * targetTotal)).toFixed(1);
+                                    newPercentageValue = Math.max(0.01, (ratio * targetTotal)).toFixed(1);
                                 }
                                 
                                 percentageInput.value = newPercentageValue;
@@ -840,7 +871,7 @@ export class PopulationDataGenerator {
                         }
                         
                         const remainingPercentage = 100 - totalLockedPercentage;
-                        const minimumNeeded = unlockedPops.length * 0.1;
+                        const minimumNeeded = unlockedPops.length * 0.01;
                         
                         if (unlockedPops.length > 0) {
                             if (remainingPercentage >= minimumNeeded) {
@@ -868,8 +899,8 @@ export class PopulationDataGenerator {
                                     const percentageDisplay = pop.querySelector('.percentage-display');
                                     const sizeInput = pop.querySelector('.size-value');
                                     
-                                    percentageInput.value = "0.1";
-                                    percentageDisplay.textContent = "0.1%";
+                                    percentageInput.value = "0.01";
+                                    percentageDisplay.textContent = "0.01%";
                                     sizeInput.value = "1";
                                     
                                     updatePopTitle(pop.id);
@@ -891,19 +922,26 @@ export class PopulationDataGenerator {
                         const pops = popsList.querySelectorAll('.pop-group');
                         
                         let remainingPopulation = totalPop;
+                        let totalLockedPopulation = 0;
+                        
                         pops.forEach(pop => {
                             if (pop.dataset.locked === 'true') {
-                                const percentageInput = pop.querySelector('.percentage-input');
                                 const sizeInput = pop.querySelector('.size-value');
+ 
+                                const lockedSize = parseInt(sizeInput.value);
+                                totalLockedPopulation += lockedSize;
                                 
-                                const percentage = parseFloat(percentageInput.value);
-                                const newSize = Math.max(1, Math.round((percentage / 100) * totalPop));
-                                sizeInput.value = newSize;
-                                remainingPopulation -= newSize;
+                                const percentageInput = pop.querySelector('.percentage-input');
+                                const percentageDisplay = pop.querySelector('.percentage-display');
+                                const newPercentage = (lockedSize / totalPop * 100).toFixed(2);
+                                percentageInput.value = newPercentage;
+                                percentageDisplay.textContent = newPercentage + '%';
                                 
                                 updatePopTitle(pop.id);
                             }
                         });
+                        
+                        remainingPopulation = Math.max(0, totalPop - totalLockedPopulation);
                         
                         const unlockedPops = Array.from(pops).filter(pop => pop.dataset.locked !== 'true');
                         if (unlockedPops.length > 0) {
@@ -913,8 +951,18 @@ export class PopulationDataGenerator {
                                 totalUnlockedPercentage += parseFloat(percentageInput.value);
                             });
                             
+                            if (totalUnlockedPercentage === 0 && unlockedPops.length > 0) {
+                                const equalPercentage = (100 - (totalLockedPopulation / totalPop * 100)) / unlockedPops.length;
+                                totalUnlockedPercentage = equalPercentage * unlockedPops.length;
+                                unlockedPops.forEach(pop => {
+                                    const percentageInput = pop.querySelector('.percentage-input');
+                                    percentageInput.value = equalPercentage.toFixed(1);
+                                });
+                            }
+                            
                             unlockedPops.forEach((pop, index) => {
                                 const percentageInput = pop.querySelector('.percentage-input');
+                                const percentageDisplay = pop.querySelector('.percentage-display');
                                 const sizeInput = pop.querySelector('.size-value');
                                 
                                 const percentage = parseFloat(percentageInput.value);
@@ -929,6 +977,12 @@ export class PopulationDataGenerator {
                                 }
                                 
                                 sizeInput.value = newSize;
+                                
+                                // Update percentage display to match the new size
+                                const newPercentage = (newSize / totalPop * 100).toFixed(1);
+                                percentageInput.value = newPercentage;
+                                percentageDisplay.textContent = newPercentage + '%';
+                                
                                 updatePopTitle(pop.id);
                             });
                         }
