@@ -63,7 +63,7 @@
     "Change Issue Value": {
         "prefix": "dominant_issue",
         "body": [
-            "dominant_issue = { factor = $1 value = ${2} }"
+            "dominant_issue = { factor = $1 value = $2 }"
         ],
         "description": "Changes the dominant issue of a portion of the targeted pop to the given issue. Works the same way as Upper House."
     },

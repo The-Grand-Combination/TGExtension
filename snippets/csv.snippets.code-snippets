@@ -73,21 +73,21 @@
 	"Single Line Localization": {
 		"prefix": "other_localization",
 		"body": [
-			"Key;Localization;;;;;;;;;;;;;x"
+			"${1:Key};$2{2:Localization};;;;;;;;;;;;;x"
 		],
 		"description": "Localization for other things"
 	},
 	"Province Definitions": {
 		"prefix": "definition_prov",
 		"body": [
-			"ProvID;RED;GREEN;BLUE;provName;x"
+			"ProvID;${1:RED};${2:GREEN};${3:BLUE};${4:provName};x"
 		],
 		"description": "Defining Provinces: remember to define it in continent.txt, climate.txt, regions.txt, add prov + pop history files in history/provinces and history/pops, increase max_provinces by 1 for every new prov in default.map, and add it to the all_land_provs region"
 	},
 	"Province Adjacencies": {
 		"prefix": "adjacency_prov",
 		"body": [
-			"FromProvID;ToProvID;sea|land|impassable|canal;ThroughProvID;Data;Comment"
+			"FromProvID;ToProvID;${1|sea,land,impassable,canal};ThroughProvID;Data;Comment"
 		],
 		"description": "Defining Adjacencies: 'Data' will always be '0' unless it is a canal; for impassable, use '0;0'"
 	},
