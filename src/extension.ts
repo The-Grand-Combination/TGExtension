@@ -6,12 +6,14 @@ import { GameLauncher } from './gameLauncher';
 import { ToolbarProvider } from './toolbarProvider';
 import { RenameGeneratorWebview } from './renameGeneratorWebView';
 import { ProvinceHistoryGeneratorWebview } from './provinceHistoryGeneratorWebView';
+import { ProvinceFilesGeneratorWebview } from './provinceFilesGeneratorWebView';
 import { hoverProviders } from './hoverProviders';
 import { definitionProviders } from './definitionProviders';
 import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from 'vscode-languageclient/node';
 
 export function activate(context: vscode.ExtensionContext) {
-
+    console.log("Activating extension..."); // To check if activate() is running
+    console.log(ProvinceFilesGeneratorWebview); // Should log the class definition
     const toolbarProvider = new ToolbarProvider(context);
     
     context.subscriptions.push(
@@ -51,6 +53,10 @@ export function activate(context: vscode.ExtensionContext) {
 
         vscode.commands.registerCommand('extension.openProvinceHistoryGenerator', () => 
             ProvinceHistoryGeneratorWebview.open(context)
+        ),
+
+        vscode.commands.registerCommand('extension.openProvinceFilesGenerator', () => 
+            ProvinceFilesGeneratorWebview.open(context)
         ),
         
         vscode.commands.registerCommand('extension.launchGame', () => 
