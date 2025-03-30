@@ -81,7 +81,11 @@ export class ProvinceFilesGeneratorWebview {
                     if (csvInput) {
                         // Split the CSV input by lines
                         const lines = csvInput.split("\\n");
-                        let outputHTML = "";
+                        let outputList1HTML = "";
+                        let outputList2HTML = "";
+                        let outputLocHTML = "";
+                        let outputPopHTML = "";
+                        let outputPosHTML = "";
 
                         // Process each line (skip the header)
                         for (let i = 0; i < lines.length; i++) {
@@ -95,12 +99,77 @@ export class ProvinceFilesGeneratorWebview {
                                 const name = columns[4];
 
                                 // Construct HTML for each row
-                                outputHTML += \`<p>PROV\${provinceId};\${name};;;;;;;;;;;;;x</p>\`;
+                                outputList1HTML += \`\${provinceId} \`;
+                            }
+                        }
+
+                        // Process each line (skip the header)
+                        for (let i = 0; i < lines.length; i++) {
+                            const columns = lines[i].split(";");
+                            
+                            if (columns.length > 1) {
+                                const provinceId = columns[0];
+                                const red = columns[1];
+                                const green = columns[2];
+                                const blue = columns[3];
+                                const name = columns[4];
+
+                                // Construct HTML for each row
+                                outputList2HTML += \`<p>\${provinceId}</p>\`;
+                            }
+                        }
+
+                        // Process each line (skip the header)
+                        for (let i = 0; i < lines.length; i++) {
+                            const columns = lines[i].split(";");
+                            
+                            if (columns.length > 1) {
+                                const provinceId = columns[0];
+                                const red = columns[1];
+                                const green = columns[2];
+                                const blue = columns[3];
+                                const name = columns[4];
+
+                                // Construct HTML for each row
+                                outputLocHTML += \`<p>PROV\${provinceId};\${name};;;;;;;;;;;;;x</p>\`;
+                            }
+                        }
+
+                        // Process each line (skip the header)
+                        for (let i = 0; i < lines.length; i++) {
+                            const columns = lines[i].split(";");
+                            
+                            if (columns.length > 1) {
+                                const provinceId = columns[0];
+                                const red = columns[1];
+                                const green = columns[2];
+                                const blue = columns[3];
+                                const name = columns[4];
+
+                                // Construct HTML for each row
+                                outputPopHTML += \`<p>\#\${name} \(400\/100 POPS\)<br>\${provinceId} = \{<br>&nbsp;&nbsp;&nbsp;&nbsp;artisans = \{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;culture = alaskan<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;religion = orthodox<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;size = 100<br>&nbsp;&nbsp;&nbsp;&nbsp;\}<br>\}</p>\`;
+                            }
+                        }
+
+
+                        // Process each line (skip the header)
+                        for (let i = 0; i < lines.length; i++) {
+                            const columns = lines[i].split(";");
+                            
+                            if (columns.length > 1) {
+                                const provinceId = columns[0];
+                                const red = columns[1];
+                                const green = columns[2];
+                                const blue = columns[3];
+                                const name = columns[4];
+
+                                // Construct HTML for each row
+                                outputPosHTML += \`<p>&nbsp;\#&nbsp;\${name}<br><br>\${provinceId}&nbsp;=&nbsp;\{<br>&nbsp;&nbsp;&nbsp;&nbsp;text_position&nbsp;=&nbsp;\{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;1.000000<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y&nbsp;=&nbsp;1.000000<br>&nbsp;&nbsp;&nbsp;&nbsp;\}<br><br>&nbsp;&nbsp;&nbsp;&nbsp;text_rotation&nbsp;=&nbsp;1.000000<br>&nbsp;&nbsp;&nbsp;&nbsp;text_scale&nbsp;=&nbsp;1.00<br>&nbsp;&nbsp;&nbsp;&nbsp;unit&nbsp;=&nbsp;\{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;1.000000<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y&nbsp;=&nbsp;1.000000<br>&nbsp;&nbsp;&nbsp;&nbsp;\}<br><br>&nbsp;&nbsp;&nbsp;&nbsp;city&nbsp;=&nbsp;\{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;1.000000<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y&nbsp;=&nbsp;1.000000<br>&nbsp;&nbsp;&nbsp;&nbsp;\}<br><br>&nbsp;&nbsp;&nbsp;&nbsp;building_construction&nbsp;=&nbsp;\{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;1.000000<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y&nbsp;=&nbsp;1.000000<br>&nbsp;&nbsp;&nbsp;&nbsp;\}<br><br>&nbsp;&nbsp;&nbsp;&nbsp;military_construction&nbsp;=&nbsp;\{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;1.000000<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y&nbsp;=&nbsp;1.000000<br>&nbsp;&nbsp;&nbsp;&nbsp;\}<br><br>&nbsp;&nbsp;&nbsp;&nbsp;building_position&nbsp;=&nbsp;\{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;fort&nbsp;=&nbsp;\{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;1.000000<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y&nbsp;=&nbsp;1.000000<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;\}<br><br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;railroad&nbsp;=&nbsp;\{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;x&nbsp;=&nbsp;1.000000<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;y&nbsp;=&nbsp;1.000000<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;\}<br><br>&nbsp;&nbsp;&nbsp;&nbsp;\}<br><br>\}</p>\`;
                             }
                         }
 
                         // Insert the output HTML
-                        outputDiv.innerHTML = \`<h1>Province Localisation</h1>\` + outputHTML;
+                        outputDiv.innerHTML = \`<h1>Climate/Continent/Region</h1>\` + \`<p>\` + outputList1HTML + \`</p>\` + \`<h1>Metaregions</h1>\` + outputList2HTML + \`<h1>Localisation</h1>\` + outputLocHTML + \`<h1>Pops</h1>\` + outputPopHTML + \`<h1>Positions</h1>\`+outputPosHTML;
                     }
                 });
             </script>
