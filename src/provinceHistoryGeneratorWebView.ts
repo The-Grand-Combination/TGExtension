@@ -348,8 +348,8 @@ export class ProvinceHistoryGeneratorWebview {
                                 <div class="form-group">
                                     <label for="colonial-\${provinceGroupId}">Colonial:</label>
                                     <input type="number" id="colonial-\${provinceGroupId}" class="input-field" 
-                                        placeholder="e.g. 2" required min="1" max="3">
-                                    <div class="info-text">Colonial value (1-3).</div>
+                                        placeholder="e.g. 0" required min="0" max="2">
+                                    <div class="info-text">Colonial value (0-2).</div>
                                 </div>
                             </div>
                         \`;

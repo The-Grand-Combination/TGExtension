@@ -63,6 +63,14 @@ export class ProvinceFilesGeneratorWebview {
                     input:focus, textarea:focus, button:focus, select:focus {
                         outline: 1px solid var(--vscode-focusBorder);
                     }
+                    th, td {
+                        padding-top: 10px;
+                        padding-bottom: 10px;
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        text-align: left;
+                        vertical-align: top;
+                    }
                 </style>
             </head>
             <body>
@@ -111,7 +119,7 @@ export class ProvinceFilesGeneratorWebview {
                         }
 
                         // Insert the output HTML
-                        outputDiv.innerHTML = \`<h1>Climate/Continent/Region</h1>\` + \`<p>\` + outputList1HTML + \`</p>\` + \`<h1>Metaregions</h1>\` + outputList2HTML + \`<h1>Localisation</h1>\` + outputLocHTML + \`<h1>Pops</h1>\` + outputPopHTML + \`<h1>Positions</h1>\`+outputPosHTML;
+                        outputDiv.innerHTML = \`<table>\` + \`<tr>\` + \`<th>Climate/Continent/Region</th>\` + \`<th>Metaregions</th>\` + \`<th>Localisation</th>\` + \`<th>Pops</th>\` + \`<th>Climate/Continent/Positions</th>\` + \`</tr>\` + \`<tr>\` + \`<td>\` + outputList1HTML + \`</td>\` + \`<td>\` + outputList2HTML + \`</td>\` + \`<td>\` + outputLocHTML + \`</td>\` + \`<td>\` + outputPopHTML + \`</td>\` + \`<td>\` + outputPosHTML + \`</td>\` + \`<tr>\` + \`</table>\`;
                     }
                 });
             </script>
