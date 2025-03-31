@@ -119,7 +119,7 @@ export class ProvinceFilesGeneratorWebview {
                         }
 
                         // Insert the output HTML
-                        outputDiv.innerHTML = \`<table>\` + \`<tr>\` + \`<th>Climate/Continent/Region</th>\` + \`<th>Metaregions</th>\` + \`<th>Localisation</th>\` + \`<th>Pops</th>\` + \`<th>Positions</th>\` + \`</tr>\` + \`<tr>\` + \`<td>\` + outputList1HTML + \`</td>\` + \`<td>\` + outputList2HTML + \`</td>\` + \`<td>\` + outputLocHTML + \`</td>\` + \`<td>\` + outputPopHTML + \`</td>\` + \`<td>\` + outputPosHTML + \`</td>\` + \`<tr>\` + \`</table>\`;
+                        outputDiv.innerHTML = \`<table>\` + \`<tr>\` + \`<th>Climate/Continent/Region</th>\` + \`<th>Metaregions</th>\` + \`<th>Localisation</th>\` + \`<th>Pops</th>\` + \`<th>Positions</th>\` + \`</tr>\` + \`<tr>\` + \`<td>\` + outputList1HTML + \`</td>\` + \`<td><br>\` + outputList2HTML + \`</td>\` + \`<td>\` + outputLocHTML + \`</td>\` + \`<td>\` + outputPopHTML + \`</td>\` + \`<td>\` + outputPosHTML + \`</td>\` + \`<tr>\` + \`</table>\`;
                     }
                 });
             </script>
