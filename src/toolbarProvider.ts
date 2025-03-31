@@ -88,6 +88,16 @@ export class ToolbarProvider implements vscode.TreeDataProvider<vscode.TreeItem>
                 iconName: 'edit'
             },
             {
+                label: 'Province Files Generator',
+                collapsibleState: vscode.TreeItemCollapsibleState.None,
+                command: {
+                    command: 'extension.openProvinceFilesGenerator',
+                    title: 'Open Province Files Generator'
+                },
+                tooltip: 'Generate province files.',
+                iconName: 'edit'
+            },
+            {
                 label: 'Launch Game',
                 collapsibleState: vscode.TreeItemCollapsibleState.None,
                 command: {
