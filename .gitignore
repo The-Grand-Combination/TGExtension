@@ -3,6 +3,7 @@ node_modules
 
 # Ignore everything in src except built files
 src/built/**
+src/*.js
 
 # Ignore node_modules but include necessary types
 node_modules/
