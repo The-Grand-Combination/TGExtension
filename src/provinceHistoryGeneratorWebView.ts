@@ -384,10 +384,6 @@ export class ProvinceHistoryGeneratorWebview {
                 <button type="button" id="addProvince" class="secondary-button">
                     Add Province
                 </button>
-                
-                <button type="button" id="testButton" class="secondary-button">
-                    Test Connection
-                </button>
             </div>
             
             <div class="button-row">
@@ -1291,16 +1287,6 @@ export class ProvinceHistoryGeneratorWebview {
                         addProvinceBtn.addEventListener('click', function() {
                             console.log('Add province button clicked');
                             addProvinceGroup();
-                        });
-                    }
-                    
-                    if (testBtn) {
-                        testBtn.addEventListener('click', function() {
-                            console.log('Test button clicked');
-                            vscode.postMessage({
-                                command: 'error',
-                                message: 'Test connection successful! VSCode communication is working.'
-                            });
                         });
                     }
                     

@@ -399,11 +399,6 @@ export class PopulationDataGenerator {
                 <button type="button" id="addProvince" class="secondary-button">
                     Add Province
                 </button>
-
-                <button type="button" id="testButton" class="secondary-button">
-                    Test Connection
-                </button>
-
                 <button type="button" id="generate" class="primary-button">Save Population Data</button>
             </div>
 
@@ -1375,17 +1370,6 @@ export class PopulationDataGenerator {
                             });
                         } else {
                             console.error('Add Province button not found!');
-                        }
-                        
-                        if (testBtn) {
-                            testBtn.addEventListener('click', function() {
-                                console.log('Test button clicked');
-                                vscode.postMessage({
-                                    command: 'error',
-                                    message: 'Test connection successful!'
-                                });
-                                console.log('Test message sent');
-                            });
                         }
                         
                         if (generateBtn) {
