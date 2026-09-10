@@ -1,0 +1,793 @@
+{
+    "If emulation": {
+        "prefix": "if",
+        "body": [
+            "random_owned = {",
+            "    limit = {",
+            "        owner = {",
+            "            #${conditions}",
+            "        }",
+            "    }",
+            "    owner = { ",
+            "        #${effects}",
+            "    }",
+            "}"
+        ],
+        "description": "Emulate the IF conditional by using the random_owned and owner scopes."
+    },
+
+    "Define General": {
+        "prefix": "define_general",
+        "body": [
+            "define_general = {",
+            "    name = \"$1\"",
+            "    personality = $2",
+            "    background = $3",
+            "}"
+        ],
+        "description": "Effect that creates a general with the specified name, personality and background."
+    },
+
+    "Add Country Modifier": {
+        "prefix": "add_country_modifier",
+        "body": [
+            "add_country_modifier = { name = $1 duration = $2 }"
+        ],
+        "description": "Creates a country-scope modifier."
+    },
+
+    "Add Province Modifier": {
+        "prefix": "add_province_modifier",
+        "body": [
+            "add_province_modifier = { name = $1 duration = $2 }"
+        ],
+        "description": "Creates a province-scope modifier."
+    },
+
+    "Create Unit": {
+        "prefix": "sub_unit",
+        "body": [
+            "sub_unit = { type = $1 value = current }"
+        ],
+        "description": "Spawns a unit. (Warning: may be slightly unstable.)"
+    },
+
+    "Upper House Composition": {
+        "prefix": "upper_house",
+        "body": [
+            "upper_house = { ideology = $1 value = $2 }"
+        ],
+        "description": "Changes or checks the Upper House's compsition. In effects, the amount gained (U) is calculated by the following formula: U=1-1/(1+N) The other values will be multiplied by 1-U."
+    },
+
+    "Change Issue Value": {
+        "prefix": "dominant_issue",
+        "body": [
+            "dominant_issue = { factor = $1 value = $2 }"
+        ],
+        "description": "Changes the dominant issue of a portion of the targeted pop to the given issue. Works the same way as Upper House."
+    },
+
+    "Issue Shift": {
+        "prefix": "move_issue_percentage",
+        "body": [
+            "move_issue_percentage = {",
+            "    from = ${issue_1}",
+            "    to = ${issue_2}",
+            "    value = ${value}",
+            "}"
+        ],
+        "description": "Makes a certain percentage of people supporting issue A, switch to issue B. Usually used in CBs."
+    },
+
+    "Scaled Consciousness": {
+        "prefix": "scaled_consciousness",
+        "body": [
+            "scaled_consciousness = { factor = $1 ${ideology_issue} = $2 }"
+        ],
+        "description": "Changes the consciousness of the targeted pops by the given value multiplied by the proportion of the pop that is of the given ideology or issue."
+    },
+
+    "Scaled Militancy": {
+        "prefix": "scaled_militancy",
+        "body": [
+            "scaled_militancy = { factor = $1 ${ideology_issue} = $2 }"
+        ],
+        "description": "Changes the militancy of the targeted pops by the given value multiplied by the proportion of the pop that is of the given ideology or issue."
+    },
+
+    "Change Ideology Value": {
+        "prefix": "ideology",
+        "body": [
+            "ideology = { factor = $1 value = $2 }"
+        ],
+        "description": "Change the proportion of the targeted pop that follows the specified ideology. Works the same way as Upper House."
+    },
+
+    "Add Casus Belli - Effect": {
+        "prefix": "add_casus_belli_effect",
+        "body": [
+            "add_casus_belli = {",
+            "    target = ${TAG}",
+            "    type = ${CB_TYPE}",
+            "    months = ${MONTHS}",
+            "}"
+        ],
+        "description": "NOT TO BE CONFUSED WITH casus_belli. Gives the target a casus belli against the country in scope for n months."
+    },
+
+    "Casus Belli - Effect": {
+        "prefix": "casus_belli_effect",
+        "body": [
+            "casus_belli = {",
+            "    target = ${TAG}",
+            "    type = ${CB_TYPE}",
+            "    months = ${MONTHS}",
+            "}"
+        ],
+        "description": "NOT TO BE CONFUSED WITH add_casus_belli. Grants the scoped country a casus belli against the target country for n months."
+    },
+
+    "Diplomatic Influence": {
+        "prefix": "influence",
+        "body": [
+            "diplomatic_influence = { who = ${TAG} value = ${NUMBER} }"
+        ],
+        "description": "Changes or checks the influence that the scoped country has on the specified country."
+    },
+
+    "Relation": {
+        "prefix": "relation",
+        "body": [
+            "relation = { who = ${TAG} value = ${NUMBER} }"
+        ],
+        "description": "Changes or checks the relation between the scoped country and the specified country."
+    },
+
+    "War": {
+        "prefix": "war",
+        "body": [
+            "war = {",
+            "    target = ${TAG}",
+            "    attacker_goal = {",
+            "        casus_belli = ${CB_A}",
+            "        state_province_id = ${REGION_A}",
+            "    }",
+            "    defender_goal = {",
+            "        casus_belli = ${CB_D}",
+            "        state_province_id = ${REGION_D}",
+            "    }",
+            "    call_ally = ${yes_no}",
+            "}"
+        ],
+        "description": "Starts a war between the country for whom the event or decision fired and the given country. defender_goal, state_province_id and call_ally may be optional."
+    },
+
+    "Set Variable": {
+        "prefix": "set_variable",
+        "body": [
+            "set_variable = { which = $1 value = $2 }"
+        ],
+        "description": "Creates a new variable and assigns it the value n."
+    },
+
+    "Check Variable": {
+        "prefix": "check_variable",
+        "body": [
+            "check_variable = { which = $1 value = $2 }"
+        ],
+        "description": "Returns true if the variable has been set at an earlier stage and its value is greater than x. NOTE: Unlike other conditions, check_variable will *only* be true if the variable's actual value is greater than the value in the condition. Likewise, NOT = { check_variable } will *only* be true if the variable's actual value is less than the value in the condition."
+    },
+
+    "Change Variable": {
+        "prefix": "change_variable",
+        "body": [
+            "change_variable = { which = $1 value = $2 }"
+        ],
+        "description": "Increases or decreases the value of an existing variable."
+    },
+
+    
+    "Fire Country Event": {
+        "prefix": "country_event_effect",
+        "body": [
+            "country_event = { id = $1 days = $2 }"
+        ],
+        "description": "Fires the specified country event for the targeted country in a specified amount of days."
+    },
+
+    "Random": {
+        "prefix": "random",
+        "body": [
+            "random = {",
+            "    chance = $1",
+            "    $2",
+            "}"            
+        ],
+        "description": "Specifies the probability n that the specified effects will occur."
+    },
+
+    "Random List": {
+        "prefix": "random_list",
+        "body": [
+            "random_list = {",
+            "    ${CHANCE_1} = { ${EFFECT_1} }",
+            "    ${CHANCE_2} = { ${EFFECT_2} }",
+            "}"            
+        ],
+        "description": "Specifies the probability n that the specified effects will occur."
+    },
+
+    "Hidden Tooltip": {
+        "prefix": "hidden tooltip",
+        "body": [
+            "set_country_flag = hidden_tooltip",
+            "random_owned = { limit = { owner = { has_country_flag = hidden_tooltip } }",
+            "    owner = {",
+            "        #Effects here will be hidden from the player",
+            "    }",
+            "}",
+            "clr_country_flag = hidden_tooltip"            
+        ],
+        "description": "Uses a clever assortment of if emulation and country flags to make an hidden tooltip, original method by SirRunner."
+    },
+
+    "Unemployment by PoP Type": {
+        "prefix": "unemployment_by_type",
+        "body": [
+            "unemployment_by_type = { type = $1 value = $2 }"
+        ],
+        "description": "Change the proportion of the targeted pop that follows the specified ideology. Works the same way as Upper House."
+    },
+
+    "Work Available": {
+        "prefix": "work",
+        "body": [
+            "work_available = { worker = ${POP_TYPE} }"
+        ],
+        "description": "Returns true if there is any work available for the specified pop type—meaning specifically is it possible for that pop type to be employed, not whether they would actually find work there or whether there's any unemployment in the province. If a province has factories, this command will always return true for craftsmen and clerks. If the province produces coal, this command will always return true for labourers and false for farmers."
+    },
+
+    "Limit statement": {
+        "prefix": "limit",
+        "body": [
+            "limit = {",
+            "    $0",
+            "}"
+        ],
+        "description": "Restricts the effects that follow to the scopes matching these conditions. Inside an iterator, filters which scopes it visits."
+    },
+
+    "Immediate statement": {
+        "prefix": "immediate",
+        "body": [
+            "immediate = {",
+            "    $0",
+            "}"
+        ],
+        "description": "Event-specific statement that fires an effect as soon as the event appears."
+    },
+
+    "Trigger statement": {
+        "prefix": "trigger",
+        "body": [
+            "trigger = {",
+            "    $0",
+            "}"
+        ],
+        "description": "The conditions that must hold for an event to fire, or for a triggered modifier or crime to apply."
+    },
+
+    "Option statement for events": {
+        "prefix": "option_event",
+        "body": [
+            "option = {",
+            "    name = \"EVTOPT${LETTER}${ID}\"",
+            "    $1",
+            "    ai_chance = {",
+            "        factor = ${2:1}",
+            "        modifier = {",
+            "            factor = ${3:1}",
+            "        }",
+            "    }",
+            "}"
+        ],
+        "description": "An event option, with the localisation key the engine expects (EVTOPTA<id>, EVTOPTB<id>, ...) and an AI weight."
+    },
+
+    "AI_chance statement": {
+        "prefix": "ai_chance",
+        "body": [
+            "ai_chance = {",
+            "    factor = ${1:1}",
+            "    modifier = {",
+            "        factor = ${2:1}",
+            "    }",
+            "}"
+        ],
+        "description": "AI weight modifiers for choosing options in events."
+    },
+
+    "ai_will_do statement": {
+        "prefix": "ai_will_do",
+        "body": [
+            "ai_will_do = {",
+            "    factor = ${1:1}",
+            "    modifier = {",
+            "        factor = ${2:1}",
+            "    }",
+            "}"
+        ],
+        "description": "AI weight modifiers for enacting decisions."
+    },
+
+    "Country Event": {
+        "prefix": "country_event",
+        "body": [
+            "country_event = {",
+            "    id = ${1:ID}",
+            "    title = \"EVTNAME${1}\"",
+            "    desc = \"EVTDESC${1}\"",
+            "    picture = ${2:Picture}",
+            "    ",
+            "    trigger = {",
+            "        $3",
+            "    }",
+            "    ",
+            "    mean_time_to_happen = {",
+            "        $4",
+            "    }",
+            "",
+            "    #fire_only_once = yes",
+            "",
+            "    option = {",
+            "        name = \"EVTOPTA${1}\"",
+            "        $5",
+            "        ",
+            "        ai_chance = {",
+            "            factor = $6",
+            "            modifier = {",
+            "                factor = $7",
+            "            }",
+            "        }",
+            "    }",
+            "    ",
+            "    option = {",
+            "        name = \"EVTOPTB${1}\"",
+            "        $8",
+            "        ",
+            "        ai_chance = {",
+            "            factor = $9",
+            "            modifier = {",
+            "                factor = $10",
+            "            }",
+            "        }",
+            "    }",
+            "}"
+        ],
+        "description": "A basic country event template. Note that it can only have a maximum of 5 options without looking bad."
+    },
+
+    "Country Event Triggered": {
+        "prefix": "country_event_triggered_only",
+        "body": [
+            "country_event = {",
+            "    id = ${1:ID}",
+            "    title = \"EVTNAME${1}\"",
+            "    desc = \"EVTDESC${1}\"",
+            "    picture = ${2:Picture}",
+            "    ",
+            "    is_triggered_only = yes",
+			"    ",
+            "    option = {",
+            "        name = \"EVTOPTA${1}\"",
+            "        $3",
+            "        ",
+            "        ai_chance = {",
+            "            factor = $4",
+            "            modifier = {",
+            "                factor = $5",
+            "            }",
+            "        }",
+            "    }",
+            "    ",
+            "    option = {",
+            "        name = \"EVTOPTB${1}\"",
+            "        $6",
+            "        ",
+            "        ai_chance = {",
+            "            factor = $7",
+            "            modifier = {",
+            "                factor = $8",
+            "            }",
+            "        }",
+            "    }",
+            "}"
+        ],
+        "description": "A basic triggered only country event template. Note that it can only have a maximum of 5 options without looking bad."
+    },
+
+    "Country Event Barebones": {
+        "prefix": "country_event_barebones",
+        "body": [
+            "country_event = {",
+            "    id = ${1:ID}",
+            "    is_triggered_only = yes",
+            "    allow_multiple_instances = yes",
+            "    ",
+            "    immediate = { }",
+            "    ",
+            "    option = {",
+            "        name = \"\"",
+            "        ",
+            "    }",
+            "}"
+        ],
+        "description": "A barebones event template for mechanical stuff, for Bob"
+    },
+
+    "News Article": {
+        "prefix": "news",
+        "body": [
+            "news = yes",
+            "news_desc_long = \"EVTDESC${1:ID}_NEWS_LONG\"",
+            "news_desc_medium = \"EVTDESC${1}_NEWS_MEDIUM\"",
+            "news_desc_short = \"EVTDESC${1}_NEWS_SHORT\""
+        ],
+        "description": "News article structure for events and decisions."
+    },
+
+    "Decision": {
+        "prefix": "decision",
+        "body": [
+            "${1:(Insert the decision's name)} = {",
+            "    picture = ${1}",
+            "",
+            "    potential = { ",
+            "        $2",
+            "    }",
+            "",
+            "    allow = {",
+            "        $3",
+            "    }",
+            "",
+            "    effect = {",
+            "        $4",
+            "    }",
+            "",
+            "    ai_will_do = {",
+            "        factor = 1",
+            "    }",
+            "}"
+        ],
+        "description": "Basic decision template. Note that all decisions in a file *must* be within 'political_decisions = {}'."
+    },
+
+    "History Relationship": {
+        "prefix": "alliance",
+        "body": [
+            "${1|alliance,vassal,union,substate|} = {",
+            "    first = ${2:TAG}",
+            "    second = ${3:TAG}",
+            "    start_date = ${4:1836}.${5:1}.${6:1}",
+            "    end_date = ${7:1936}.${8:1}.${9:1}",
+            "}"
+        ],
+        "description": "A template for pre-existing special relationships at the start of the game. Only for use inside history/diplomacy files."
+    },
+
+    "History Relations": {
+        "prefix": "history relation",
+        "body": [
+            "${tag} = {",
+            "    value = $1",
+            "    level = $2",
+            "    influence_value = $3",
+            "}"
+        ],
+        "description":"A template for pre-existing relations at the start of the game. Only for use inside the history files."
+    },
+
+    "History Leader": {
+        "prefix": "leader",
+        "body": [
+            "leader = {",
+            "    name = \"${leader_name}\"",
+            "    date = ${1:1836}.${2:1}.${3:1}",
+            "    type = ${land_sea}",
+            "    personality = ${personality}",
+            "    background = ${background}",
+            "    prestige = ${value}",
+            "}"
+        ],
+        "description":"A template for pre-existing leaders at the start of the game. Only for use inside the history files."
+    },
+
+    "History Army": {
+        "prefix": "army",
+        "body": [
+            "army = {",
+            "    name = \"${army_name}\"",
+            "    location = ${prov_id}",
+            "    ",
+            "    regiment = {",
+            "        name = \"${name}\"",
+            "        type = ${unit_type}",
+            "        home = ${prov_id2}",
+            "    }",
+            "    regiment = {",
+            "        name = \"${name2}\"",
+            "        type = ${unit_type2}",
+            "        home = ${prov_id2}",
+            "    }",
+            "}"
+        ],
+        "description":"A template for pre-existing armies at the start of the game. Only for use inside the history files."
+    },
+
+    "History Navy": {
+        "prefix": "navy",
+        "body": [
+            "navy = {",
+            "    name = \"${navy_name}\"",
+            "    location = ${prov_id}",
+            "    ",
+            "    ship = {",
+            "        name = \"${name}\"",
+            "        type = ${ship_type}",
+            "    }",
+            "    ship = {",
+            "        name = \"${name2}\"",
+            "        type = ${ship_type2}",
+            "    }",
+            "}"
+        ],
+        "description":"A template for pre-existing armies at the start of the game. Only for use inside the history files."
+    },
+
+    "History Province": {
+        "prefix": "province history",
+        "body": [
+            "owner = ${TAG}",
+            "controller = ${TAG}",
+            "add_core = ${TAG}",
+            "trade_goods = ${good}",
+            "life_rating = ${value}",
+            "terrain = ${terrain}",
+            "is_slave = ${yes_no}",
+            "colonial = ${colonial_level}",
+            "",
+            "fort = ${value1}",
+            "naval_base = ${value2}",
+            "railroad = ${value3}",
+            "",
+            "party_loyalty = {",
+            "    ideology = ${ideology}",
+            "    loyalty_value = ${value4}",
+            "}",
+            "party_loyalty = {",
+            "    ideology = ${ideology2}",
+            "    loyalty_value = ${value5}",
+            "}",
+            "",
+            "state_building = {",
+            "    level = 2",
+            "    building = ${factory}",
+            "    upgrade = ${value6}",
+            "}",
+            ""
+        ],
+        "description":"A template for pre-existing provinces at the start of the game. Only for use inside the history files."
+    },
+
+    "History Country": {
+        "prefix": "country history",
+        "body": [
+            "capital = ${prov_id}",
+            "primary_culture = ${p_culture}",
+            "culture = ${culture}",
+            "religion = ${religion}",
+            "government = ${government_type}",
+            "plurality = ${pluralityvalue}",
+            "nationalvalue = ${nv}",
+            "literacy = ${percent}",
+            "civilized = ${yes}",
+            "schools = ${tech_school}",
+            "prestige = ${value}",
+            "",
+            "consciousness = ${con}",
+            "nonstate_consciousness = ${n_con}",
+            "",
+            "#Starting Politics",
+            "ruling_party = ${tag_party}",
+            "last_election = ${yyyy}.${mm}.${dd}",
+            "upper_house = {",
+            "    anarcho_liberal = 0",
+            "    anarchist = 0",
+            "    communist = 0",
+            "    conservative = 83",
+            "    fascist = 0",
+            "    liberal = 12",
+            "    reactionary = 5",
+            "    socialist = 0",
+            "}",
+            "",
+            "govt_flag = {",
+            "    government = ${gov_type}",
+            "    flag = ${flag_type}",
+            "",
+            "foreign_investment = {",
+            "    ${f_tag1} = ${amount}",
+            "}",
+            "",
+            "oob = \"${TAG}_oob.txt\"",
+            "#Political Reforms",
+            "${pol_reforms}",
+            "",
+            "#Social Reforms",
+            "${soc_reforms}",
+            "",
+            "#Technologies",
+            "${tech}",
+            "",
+            "#Inventions",
+            "${inv}",
+            "}",
+            ""
+        ],
+        "description":"A template for countries at the start of the game. Only for use inside the history files."
+    },
+
+    "Commons Country": {
+        "prefix": "country info",
+        "body": [
+            "color = { ${r} ${g} ${b} }",
+            "graphical_culture = ${g_culture}",
+            "",
+            "#${Localised_Party_Name}",
+            "party = {",
+            "    name = \"${tag}_${ideology}\"",
+            "    start_date = ${start_yyyy}.${start_mm}.${start_dd}",
+            "    end_date = ${end_yyyy}.${end_mm}.${end_dd}",
+            "    ",
+            "    ideology = ${ideology}",
+            "    ",
+            "    social_policy = ${s_policy}",
+            "    economic_policy = ${e_policy}",
+            "    trade_policy = ${t_policy}",
+            "    citizenship_policy = ${c_policy}",
+            "    war_policy = ${w_policy}",
+            "}",
+            "",
+            "unit_names = {",
+            "    dreadnought = {",
+            "        ${names}",
+            "    }",
+            "    battleship = {",
+            "        ${names}",
+            "    }",
+            "    cruiser = {",
+            "        ${names}",
+            "    }",
+            "    monitor = {",
+            "        ${names}",
+            "    }",
+            "    commerce_raider = {",
+            "        ${names}",
+            "    }",
+            "    ironclad = {",
+            "        ${names}",
+            "    }",
+            "    manowar = {",
+            "        ${names}",
+            "    }",
+            "    frigate = {",
+            "        ${names}",
+            "    }",
+            "    steam_transport = {",
+            "        ${names}",
+            "    }",
+            "    clipper_transport = {",
+            "        ${names}",
+            "    }",
+            "}"
+        ],
+        "description":"A template for basic country data. Only for use inside the commons files."
+    },
+    
+    "Casus Belli - Defining": {
+        "prefix": "casus_belli_defining",
+        "body": [
+            "${CB_NAME} = {",
+            "    sprite_index = ${SPRITE_INDEX}",
+            "    is_triggered_only = yes",
+            "    months = 12",
+            "    crisis = no",
+            "    constructing_cb = no",
+            "",
+            "    badboy_factor = 0",
+            "    prestige_factor = 0.5",
+            "    peace_cost_factor = 35",
+            "    penalty_factor = 1",
+            "",
+            "    break_truce_prestige_factor = 1",
+            "    break_truce_infamy_factor = 1",
+            "    break_truce_militancy_factor = 1",
+            "    truce_months = 48",
+            "",
+            "    good_relation_prestige_factor = 1",
+            "    good_relation_infamy_factor = 1",
+            "    good_relation_militancy_factor = 1",
+            "",
+            "    always = no",
+            "",
+            "    can_use = {} # This part must be empty, or the CB will cause lag",
+            "",
+            "    # po_effects",
+            "",
+            "    on_po_accepted = {",
+            "        # effects",
+            "    }",
+            "",
+            "    on_add = {}",
+            "",
+            "    war_name = ${WAR_NAME}",
+            "}"
+        ],
+        "description": "A template for a casus belli that is only ever given out by events/decisions or in scripted wars. Causes minimal lag."
+    },
+
+    "Renaming Format - Province Only": {
+        "prefix": "rename_prov",
+        "body": [
+            "any_country = {",
+            "    limit = {",
+            "        owns = ${1:ProvID}",
+            "        is_culture_group = ${Culture_Group}",
+            "        primary_culture = ${Primary_Culture}",
+            "    }",
+            "    ${1} = { change_province_name = \"${Rename}\" }",
+            "}"
+        ],
+        "description": "Standard IF emulation for renames for provs in the renaming event."
+    },
+
+    "Renaming Format - Province + State": {
+        "prefix": "rename_capital",
+        "body": [
+            "any_country = {",
+            "    limit = {",
+            "        owns = ${1:ProvID}",
+            "        is_culture_group = ${Culture_Group}",
+            "        primary_culture = ${Primary_Culture}",
+            "    }",
+            "    ${1} = {",
+            "        change_province_name = \"${Rename}\"",
+            "        state_scope = { change_region_name = \"${Region_Rename}\" }",
+            "    }",
+            "}"
+        ],
+        "description": "Standard IF emulation for renames for capital provs in the renaming event."
+    },
+
+    "Song": {
+        "prefix": "song",
+        "body": [
+            "song = {",
+            "    name = \"$1\"",
+            "    chance = {",
+            "        modifier = { factor = $2 }",
+            "    }",
+            "}"
+        ],
+        "description": "Effect that sets up the chances for a specific piece of music to play."
+    },
+
+    "Song Modifier": {
+        "prefix": "modifier_song",
+        "body": [
+            "modifier = { factor = ${1:1} $2 }"
+        ],
+        "description": "Effect that adds a modifier to the chance of a specific piece of music playing."
+    }
+}

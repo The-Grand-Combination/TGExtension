@@ -1,0 +1,124 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Victoria 2 Script",
+  "scopeName": "source.victoria2",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#string" },
+    { "include": "#logical" },
+    { "include": "#structureField" },
+    { "include": "#scopeChanger" },
+    { "include": "#popType" },
+    { "include": "#implicitScope" },
+    { "include": "#flagValue" },
+    { "include": "#modifierValue" },
+    { "include": "#politicalValue" },
+    { "include": "#cultureReligionValue" },
+    { "include": "#identifierValue" },
+    { "include": "#locationValue" },
+    { "include": "#provinceScopeKey" },
+    { "include": "#countryTag" },
+    { "include": "#boolean" },
+    { "include": "#number" },
+    { "include": "#genericKey" },
+    { "include": "#operator" },
+    { "include": "#braces" }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.line.number-sign.victoria2",
+      "match": "#.*$"
+    },
+    "string": {
+      "name": "string.quoted.double.victoria2",
+      "begin": "\"",
+      "end": "\"",
+      "patterns": [
+        {
+          "name": "constant.character.escape.victoria2",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "logical": {
+      "name": "keyword.control.logical.victoria2",
+      "match": "\\b(AND|OR|NOT|and|or|not|limit)\\b(?=\\s*[=<>])"
+    },
+    "structureField": {
+      "name": "storage.type.structure.victoria2",
+      "match": "\\b(id|title|desc|picture|name|option|immediate|trigger|mean_time_to_happen|potential|allow|effect|ai_chance|ai_will_do|factor|base|modifier|fire_only_once|is_triggered_only|allow_multiple_instances|major|election|news|news_title|news_desc_long|news_desc_medium|news_desc_short|alert|months|days|years|chance|issue_group|political_decisions|country_event|province_event)\\b(?=\\s*[=<>])"
+    },
+    "scopeChanger": {
+      "name": "support.function.scope.victoria2",
+      "match": "\\b(all_core|any_core|any_greater_power|any_neighbor_country|any_owned_province|any_pop|any_sphere_member|any_state|any_substate|capital_scope|cultural_union|overlord|sphere_owner|war_countries|any_country|any_owned|random_country|random_owned|random_pop|random_state|random_greater_power|random_province|any_neighbor_province|controller|owner|sea_zone|state_scope|country|random_neighbor_province|random_empty_neighbor_province|location|poor_strata|middle_strata|rich_strata|random_list|random)\\b(?=\\s*[=<>])"
+    },
+    "popType": {
+      "name": "keyword.control.pop-type.victoria2",
+      "match": "\\b(aristocrats|artisans|bureaucrats|capitalists|clergymen|clerks|craftsmen|farmers|labourers|officers|pioneers|post_revolt_bureau|serfs|slaves|soldiers|tribals|nomads)\\b"
+    },
+    "implicitScope": {
+      "name": "variable.language.victoria2",
+      "match": "\\b(THIS|FROM|this|from)\\b"
+    },
+    "flagValue": {
+      "name": "string.unquoted.flag.victoria2",
+      "match": "(?<=\\b(?:has_country_flag|set_country_flag|clr_country_flag|has_province_flag|set_province_flag|clr_province_flag|has_global_flag|set_global_flag|clr_global_flag|which)\\s*=\\s*)[\\w.'-]+"
+    },
+    "modifierValue": {
+      "name": "entity.name.type.modifier.victoria2",
+      "match": "(?<=\\b(?:has_country_modifier|has_province_modifier|remove_country_modifier|remove_province_modifier|tech_school|name)\\s*=\\s*)(?!\")(?!yes\\b|no\\b)[\\w.'-]+"
+    },
+    "politicalValue": {
+      "name": "entity.name.type.political.victoria2",
+      "match": "(?<=\\b(?:ideology|ruling_party_ideology|pop_majority_ideology|enable_ideology|is_ideology_enabled|dominant_issue|pop_majority_issue|political_reform|social_reform|military_reform|economic_reform|is_next_reform|value|government|nationalvalue)\\s*=\\s*)(?!\")(?!yes\\b|no\\b)[A-Za-z_][\\w.'-]*"
+    },
+    "cultureReligionValue": {
+      "name": "string.unquoted.culture.victoria2",
+      "match": "(?<=\\b(?:primary_culture|add_accepted_culture|remove_accepted_culture|accepted_culture|has_pop_culture|pop_majority_culture|culture|culture_group|is_culture_group|religion|has_pop_religion|pop_majority_religion)\\s*=\\s*)(?!\")(?!yes\\b|no\\b)[A-Za-z_][\\w.'-]*"
+    },
+    "identifierValue": {
+      "name": "constant.character.escape.identifier.victoria2",
+      "match": "(?<=\\b(?:trade_goods|produces|big_producer|terrain|continent|type|personality|background|casus_belli|constructing_cb_type|invention|activate_technology|has_building|build_factory_in_capital_state|can_build_factory_in_capital_state|has_crime|add_crime|pop_type|strata)\\s*=\\s*)(?!\")(?!yes\\b|no\\b)[A-Za-z_][\\w.'-]*"
+    },
+    "locationValue": {
+      "name": "string.regexp.location.victoria2",
+      "match": "(?<=\\b(?:owns|controls|capital|province_id|state_id|state_province_id|is_core|region|move_pop)\\s*=\\s*)[\\w.]+"
+    },
+    "provinceScopeKey": {
+      "name": "string.regexp.province.victoria2",
+      "match": "\\b\\d{1,5}\\b(?=\\s*=\\s*\\{)"
+    },
+    "countryTag": {
+      "name": "string.regexp.tag.victoria2",
+      "match": "\\b[A-Z][A-Z0-9]{2}\\b"
+    },
+    "boolean": {
+      "name": "constant.language.boolean.victoria2",
+      "match": "\\b(yes|no)\\b"
+    },
+    "number": {
+      "name": "constant.numeric.victoria2",
+      "match": "(?<![\\w.])[+-]?(?:\\d+(?:\\.\\d+){0,2}|\\.\\d+)(?![\\w.])"
+    },
+    "genericKey": {
+      "name": "support.type.property-name.victoria2",
+      "match": "\\b[A-Za-z_][\\w.']*\\b(?=\\s*[=<>])"
+    },
+    "operator": {
+      "name": "keyword.operator.comparison.victoria2",
+      "match": "<=|>=|<|>|="
+    },
+    "braces": {
+      "patterns": [
+        {
+          "name": "punctuation.section.block.begin.victoria2",
+          "match": "\\{"
+        },
+        {
+          "name": "punctuation.section.block.end.victoria2",
+          "match": "\\}"
+        }
+      ]
+    }
+  }
+}

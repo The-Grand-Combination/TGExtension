@@ -1,0 +1,49 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Victoria 2 CSV",
+  "scopeName": "source.victoria2csv",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#key" },
+    { "include": "#colorCode" },
+    { "include": "#variable" },
+    { "include": "#escape" },
+    { "include": "#endMarker" },
+    { "include": "#number" },
+    { "include": "#separator" }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.line.number-sign.victoria2csv",
+      "match": "^\\s*#.*$"
+    },
+    "key": {
+      "name": "support.type.property-name.victoria2csv",
+      "match": "^[^;#\\r\\n][^;\\r\\n]*(?=;)"
+    },
+    "colorCode": {
+      "name": "constant.character.escape.color.victoria2csv",
+      "match": "§."
+    },
+    "variable": {
+      "name": "variable.language.victoria2csv",
+      "match": "\\$[\\w.]+\\$"
+    },
+    "escape": {
+      "name": "constant.character.escape.victoria2csv",
+      "match": "\\\\n"
+    },
+    "endMarker": {
+      "name": "keyword.control.end-marker.victoria2csv",
+      "match": "(?<=;)[xX]\\s*$"
+    },
+    "number": {
+      "name": "constant.numeric.victoria2csv",
+      "match": "(?<=;)[+-]?\\d+(?:\\.\\d+)?(?=;|\\s*$)"
+    },
+    "separator": {
+      "name": "keyword.operator.separator.victoria2csv",
+      "match": ";"
+    }
+  }
+}

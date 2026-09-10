@@ -1,113 +1,126 @@
+import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { FileUtils } from './fileUtils';
-import { ValidationManager } from './validationManager';
-import { ValidationMapManager } from './validationMapManager';
-import { GameLauncher } from './gameLauncher';
-import { ToolbarProvider } from './toolbarProvider';
-import { RenameGeneratorWebview } from './renameGeneratorWebView';
-import { PopulationDataGenerator } from './provincePopGeneratorWebView';
-import { ProvinceHistoryGeneratorWebview } from './provinceHistoryGeneratorWebView';
-import { hoverProviders } from './hoverProviders';
-import { definitionProviders } from './definitionProviders';
-import { LanguageClient, LanguageClientOptions, ServerOptions, TransportKind } from 'vscode-languageclient/node';
+import {
+  LanguageClient,
+  TransportKind,
+  type LanguageClientOptions,
+  type ServerOptions,
+} from 'vscode-languageclient/node';
+import { enforceColormapsCommand } from './commands/enforceColormapsCommand.js';
+import { generateFullReportCommand } from './commands/generateFullReportCommand.js';
+import { generateMapReportCommand } from './commands/generateMapReportCommand.js';
+import { launchGameCommand } from './commands/launchGameCommand.js';
+import type { PickMemory } from './commands/pickMods.js';
+import { ActionsTreeProvider } from './providers/actionsTreeProvider.js';
+import { SettingsPanel } from './providers/settingsPanel.js';
 
-export function activate(context: vscode.ExtensionContext) {
+let client: LanguageClient | undefined;
 
-    const toolbarProvider = new ToolbarProvider(context);
-    
-    context.subscriptions.push(
-        vscode.window.registerTreeDataProvider('victorian_tools', toolbarProvider),
-        
-        vscode.commands.registerCommand('extension.openFileSelection', () => 
-            ValidationManager.validateGame(toolbarProvider)
-        ),
-        
-        vscode.commands.registerCommand('extension.openLastErrorFile', async () => {
-            const errorPath = toolbarProvider.getLastErrorFilePath();
-            if (!errorPath || !await FileUtils.fileExists(errorPath)) {
-                vscode.window.showErrorMessage('No error file to open.');
-                return;
-            }
-            const doc = await vscode.workspace.openTextDocument(errorPath);
-            await vscode.window.showTextDocument(doc);
-        }),
+/**
+ * Composition root for the client half of the extension. Starts the Victoria 2
+ * language server and routes matching documents to it. All analysis logic lives
+ * in the server; this file only wires VS Code to it.
+ */
+export function activate(context: vscode.ExtensionContext): void {
+  const serverModule = context.asAbsolutePath(path.join('dist', 'server.js'));
 
-        vscode.commands.registerCommand('extension.openLastMapErrorFile', async () => {
-            const errorPath = toolbarProvider.getLastMapErrorFilePath();
-            if (!errorPath || !await FileUtils.fileExists(errorPath)) {
-                vscode.window.showErrorMessage('No map validation file to open.');
-                return;
-            }
-            const doc = await vscode.workspace.openTextDocument(errorPath);
-            await vscode.window.showTextDocument(doc);
-        }),
+  const serverOptions: ServerOptions = {
+    run: { module: serverModule, transport: TransportKind.ipc },
+    debug: {
+      module: serverModule,
+      transport: TransportKind.ipc,
+      options: { execArgv: ['--nolazy', '--inspect=6009'] },
+    },
+  };
 
-        vscode.commands.registerCommand('extension.openFileSelectionMap', () => 
-            ValidationMapManager.validateMap(toolbarProvider)
-        ),
-        
-        vscode.commands.registerCommand('extension.openRenameGenerator', () => 
-            RenameGeneratorWebview.open(context)
-        ),
+  // Everything the mod index reads, so the server can rebuild it when a file
+  // changes outside the editor. `default.map` needs the `.map` glob; a `.mod`
+  // descriptor change re-reads which mods are stacked.
+  const fileWatchers = [
+    vscode.workspace.createFileSystemWatcher(
+      '**/{common,map,poptypes,technologies,inventions,units,events,decisions,localisation,news,history}/**/*.{txt,csv,map}',
+    ),
+    vscode.workspace.createFileSystemWatcher('**/gfx/pictures/{events,decisions}/**/*.{tga,dds}'),
+    vscode.workspace.createFileSystemWatcher('**/*.mod'),
+  ];
+  context.subscriptions.push(...fileWatchers);
 
-        vscode.commands.registerCommand('extension.openProvinceHistoryGenerator', () => 
-            ProvinceHistoryGeneratorWebview.open(context)
-        ),
+  const clientOptions: LanguageClientOptions = {
+    documentSelector: [
+      { scheme: 'file', pattern: '**/events/**/*.txt' },
+      { scheme: 'file', pattern: '**/decisions/**/*.txt' },
+      { scheme: 'file', pattern: '**/common/**/*.txt' },
+      { scheme: 'file', pattern: '**/poptypes/**/*.txt' },
+      { scheme: 'file', pattern: '**/technologies/**/*.txt' },
+      { scheme: 'file', pattern: '**/inventions/**/*.txt' },
+      { scheme: 'file', pattern: '**/news/**/*.txt' },
+      { scheme: 'file', pattern: '**/history/**/*.txt' },
+      { scheme: 'file', pattern: '**/units/**/*.txt' },
+      { scheme: 'file', pattern: '**/map/**/*.txt' },
+      { scheme: 'file', pattern: '**/map/**/*.csv' },
+      { scheme: 'file', pattern: '**/map/default.map' },
+      { scheme: 'file', pattern: '**/interface/**/*.txt' },
+      { scheme: 'file', pattern: '**/battleplans/**/*.txt' },
+      { scheme: 'file', pattern: '**/tutorial/**/*.txt' },
+      { scheme: 'file', pattern: '**/script/**/*.txt' },
+      { scheme: 'file', pattern: '**/*.gui' },
+      { scheme: 'file', pattern: '**/*.gfx' },
+      { scheme: 'file', pattern: '**/*.sfx' },
+      { scheme: 'file', pattern: '**/*.mod' },
+    ],
+    synchronize: { configurationSection: 'victorianTools', fileEvents: fileWatchers },
+  };
 
-        vscode.commands.registerCommand('extension.openProvincePopGenerator', () => 
-            PopulationDataGenerator.open(context)
-        ),
-        
-        
-        vscode.commands.registerCommand('extension.launchGame', () => 
-            GameLauncher.launchGame()
-        )
-    );
+  client = new LanguageClient(
+    'victorianTools',
+    'Victorian Tools Language Server',
+    serverOptions,
+    clientOptions,
+  );
 
-    hoverProviders.forEach(provider => {
-        context.subscriptions.push(
-            vscode.languages.registerHoverProvider({ scheme: 'file', language: 'paradox' }, {
-                provideHover(document, position) {
-                    const range = document.getWordRangeAtPosition(position, provider.regex);
-                    const match = range ? document.getText(range).match(provider.regex) : null;
-                    const text = match ? match[1] || match[0] : null;
-                    return text ? provider.handler(text, document) : null;
-                }
-            })
-        );
-    });
+  const settingsPanel = new SettingsPanel(() => client);
+  settingsPanel.listenTo(client);
+  const pickMemory = workspacePickMemory(context.workspaceState);
+  context.subscriptions.push(
+    settingsPanel,
+    vscode.commands.registerCommand('victorian-tools.restartServer', (): void => {
+      void client?.restart();
+    }),
+    vscode.commands.registerCommand(
+      'victorian-tools.generateFullReport',
+      generateFullReportCommand(() => client, pickMemory),
+    ),
+    vscode.commands.registerCommand(
+      'victorian-tools.generateMapReport',
+      generateMapReportCommand(() => client, pickMemory),
+    ),
+    vscode.commands.registerCommand(
+      'victorian-tools.enforceColormaps',
+      enforceColormapsCommand(() => client, pickMemory),
+    ),
+    vscode.commands.registerCommand('victorian-tools.launchGame', launchGameCommand(() => client, pickMemory)),
+    vscode.commands.registerCommand('victorian-tools.openSettings', (): void => {
+      settingsPanel.open();
+    }),
+    vscode.window.registerTreeDataProvider('victorianTools.actions', new ActionsTreeProvider()),
+  );
 
-    definitionProviders.forEach(provider => {
-        context.subscriptions.push(
-            vscode.languages.registerDefinitionProvider({ scheme: 'file', language: 'paradox' }, {
-                provideDefinition(document, position) {
-                    const range = document.getWordRangeAtPosition(position, provider.regex);
-                    const match = range ? document.getText(range).match(provider.regex) : null;
-                    const text = match ? match[0] : null;
-                    return text ? provider.handler(text, document) : null;
-                }
-            })
-        );
-    });
-
-    const serverModule = __dirname + '/server.js';
-    const serverOptions: ServerOptions = {
-        run: { module: serverModule, transport: TransportKind.ipc },
-        debug: { module: serverModule, transport: TransportKind.ipc }
-    };
-
-    const clientOptions: LanguageClientOptions = {
-        documentSelector: [{ scheme: 'file', language: 'paradox' }],
-        synchronize: {
-            fileEvents: vscode.workspace.createFileSystemWatcher('**/*.txt')
-        }
-    };
-
-    const client = new LanguageClient('paradoxLanguageServer', 'Paradox Language Server', serverOptions, clientOptions);
-
-    context.subscriptions.push(client);
-
-    client.start();
+  void client.start();
 }
 
-export function deactivate() {}
+const LAST_PICK_KEY = 'victorianTools.lastPickedMods';
+
+/** The last mods picked for a report or a launch, kept with the workspace. */
+function workspacePickMemory(state: vscode.Memento): PickMemory {
+  return {
+    recall: (): readonly string[] => {
+      const stored = state.get<unknown>(LAST_PICK_KEY);
+      return Array.isArray(stored) ? stored.filter((item): item is string => typeof item === 'string') : [];
+    },
+    remember: (names): Thenable<void> => state.update(LAST_PICK_KEY, [...names]),
+  };
+}
+
+export function deactivate(): Thenable<void> | undefined {
+  return client?.stop();
+}

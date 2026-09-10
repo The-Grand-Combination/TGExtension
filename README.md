@@ -1,35 +1,99 @@
-# **Victorian Tools - An Intuitive and Fast Modding Tool** #
+# Victorian Tools
 
-**Discover a new era in Victoria II modding with ParadoxScript Tools - a VSCode extension crafted by modders for modders, designed to improve your modding enviroment with colorful syntax highlighting and a library of snippets, providing a seamless and user-friendly approach that makes modding more accessible.**
+A Visual Studio Code extension for modding **Victoria 2**, written in **strict
+TypeScript**. It runs a Language Server Protocol (LSP) server that parses the
+game's Paradox script and validates it inline as you type.
 
-![preview](https://github.com/ColdSlav/paradoxscript-tools/assets/78610822/d59010ac-ce48-453b-9f78-62046db492fb)
+Companion to [`vic2-mcp`](../vic2-mcp) (an MCP server serving Victoria 2 modding
+reference docs).
 
-## Readable and Intuitive Syntax Highlighting ##
+## What it does today
 
-Dive into the world of Victoria II modding with vibrant syntax highlighting. This extension ensures that every relevant keyword, variable, value, and modifier is assigned a unique color, enhancing readability and making your modding experience faster.
+- **Syntax highlighting** — a TextMate grammar mapped to standard scopes, so it
+  works with any color theme (no bundled theme required): TAGs, scope changers,
+  `AND`/`OR`/`NOT`, structural fields, numbers/dates, strings, comments.
+- **Syntax validation** — unbalanced braces, unterminated strings, and other
+  malformed script are flagged with precise ranges, with error recovery so one
+  mistake does not hide the rest.
+- **Structural validation** for `events/` and `decisions/` files — e.g. an event
+  missing its `id`, or a decision missing `potential`/`effect`.
+- **Semantic validation** — unknown triggers/effects (with "did you mean"
+  suggestions), triggers/effects used in the wrong scope
+  (country/province/state/pop), and references that don't exist in the mod:
+  TAGs, cultures, religions, goods, ideologies, modifiers, reforms, pop types,
+  provinces, technologies, and more — all indexed from the mod's own files.
+- **Event id validation** — firing an undefined event id, or defining the same
+  event id in two files, is an error.
+- **Duplicate detection** — duplicated decision names, country tags, cultures,
+  modifiers, and other mod identifiers are errors, reported even in files that
+  are not open.
+- **Localisation & picture checks** — missing loc keys (`title`, `desc`,
+  option `name`, decision-derived keys) and missing event/decision pictures are
+  warnings. Ctrl+Click a loc key to jump to its line in the CSV; hover it to
+  see the English text. Hovering a `picture` value shows an inline preview of
+  the image (DDS and TGA are decoded in-process).
 
-![syntax](https://github.com/ColdSlav/paradoxscript-tools/assets/78610822/9c87ab89-eb6d-40ae-b648-0a2f71c573d3)
+The identifier index builds from the mod root (the folder containing `common/`)
+and rebuilds automatically when mod files change. Only files under `events/`
+and `decisions/` are analysed for now; the `victoria2` language does not claim
+every `.txt` file.
 
-## Effortless Modding with a Robust Snippet Library ##
+## Requirements
 
-Boost productivity with intelligent snippets covering common modifiers, scopes, and complex structures. Let the snippets do the heavy lifting by offering quick and efficient code completion, saving you time and effort.
+- [Node.js](https://nodejs.org/) (LTS)
+- [Visual Studio Code](https://code.visualstudio.com/) `^1.96.0`
 
-![snippets](https://github.com/ColdSlav/paradoxscript-tools/assets/78610822/5686c29f-f7fd-49f8-9e83-99461a87b01f)
+## Getting started
 
-## Beginner-Friendly Modding ##
+```bash
+npm install      # install dependencies
+npm run watch    # start the esbuild + tsc watchers
+```
 
-Created by modders, for modders, this extension caters specifically to the Victoria II community, whether you're a veteran modder or just starting your Victoria II modding journey, this extension provides a native and user-friendly modding experience.
+Press <kbd>F5</kbd> in VS Code to launch the **Extension Development Host** with
+the extension loaded. Run the `Victorian Tools: Hello World` command from the
+Command Palette (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd>) to confirm it
+works.
 
-## Enabling Extension Features ##
+## Scripts
 
-To enable and make use of the syntax highlight features, you need to go to the lower right corner of the editor and click on the text next to the notifications icon, here, a dropdown menu will appear, letting you select the "Paradox" language.
+| Script                 | Description                                             |
+| ---------------------- | ------------------------------------------------------- |
+| `npm run compile`      | Type-check, lint, and bundle once.                      |
+| `npm run watch`        | Rebuild on change (esbuild) + type-check on change.     |
+| `npm run package`      | Production build (minified) for publishing.             |
+| `npm run lint`         | Run ESLint over `src`.                                  |
+| `npm run check-types`  | Type-check without emitting.                            |
+| `npm run test:unit`    | Run the fast unit suites (plain Mocha, no editor host). |
+| `npm test`             | Run the integration suite in the Extension Host.        |
 
-![enable](https://github.com/ColdSlav/paradoxscript-tools/assets/78610822/911e89f6-0804-4ffb-ab7c-fcc16f9539f0)
+## Project layout
 
-### **Community** ###
+```
+.
+├── src/
+│   ├── extension.ts             # LSP client — starts the server, no logic
+│   ├── server/                  # LSP server (adapter): server.ts, toLspDiagnostic.ts
+│   ├── services/                # domain logic — platform-free (syntax + structure validation)
+│   ├── parser/                  # lexer.ts, parser.ts (error-recovering) → typed AST
+│   ├── model/                   # domain types: ast, diagnostic, range, fileType
+│   └── test/
+│       ├── extension.test.ts    # integration suite (Extension Host)
+│       └── unit/                # unit suites (plain Mocha)
+├── esbuild.js                   # bundler (two entry points → dist/extension.js, dist/server.js)
+├── language-configuration.json  # comments/brackets for the victoria2 language
+├── eslint.config.mjs            # lint rules (strict, type-checked)
+├── tsconfig.json                # strict TypeScript config
+└── package.json                 # extension manifest
+```
 
-Join the creator on Discord in [The Grand Combination](https://discord.gg/the-grand-combination-689466155978588176).
+The core (`parser/`, `model/`, `services/`) imports neither `vscode` nor
+`vscode-languageserver`, so it is unit-tested without any editor host.
 
-### *License* ###
+## Type-safety policy
 
-The Victorian Tools Extension is distributed under the MIT Permissive Free Software license. See [LICENSE](LICENSE.txt) for more details.
+This project uses **strict TypeScript with strong typing**. `tsconfig.json`
+enables `strict` plus every additional check (`noUncheckedIndexedAccess`,
+`exactOptionalPropertyTypes`, `noImplicitReturns`, and more), and ESLint runs
+the `strict-type-checked` ruleset with `no-explicit-any` promoted to an error.
+Keep it that way.

@@ -1,24 +1,56 @@
 {
-    "compilerOptions": {
-        "target": "ES2020",
-        "module": "commonjs",
-        "outDir": "./src/built",
-        "rootDir": "./src",
-        "sourceMap": true,
-        "types": ["vscode", "node"],
-        "typeRoots": [
-            "node_modules/@types"
-        ],
-        "strict": true,
-        "noImplicitAny": false
-    },
-    "include": [
-        "./src/**/*.ts",
-        "./src/*.ts",
-        "src"
+  "compilerOptions": {
+    "module": "Node16",
+    "target": "ES2022",
+    "lib": [
+      "ES2022"
     ],
-    "exclude": [
-        "node_modules"
+    "outDir": "out",
+    "sourceMap": true,
+    "rootDir": "src",
+    "types": [
+      "node",
+      "mocha",
+      "vscode"
     ],
-     "moduleResolution": "node"
+
+    /* Strict type-checking — non-negotiable for this project */
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "useUnknownInCatchVariables": true,
+    "exactOptionalPropertyTypes": true,
+
+    /* Additional correctness checks */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* Interop / module resolution */
+    "moduleResolution": "Node16",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": false
+  },
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "out",
+    ".vscode-test"
+  ]
 }

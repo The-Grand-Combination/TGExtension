@@ -1,12 +1,7 @@
-node_modules
-*.vsix
-
-# Ignore everything in src except built files
-src/built/**
-src/*.js
-
-# Ignore node_modules but include necessary types
 node_modules/
-
-# Other common ignore patterns
 out/
+dist/
+*.vsix
+.vscode-test/
+*.log
+npm-debug.log*

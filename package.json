@@ -1,162 +1,237 @@
 {
   "name": "victorian-tools",
   "displayName": "Victorian Tools",
-  "description": "Syntax highlighting features and code snippets for Victoria II modding.",
+  "description": "Tooling for Victoria 2 mod files: a language server that parses Paradox script and validates it inline.",
+  "version": "4.0.0",
   "publisher": "TGCModdingTeam",
-  "main": "./src/built/extension.js",
-  "version": "3.2.2",
-  "icon": "/images/icon.png",
-  "engines": {
-    "vscode": "^1.92.0"
-  },
-  "homepage": "https://discord.com/invite/rGfQAgwyST",
+  "private": true,
+  "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/The-Grand-Combination/TGExtension"
+    "url": "https://github.com/The-Grand-Combination/TGExtension.git"
   },
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/The-Grand-Combination/TGExtension/issues"
+  "engines": {
+    "vscode": "^1.96.0"
   },
   "categories": [
-    "Programming Languages",
-    "Snippets",
-    "Themes"
+    "Other"
   ],
+  "activationEvents": [
+    "workspaceContains:**/*.mod",
+    "workspaceContains:common/cultures.txt"
+  ],
+  "main": "./dist/extension.js",
   "contributes": {
     "languages": [
       {
-        "id": "paradox",
+        "id": "victoria2",
         "aliases": [
-          "Paradox",
-          "paradox"
+          "Victoria 2 Script",
+          "Paradox Script"
         ],
         "extensions": [
-          ".txt",
+          ".gui",
+          ".gfx",
+          ".sfx",
           ".mod"
+        ],
+        "filenamePatterns": [
+          "**/events/**/*.txt",
+          "**/decisions/**/*.txt",
+          "**/common/**/*.txt",
+          "**/poptypes/**/*.txt",
+          "**/technologies/**/*.txt",
+          "**/inventions/**/*.txt",
+          "**/news/**/*.txt",
+          "**/history/**/*.txt",
+          "**/units/**/*.txt",
+          "**/map/**/*.txt",
+          "**/map/default.map",
+          "**/interface/**/*.txt",
+          "**/localisation/**/*.txt",
+          "**/battleplans/**/*.txt",
+          "**/tutorial/**/*.txt",
+          "**/script/**/*.txt"
         ],
         "configuration": "./language-configuration.json"
       },
       {
-        "id": "csv",
+        "id": "victoria2-csv",
         "aliases": [
-          "CSV",
-          "csv"
+          "Victoria 2 CSV"
         ],
-        "extensions": [
-          ".csv"
+        "filenamePatterns": [
+          "**/localisation/**/*.csv",
+          "**/map/**/*.csv"
         ],
-        "configuration": "./language-configuration.json"
+        "configuration": "./csv-language-configuration.json"
       }
     ],
     "grammars": [
       {
-        "language": "paradox",
-        "scopeName": "source.mod",
-        "path": "./syntaxes/paradox.tmLanguage.json"
+        "language": "victoria2",
+        "scopeName": "source.victoria2",
+        "path": "./syntaxes/victoria2.tmLanguage.json"
       },
       {
-        "language": "csv",
-        "scopeName": "source.csv",
-        "path": "./syntaxes/csv.tmLanguage.json"
-      }
-    ],
-    "themes": [
-      {
-        "label": "Victorian Dark+",
-        "uiTheme": "vs-dark",
-        "path": "./themes/victorian-dark+.json"
+        "language": "victoria2-csv",
+        "scopeName": "source.victoria2csv",
+        "path": "./syntaxes/victoria2csv.tmLanguage.json"
       }
     ],
     "snippets": [
       {
-        "language": "paradox",
-        "path": "./snippets/paradox.snippets.code-snippets"
+        "language": "victoria2",
+        "path": "./snippets/victoria2.code-snippets"
       },
       {
-        "language": "csv",
-        "path": "./snippets/csv.snippets.code-snippets"
+        "language": "victoria2-csv",
+        "path": "./snippets/victoria2-csv.code-snippets"
+      }
+    ],
+    "commands": [
+      {
+        "command": "victorian-tools.restartServer",
+        "title": "Restart Language Server",
+        "category": "Victorian Tools"
+      },
+      {
+        "command": "victorian-tools.generateFullReport",
+        "title": "Generate Full Report",
+        "category": "Victorian Tools",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "victorian-tools.generateMapReport",
+        "title": "Generate Map Report",
+        "category": "Victorian Tools",
+        "icon": "$(map)"
+      },
+      {
+        "command": "victorian-tools.enforceColormaps",
+        "title": "Enforce Colormaps",
+        "category": "Victorian Tools",
+        "icon": "$(symbol-color)"
+      },
+      {
+        "command": "victorian-tools.launchGame",
+        "title": "Launch Game",
+        "category": "Victorian Tools",
+        "icon": "$(play)"
+      },
+      {
+        "command": "victorian-tools.openSettings",
+        "title": "Open Settings",
+        "category": "Victorian Tools",
+        "icon": "$(settings-gear)"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "victorian_tools_container",
+          "id": "victorianTools",
           "title": "Victorian Tools",
-          "icon": "/images/vicIItools.png"
+          "icon": "images/vicIItools.png"
         }
       ]
     },
     "views": {
-      "victorian_tools_container": [
+      "victorianTools": [
         {
-          "id": "victorian_tools",
-          "name": "Victorian Tools"
+          "id": "victorianTools.actions",
+          "name": "Actions",
+          "icon": "images/vicIItools.png",
+          "contextualTitle": "Victorian Tools"
         }
       ]
     },
-    "commands": [
-      {
-        "command": "extension.launchGame",
-        "title": "Launch Game"
-      },
-      {
-        "command": "extension.openRenameGenerator",
-        "title": "Open Province Rename Generator"
-      },
-      {
-        "command": "extension.openProvinceHistoryGenerator",
-        "title": "Open Province History Generator"
-      },
-      {
-        "command": "extension.openProvincePopGenerator",
-        "title": "Open Province Pop Generator"
-      }
-    ],
     "configuration": {
-      "type": "object",
-      "title": "Victorian Tools Configurations",
+      "title": "Victorian Tools",
       "properties": {
-        "configs.vic2_root_folder": {
-          "title": "Victoria II Root Folder",
+        "victorianTools.validation.enable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable inline validation of Victoria 2 script files."
+        },
+        "victorianTools.validation.delay": {
+          "type": "number",
+          "default": 300,
+          "minimum": 0,
+          "maximum": 5000,
+          "markdownDescription": "Milliseconds of typing pause before a changed file is revalidated. `0` validates on every keystroke."
+        },
+        "victorianTools.index.rebuildDelay": {
+          "type": "number",
+          "default": 500,
+          "minimum": 50,
+          "maximum": 10000,
+          "markdownDescription": "Milliseconds to wait after mod files change on disk before rebuilding the identifier index of the mods they belong to."
+        },
+        "victorianTools.index.onStartup": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Index every mod in the workspace when the server starts, so mod-wide errors (duplicate identifiers) appear without opening a file. Turn off to index a mod only when one of its files is opened."
+        },
+        "victorianTools.gamePath": {
           "type": "string",
           "default": "",
-          "description": "Path to the default Victoria II root folder.",
-          "editor": {
-            "type": "folder"
-          }
+          "scope": "machine-overridable",
+          "markdownDescription": "The Victoria 2 install folder (the one holding `mod/`, `common/` and `map/`). Leave empty to detect it above the workspace folder. Mods are read on top of the game files they do not `replace_path`. Set from **Settings** in the Victorian Tools side bar."
+        },
+        "victorianTools.activeMods": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "`name`s (from their `.mod` files) of the mods and submods being worked on, any combination. Their files are validated against the whole stack, in load order (dependencies first): game files, then each selected mod. Empty: every mod is read with its dependencies only. Set from **Settings** in the Victorian Tools side bar."
+        },
+        "victorianTools.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Trace the communication between VS Code and the Victorian Tools language server."
         }
       }
-    },
-    "activationEvents": [
-      "onLanguage:paradox",
-      "onCommand:extension.openFileSelection",
-      "onCommand:extension.openFileSelectionMap",
-      "onCommand:extension.openRenameGenerator",
-      "onCommand:extension.launchGame",
-      "onView:victorian_tools"
-    ]
-  },
-  "devDependencies": {
-    "@types/node": "^20.16.2",
-    "@types/vscode": "^1.92.0",
-    "parse-dds": "^1.2.1",
-    "typescript": "^5.3.2"
+    }
   },
   "scripts": {
-    "compile": "tsc"
+    "vscode:prepublish": "npm run package",
+    "compile": "npm run check-types && npm run lint && node esbuild.js",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "npm run check-types && npm run lint && node esbuild.js --production",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vscode-test",
+    "test:unit": "npm run compile-tests && mocha --ui tdd \"out/test/unit/**/*.test.js\""
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.20.1",
+    "@types/vscode": "^1.96.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.1.0",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.10.0",
+    "mocha": "^12.0.0",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.69.0"
   },
   "dependencies": {
-    "@vscode/codicons": "^0.0.36",
-    "buffer-to-arraybuffer": "^0.0.6",
-    "csv-parse": "^5.6.0",
-    "dds-ktx-parser": "^1.0.1",
-    "jimp": "^0.22.12",
-    "pngjs": "^7.0.0",
-    "sdds": "^0.0.2",
-    "vsce": "^2.15.0",
-    "vscode-languageclient": "^9.0.1",
-    "vscode-languageserver": "^9.0.1",
-    "vscode-languageserver-textdocument": "^1.0.12"
+    "vscode-languageclient": "^10.1.1",
+    "vscode-languageserver": "^10.1.1",
+    "vscode-languageserver-textdocument": "^1.0.14",
+    "vscode-uri": "^3.2.0"
   }
 }
