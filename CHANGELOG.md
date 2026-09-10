@@ -3,6 +3,14 @@
 All notable changes to the "victorian-tools" extension will be documented in
 this file. This project adheres to [Keep a Changelog](https://keepachangelog.com/).
 
+## [4.0.1]
+
+### Changed
+
+- Marketplace README rewritten as a feature overview; the developer guide moved
+  to `project_README.md`.
+- Placeholder Marketplace icon (`images/icon.png`).
+
 ## [4.0.0]
 
 Complete rewrite. The extension moved from a syntax-highlighting and snippet
