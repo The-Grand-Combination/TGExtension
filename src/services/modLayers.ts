@@ -149,6 +149,8 @@ export function layeredIndexProvider(
     },
     listFiles: (relativeDirectory: string, extension: string): string[] =>
       listLayeredFiles(layers, fileSystem, relativeDirectory, extension),
+    listFilesRecursive: (relativeFolder: string): string[] =>
+      listLayeredFilesRecursive(layers, fileSystem, relativeFolder),
   };
 }
 

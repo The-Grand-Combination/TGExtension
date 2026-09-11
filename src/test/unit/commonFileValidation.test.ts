@@ -148,7 +148,7 @@ suite('common/ file validators — common data files', () => {
     assert.deepStrictEqual(codes('promotion_chance = { factor = 1 modifier = { factor = 2 literacy = 0.5 } }', 'popChances', 'common/pop_types.txt'), []);
     assert.ok(codes('promotion_chanse = { factor = 1 }', 'popChances', 'common/pop_types.txt').includes('unknown-pop-chance'));
     assert.deepStrictEqual(codes('bookmark = { name = "GC" date = 1836.1.1 }', 'bookmarks', 'common/bookmarks.txt'), []);
-    assert.deepStrictEqual(codes('folders = { army_tech = { army_doctrine } } schools = { s = { supply_limit = 1 } }', 'techFolders', 'common/technology.txt'), []);
+    assert.deepStrictEqual(codes('folders = { army_tech = { army_doctrine } navy_tech = { naval_doctrine } } schools = { s = { supply_limit = 1 } }', 'techFolders', 'common/technology.txt'), []);
     assert.ok(codes('schools = { s = { nope = 1 } }', 'techFolders', 'common/technology.txt').includes('unknown-modifier-key'));
   });
 

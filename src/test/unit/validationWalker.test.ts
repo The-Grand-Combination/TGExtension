@@ -200,11 +200,56 @@ suite('validationWalker — effects', () => {
   });
 });
 
+suite('validationWalker — effects the engine does not run', () => {
+  test('set_province_flag is an error in an effect block', () => {
+    const found = codes(eventWithOption('any_owned = { set_province_flag = my_flag }'));
+    assert.deepStrictEqual(found, ['broken-effect']);
+  });
+
+  test('set_province_flag is an error in province history', () => {
+    const found = codes('set_province_flag = my_flag', 'historyProvince', 'history/provinces/europe/1.txt');
+    assert.deepStrictEqual(found, ['broken-effect']);
+  });
+
+  test('the message names the effect as written', () => {
+    const diagnostics = validateSemantics(
+      parseDocument(eventWithOption('any_owned = { SET_PROVINCE_FLAG = my_flag }')).document,
+      'event',
+      index,
+      'events/Test.txt',
+    );
+    const first = diagnostics[0];
+    assert.ok(first, 'expected a diagnostic');
+    assert.strictEqual(first.severity, 'error');
+    assert.ok(first.message.includes("'SET_PROVINCE_FLAG'"), first.message);
+  });
+
+  test('the other province flag keys are untouched', () => {
+    assert.deepStrictEqual(codes(eventWithOption('any_owned = { clr_province_flag = my_flag }')), []);
+    assert.deepStrictEqual(codes(eventWithTrigger('any_owned_province = { has_province_flag = my_flag }')), []);
+  });
+});
+
 suite('validationWalker — localisation and pictures', () => {
   test('warns on a missing localisation key in title/desc/name', () => {
     const text =
-      'country_event = { id = 1 title = "NOPE_TITLE" desc = "d" is_triggered_only = yes option = { name = "o" } }';
+      'country_event = { id = 1 title = "EVTNAME_NOPE" desc = "d" is_triggered_only = yes option = { name = "o" } }';
     assert.deepStrictEqual(codes(text), ['missing-localisation']);
+  });
+
+  test('a value outside the key pattern is literal display text, not a missing key', () => {
+    const hardcoded =
+      'country_event = { id = 1 title = "t" desc = "Death of Dom Pedro II" is_triggered_only = yes option = { name = "o" } }';
+    assert.deepStrictEqual(codes(hardcoded), []);
+  });
+
+  test('an empty key pattern checks every value', () => {
+    const text =
+      'country_event = { id = 1 title = "NOPE_TITLE" desc = "d" is_triggered_only = yes option = { name = "o" } }';
+    const found = validateSemantics(parseDocument(text).document, 'event', index, 'events/Test.txt', {
+      locKeyPattern: undefined,
+    });
+    assert.deepStrictEqual(found.map((item) => item.code), ['missing-localisation']);
   });
 
   test('warns on a missing event picture with a suggestion', () => {
@@ -216,6 +261,22 @@ suite('validationWalker — localisation and pictures', () => {
     assert.strictEqual(first.code, 'missing-picture');
     assert.strictEqual(first.severity, 'warning');
     assert.ok(first.message.includes("'slaves'"), first.message);
+  });
+
+  test('a picture in a subfolder resolves by its path under the folder', () => {
+    const nested = buildTestIndex({ 'gfx/pictures/events/Brasil/Dom Pedro.tga': '' });
+    const event = (picture: string): string[] =>
+      validateSemantics(
+        parseDocument(
+          `country_event = { id = 1 title = "EVTNAME100" desc = "d" picture = "${picture}" is_triggered_only = yes option = { name = "o" } }`,
+        ).document,
+        'event',
+        nested,
+        'events/Test.txt',
+      ).map((item) => item.code);
+    assert.deepStrictEqual(event('Brasil/Dom Pedro'), []);
+    assert.deepStrictEqual(event('Brasil/Nobody'), ['missing-picture']);
+    assert.deepStrictEqual(event('Dom Pedro'), ['missing-picture']);
   });
 
   test('accepts existing loc keys and pictures', () => {

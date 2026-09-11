@@ -3,6 +3,10 @@ import type { FieldTable } from '../model/symbols.js';
 /**
  * Technology body fields (NCE technology_contents). Remaining keys are
  * modifier values, unit modifier blocks, or goods maps.
+ *
+ * `enable_crime` is not in NCE's table — NCE declares it only on `inv_effect` —
+ * but the engine accepts it on a technology too. Do not drop it when
+ * re-deriving this table from the parser.
  */
 export const TECH_SCALAR_FIELDS: FieldTable = {
   area: ['identifier'],
@@ -12,10 +16,17 @@ export const TECH_SCALAR_FIELDS: FieldTable = {
   unit: ['number'],
   activate_unit: ['unit'],
   activate_building: ['building'],
+  enable_crime: ['crime'],
   colonial_points: ['number'],
   plurality: ['number'],
   shared_prestige: ['number'],
 };
+
+/**
+ * Tech folders the engine hardcodes: it reads army and navy research from these
+ * names, so a mod that drops either one fails to load.
+ */
+export const REQUIRED_TECH_FOLDERS: readonly string[] = ['army_tech', 'navy_tech'];
 
 /** Technology/invention fields holding `good → number` maps. */
 export const TECH_GOODS_MAP_FIELDS: ReadonlySet<string> = new Set([

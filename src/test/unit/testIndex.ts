@@ -11,6 +11,10 @@ export function fakeProvider(files: Readonly<Record<string, string>>): ModFilePr
         .filter((key) => key.startsWith(prefix) && key.endsWith(extension) && !key.slice(prefix.length).includes('/'))
         .map((key) => key.slice(prefix.length));
     },
+    listFilesRecursive: (relativeFolder: string): string[] => {
+      const prefix = `${relativeFolder.replace(/\\/g, '/')}/`;
+      return Object.keys(files).filter((key) => key.startsWith(prefix));
+    },
   };
 }
 

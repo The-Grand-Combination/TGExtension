@@ -117,7 +117,7 @@ for a block, and `A OR B` for effects that accept either a scalar or a block for
 | `set_country_flag` | country, province, pop | flag | Set a country flag. |
 | `set_global_flag` | any | flag | Set a global flag. |
 | `set_news_flag` | country, province, pop | flag | Set a news flag (news scripting). |
-| `set_province_flag` | province | flag | Set a province flag. |
+| `set_province_flag` | province | flag | **Broken in the engine — `broken-effect` error.** Set a province flag. |
 | `set_variable` | country | { which=variable, value=number } | Create or overwrite a variable. |
 | `social_reform` | country, province | reformOption | Enact this social reform option. |
 | `sub_unit` | country, province | { type=unit, value=number\|identifier } | Spawn a unit ('current' = in this province). |

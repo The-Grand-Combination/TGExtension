@@ -1,4 +1,5 @@
 import type { Connection } from 'vscode-languageserver/node';
+import { DEFAULT_LOC_KEY_PATTERN } from '../model/validationOptions.js';
 
 /** The server's view of `victorianTools.*`, mirroring the manifest defaults. */
 export interface ServerConfig {
@@ -13,6 +14,8 @@ export interface ServerConfig {
   readonly gamePath: string;
   /** `name`s of the mods being worked on; empty for none (each mod is read with its dependencies). */
   readonly activeMods: readonly string[];
+  /** Regex source deciding which loc field values are keys; empty checks every value. */
+  readonly locKeyPattern: string;
 }
 
 export const DEFAULT_CONFIG: ServerConfig = {
@@ -22,6 +25,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   indexOnStartup: true,
   gamePath: '',
   activeMods: [],
+  locKeyPattern: DEFAULT_LOC_KEY_PATTERN,
 };
 
 const VALIDATION_DELAY_RANGE = { min: 0, max: 5000 } as const;
@@ -36,6 +40,7 @@ export function readServerConfig(configuration: unknown): ServerConfig {
   const root = asRecord(configuration);
   const validation = asRecord(root?.['validation']);
   const index = asRecord(root?.['index']);
+  const localisation = asRecord(root?.['localisation']);
   return {
     validationEnabled: readBoolean(validation?.['enable'], DEFAULT_CONFIG.validationEnabled),
     validationDelayMs: readMilliseconds(
@@ -51,6 +56,7 @@ export function readServerConfig(configuration: unknown): ServerConfig {
     indexOnStartup: readBoolean(index?.['onStartup'], DEFAULT_CONFIG.indexOnStartup),
     gamePath: readString(root?.['gamePath']),
     activeMods: readStringList(root?.['activeMods']),
+    locKeyPattern: readPattern(localisation?.['keyPattern']),
   };
 }
 
@@ -60,6 +66,7 @@ export function configEquals(left: ServerConfig, right: ServerConfig): boolean {
     left.validationDelayMs === right.validationDelayMs &&
     left.indexRebuildDelayMs === right.indexRebuildDelayMs &&
     left.indexOnStartup === right.indexOnStartup &&
+    left.locKeyPattern === right.locKeyPattern &&
     layoutConfigEquals(left, right)
   );
 }
@@ -87,6 +94,11 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   // A configuration bag arrives as `unknown` over JSON-RPC; the cast only
   // permits indexed reads, and every field is narrowed before use.
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined;
+}
+
+/** An absent pattern falls back to the manifest default; an empty one is the user's "check everything". */
+function readPattern(value: unknown): string {
+  return typeof value === 'string' ? value : DEFAULT_LOC_KEY_PATTERN;
 }
 
 function readString(value: unknown): string {

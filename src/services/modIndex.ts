@@ -18,6 +18,8 @@ import { parseDocument } from './syntaxValidation.js';
 export interface ModFileProvider {
   readFile(relativePath: string): string | undefined;
   listFiles(relativeDirectory: string, extension: string): string[];
+  /** Every file under a folder and its subfolders, as forward-slash paths from the mod root. */
+  listFilesRecursive(relativeFolder: string): string[];
 }
 
 /** Region files in the order the engine reads them; later files can only add meta-regions. */
@@ -412,10 +414,19 @@ function localisationDefinitions(provider: ModFileProvider): Map<string, LocKeyD
   return definitions;
 }
 
+const PICTURE_EXTENSION = /\.(tga|dds)$/i;
+
+/**
+ * Picture names as a `picture = <name>` value spells them: the path under the
+ * folder, extension dropped. Subfolders are part of the name, so a file at
+ * `gfx/pictures/events/Brasil/Dom Pedro.tga` is `brasil/dom pedro`.
+ */
 function pictureNames(provider: ModFileProvider, folder: string): string[] {
-  return ['.tga', '.dds']
-    .flatMap((extension) => provider.listFiles(folder, extension))
-    .map((fileName) => fileName.replace(/\.(tga|dds)$/i, '').toLowerCase());
+  const prefix = `${folder}/`;
+  return provider
+    .listFilesRecursive(folder)
+    .filter((relativePath) => PICTURE_EXTENSION.test(relativePath))
+    .map((relativePath) => relativePath.slice(prefix.length).replace(PICTURE_EXTENSION, '').toLowerCase());
 }
 
 function collectDuplicates(

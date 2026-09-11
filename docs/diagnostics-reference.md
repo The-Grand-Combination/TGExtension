@@ -54,6 +54,7 @@ Used across every file type that walks triggers/effects/weight-blocks/field tabl
 | `invalid-value` | error | A scalar's raw text doesn't match any accepted kind for that field (or a `<`/`>`/`<=`/`>=` comparison is used on a non-number). |
 | `unknown-<category>` | error | A scalar argument doesn't match any accepted identifier category (see the category list above); message names the category and suggests a close match. |
 | `unknown-event-id` | error | An `event`-typed scalar argument (not the block form) doesn't match any indexed event id. |
+| `broken-effect` | error | An effect the engine parses and accepts but does not run correctly (`BROKEN_EFFECTS` in `data/effects.ts`). Today that is `set_province_flag`. Reported in effect blocks and in province history, and the argument is not checked further. |
 | `uncolonize-province` | warning | `secede_province` given a tag the mod never defines (`QQQ` by convention), `null`, or `---`: the province goes to no one and is uncolonized (NCE `annex_to_null_province`). A deliberate modding trick that can crash the game, so it is not the `unknown-country` error. |
 | `expected-block` | error | A key that must hold `{ ... }` has a scalar instead (also reused by many per-file validators for the same purpose). |
 | `unknown-field` | error | A block field isn't in that block's known field table (generic; many validators reuse this exact code with a context-specific message). |
@@ -61,8 +62,8 @@ Used across every file type that walks triggers/effects/weight-blocks/field tabl
 | `invalid-color` | error | A `color = { ... }` isn't exactly three plain numeric scalars (wrong count, a non-number entry, or comma-separated values). |
 | `unknown-reform-option` | error | A reform-class value isn't any position of that class's option pool in `issues.txt` (issue options for party/political/social classes, reform options for economic/military ones), matching NCE's lookup. |
 | `flag-never-set` | warning | A checked `has_country_flag`/`has_global_flag` value is never set anywhere in the mod (or the current buffer); also fires when the flag exists only in the *other* namespace. |
-| `missing-localisation` | warning | A loc-key field's value has no matching key in `localisation/*.csv` (skipped when the mod has no localisation at all). |
-| `missing-picture` | warning | An event/decision `picture` value has no matching file in `gfx/pictures/{events,decisions}/` (skipped when that folder is absent). |
+| `missing-localisation` | warning | A loc-key field's value has no matching key in `localisation/*.csv` (skipped when the mod has no localisation at all, and when the value does not match `victorianTools.localisation.keyPattern` — default `^EVT` — which marks it as literal display text). |
+| `missing-picture` | warning | An event/decision `picture` value has no matching file under `gfx/pictures/{events,decisions}/` (skipped when that folder is absent). The value may name a subfolder — `picture = "Brasil/Dom Pedro"` is `gfx/pictures/events/Brasil/Dom Pedro.tga`. |
 
 ## Events / decisions (`semanticValidation.ts`)
 
@@ -85,7 +86,8 @@ Used across every file type that walks triggers/effects/weight-blocks/field tabl
 | `unknown-issue-option-field` | An unrecognized field inside an `issues.txt` option body. |
 | `unknown-rule` | An `issues.txt` option's `rules` block has a key outside the fixed 33 game-rule toggles. |
 | `unknown-country` | A `country_colors.txt` top-level key isn't a known TAG. |
-| `unknown-modifier-key` | A modifier-body field isn't `icon` or one of the 187 known modifier keys. |
+| `unknown-modifier-key` | A modifier-body field isn't `icon`, one of the 187 known modifier keys, or a `<folder>_research_bonus` key granted by a tech folder of `common/technology.txt`. |
+| `missing-tech-folder` | `common/technology.txt` does not declare `army_tech` or `navy_tech`; the engine hardcodes both and will not load without them. |
 | `unknown-culture-field` | An unrecognized field in a `cultures.txt` group or culture body. |
 | `unknown-religion-field` / `unknown-good-field` | An unrecognized field in a `religion.txt`/`goods.txt` item body. |
 | `unknown-ideology-field` | An unrecognized field in an `ideologies.txt` item body. |

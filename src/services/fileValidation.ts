@@ -1,6 +1,7 @@
 import type { Diagnostic } from '../model/diagnostic.js';
 import { CSV_FILE_TYPES, type FileType } from '../model/fileType.js';
 import type { ModIndex } from '../model/modIndex.js';
+import { DEFAULT_VALIDATION_OPTIONS, type ValidationOptions } from '../model/validationOptions.js';
 import { duplicateDiagnosticsFor } from './duplicateDiagnostics.js';
 import { validateMapCsv } from './mapCsvValidation.js';
 import { validateSemantics } from './semanticValidation.js';
@@ -18,6 +19,7 @@ export function validateFileText(
   fileType: FileType,
   index: ModIndex | undefined,
   relativePath: string | undefined,
+  options: ValidationOptions = DEFAULT_VALIDATION_OPTIONS,
 ): Diagnostic[] {
   const duplicates = index && relativePath !== undefined ? duplicateDiagnosticsFor(index, relativePath) : [];
   if (CSV_FILE_TYPES.has(fileType)) {
@@ -26,7 +28,7 @@ export function validateFileText(
   const parseResult = parseDocument(text);
   const semantic =
     index && fileType !== 'unknown'
-      ? validateSemantics(parseResult.document, fileType, index, relativePath)
+      ? validateSemantics(parseResult.document, fileType, index, relativePath, options)
       : [];
   return [
     ...parseResult.diagnostics,

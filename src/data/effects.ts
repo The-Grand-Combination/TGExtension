@@ -301,7 +301,7 @@ export const EFFECTS: Readonly<Record<string, SymbolDef>> = {
   change_tag_no_core_switch: { scopes: ['country'], arg: TAG, doc: 'Switch the player to TAG, cores untouched.' },
   set_country_flag: { scopes: ['country', 'province', 'pop'], arg: FLAG, doc: 'Set a country flag.' },
   clr_country_flag: { scopes: ['country'], arg: FLAG, doc: 'Clear a country flag.' },
-  set_province_flag: { scopes: ['province'], arg: FLAG, doc: 'Set a province flag.' },
+  set_province_flag: { scopes: ['province'], arg: FLAG, doc: 'Set a province flag. Broken in the engine — do not use.' },
   clr_province_flag: { scopes: ['province'], arg: FLAG, doc: 'Clear a province flag.' },
   set_global_flag: { scopes: ['any'], arg: FLAG, doc: 'Set a global flag.' },
   clr_global_flag: { scopes: ['any'], arg: FLAG, doc: 'Clear a global flag.' },
@@ -369,4 +369,14 @@ export const EFFECTS: Readonly<Record<string, SymbolDef>> = {
   },
   set_news_flag: { scopes: ['country', 'province', 'pop'], arg: FLAG, doc: 'Set a news flag (news scripting).' },
   clear_news_flag: { scopes: ['country'], arg: FLAG, doc: 'Clear a news flag (news scripting).' },
+};
+
+/**
+ * Effects the engine parses and accepts but does not run correctly. Writing one
+ * is always a bug, so it is reported wherever it can appear — in an effect
+ * block and in province history. The value completes the sentence after the
+ * effect name.
+ */
+export const BROKEN_EFFECTS: Readonly<Record<string, string>> = {
+  set_province_flag: 'is broken in the Victoria 2 engine and must not be used.',
 };

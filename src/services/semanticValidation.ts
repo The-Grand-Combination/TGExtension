@@ -3,6 +3,7 @@ import { asBlock, blockKeysOf, firstByKey } from '../model/astQuery.js';
 import type { Diagnostic } from '../model/diagnostic.js';
 import type { FileType } from '../model/fileType.js';
 import type { FlagSets, ModIndex } from '../model/modIndex.js';
+import { DEFAULT_VALIDATION_OPTIONS, type ValidationOptions } from '../model/validationOptions.js';
 import { validateBookmarksFile } from './bookmarkValidation.js';
 import { validateBuildingsFile } from './buildingValidation.js';
 import { validateCbTypeFile } from './cbTypeValidation.js';
@@ -46,6 +47,7 @@ export function validateSemantics(
   fileType: FileType,
   index: ModIndex,
   currentFile?: string,
+  options: ValidationOptions = DEFAULT_VALIDATION_OPTIONS,
 ): Diagnostic[] {
   const localFlags: FlagSets = { country: new Set(), global: new Set() };
   collectSetFlags(document.entries, localFlags);
@@ -55,6 +57,7 @@ export function validateSemantics(
     localEventIdCounts: collectLocalEventIds(document),
     localFlags,
     currentFile,
+    options,
   };
   FILE_VALIDATORS[fileType]?.(walk, document, fileType);
   checkTopLevelStrays(walk, document, fileType);

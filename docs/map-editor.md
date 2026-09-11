@@ -7,13 +7,20 @@ a province shows and edits three things about it, each with its own **Save**:
 1. **Localisation** — the `PROV<id>` key: the ENGLISH column of the CSV row that defines it.
 2. **History** — the province history file, `history/provinces/<folder>/<id> - <name>.txt`, as a
    form: owner, controller, cores, trade goods, life rating, terrain, colonial/colony, slave state,
-   buildings (`fort`, `naval_base`, `railroad`, and any other `key = number`), province flags,
+   buildings (`fort`, `naval_base`, `railroad`, and any other `key = number`),
    `party_loyalty` blocks, `state_building` blocks, and dated blocks (`1861.1.1 = { ... }`) with the
    same fields inside.
 3. **Pops** — the `<id> = { ... }` block of `history/pops/<start date>/<file>.txt`: one row per pop
-   with type, culture, religion, size, militancy and rebel type.
+   with type, culture, religion and size. A pop's `militancy` / `rebel_type`, when the file has
+   them, are kept as they are.
 
-Hovering shows the id and the `definition.csv` name; the **Go** box centers the map on an id;
+The side panel has two tabs: **Definition** (localisation and history) and **Pops**. Owner,
+controller, cores, trade goods, terrain, pop type, culture and religion are pick lists over the
+mod's identifiers, labelled with their localised names (`USA - United States of America`, `Grain`,
+`Urban (urban_fez)`); a value the mod does not define stays selectable so a save never drops it.
+
+The rows are drawn in the order the file stores them, which is how the game reads them: the map
+appears flipped vertically compared with an image editor. Hovering shows the id and the `definition.csv` name; the **Go** box centers the map on an id;
 **Fit** shows the whole map; **Reload** re-reads the map and the mod files. Sea provinces (from
 `sea_starts`) are marked as such but edit like any other.
 
@@ -47,8 +54,9 @@ game's windows-1252 encoding.
   A changed field is rewritten in its place; a removed one loses its line; a new one is inserted
   after the last entry of the same kind, or after the last plain field (before the first dated
   block) when there is none, dated blocks at the end. A `party_loyalty`, `state_building` or dated
-  block is rewritten whole when anything inside it changed. Top-level entries the form does not
-  know (a non-numeric unknown key, a stray token) are left untouched. Without a history file, the
+  block is rewritten whole when anything inside it changed. `set_province_flag` /
+  `clr_province_flag` lines and top-level entries the form does not know (a non-numeric unknown
+  key, a stray token) are left untouched. Without a history file, the
   panel offers the `history/provinces` subfolders and creates `<folder>/<id> - <name>.txt` (name from
   the localisation, else `definition.csv`).
 - **Pops** (`services/provincePopsEdit.ts`): the province's block is rewritten whole, from the
@@ -71,6 +79,8 @@ file and every pops block and saving it back unchanged produces zero patches.
 - Server: [server/mapEditorHandlers.ts](../src/server/mapEditorHandlers.ts) resolves the target
   with the same rule as the reports, reads through `resolveLayeredFile`, and remembers which pops
   file holds which province per stack and date (dropped when watched files change).
+- Loading progress and page errors are shown in the map area and logged to the **Victorian Tools
+  Language Server** output channel (`Map editor page: ...` lines).
 - Client: [providers/mapEditorPanel.ts](../src/providers/mapEditorPanel.ts) owns the webview and
   forwards messages ([providers/mapEditorMessages.ts](../src/providers/mapEditorMessages.ts) checks
   every field); [providers/mapEditorHtml.ts](../src/providers/mapEditorHtml.ts) is the page. The

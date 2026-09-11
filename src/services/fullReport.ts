@@ -2,6 +2,7 @@ import type { Diagnostic } from '../model/diagnostic.js';
 import { classifyFile } from '../model/fileType.js';
 import type { FileReport, ModReport, ReportDiagnostic } from '../model/fullReport.js';
 import type { ModIndex } from '../model/modIndex.js';
+import { DEFAULT_VALIDATION_OPTIONS, type ValidationOptions } from '../model/validationOptions.js';
 import { validateFileText } from './fileValidation.js';
 import { yieldToEventLoop } from './scheduling.js';
 
@@ -35,7 +36,12 @@ const BATCH_SIZE = 64;
  * a language server keeps answering while a large mod is scanned. The map
  * bitmaps are not part of this report; see `mapImageAudit.ts`.
  */
-export async function buildModReport(root: string, provider: ReportFileProvider, index: ModIndex): Promise<ModReport> {
+export async function buildModReport(
+  root: string,
+  provider: ReportFileProvider,
+  index: ModIndex,
+  options: ValidationOptions = DEFAULT_VALIDATION_OPTIONS,
+): Promise<ModReport> {
   const paths = reportFiles(provider);
   const files: FileReport[] = [];
   let fileCount = 0;
@@ -48,7 +54,7 @@ export async function buildModReport(root: string, provider: ReportFileProvider,
         return;
       }
       fileCount++;
-      const report = reportFor(relativePath, text, provider, index);
+      const report = reportFor(relativePath, text, provider, index, options);
       if (report) {
         files.push(report);
       }
@@ -70,8 +76,9 @@ function reportFor(
   text: string,
   provider: ReportFileProvider,
   index: ModIndex,
+  options: ValidationOptions,
 ): FileReport | undefined {
-  const found = validateFileText(text, classifyFile(relativePath), index, relativePath);
+  const found = validateFileText(text, classifyFile(relativePath), index, relativePath, options);
   if (found.length === 0) {
     return undefined;
   }

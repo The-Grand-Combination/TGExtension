@@ -62,6 +62,7 @@ import {
 import type { ModIndex } from '../model/modIndex.js';
 import { duplicateDiagnosticsByFile, duplicateDiagnosticsFor } from '../services/duplicateDiagnostics.js';
 import { validateFileText } from '../services/fileValidation.js';
+import { compileLocKeyPattern, type ValidationOptions } from '../model/validationOptions.js';
 import type { Palette } from '../data/mapPalettes.js';
 import { COLORMAP_FILES, planColormapFix } from '../services/colormapEnforcement.js';
 import { buildModReport, type ReportFileProvider } from '../services/fullReport.js';
@@ -108,6 +109,19 @@ const connection: Connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
 let config: ServerConfig = DEFAULT_CONFIG;
+let compiledLocKeyPattern = { source: config.locKeyPattern, options: optionsFor(config.locKeyPattern) };
+
+function optionsFor(pattern: string): ValidationOptions {
+  return { locKeyPattern: compileLocKeyPattern(pattern) };
+}
+
+/** The validation options of the current configuration; the regex is compiled once per change. */
+function validationOptions(): ValidationOptions {
+  if (compiledLocKeyPattern.source !== config.locKeyPattern) {
+    compiledLocKeyPattern = { source: config.locKeyPattern, options: optionsFor(config.locKeyPattern) };
+  }
+  return compiledLocKeyPattern.options;
+}
 let workspaceFolders: string[] = [];
 /** The install, its mods, and the user's selection; rebuilt on config and `.mod` changes. */
 let layout: ModLayout = { gameRoot: undefined, mods: [], selection: [] };
@@ -524,7 +538,13 @@ function validate(document: TextDocument): void {
   const modContext = contextForUri(document.uri);
   trackRootless(document.uri, modContext);
   const fileType = classifyFile(modContext?.relativePath ?? document.uri);
-  const findings = validateFileText(document.getText(), fileType, modContext?.index, modContext?.relativePath);
+  const findings = validateFileText(
+    document.getText(),
+    fileType,
+    modContext?.index,
+    modContext?.relativePath,
+    validationOptions(),
+  );
   void connection.sendDiagnostics({ uri: document.uri, diagnostics: toLspDiagnostics(findings, document) });
 }
 
@@ -630,7 +650,7 @@ connection.onRequest(FULL_REPORT_REQUEST, async (params: FullReportParams): Prom
   for (const target of reportTargets(params)) {
     const index = await modCache.ensureIndex(target.layers);
     if (index) {
-      reports.push(await buildModReport(target.root, reportProviderFor(target.root), index));
+      reports.push(await buildModReport(target.root, reportProviderFor(target.root), index, validationOptions()));
     }
   }
   const generatedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);

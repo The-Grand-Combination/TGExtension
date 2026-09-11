@@ -23,7 +23,9 @@ Applied even when no mod root is found:
 - `title`, `desc`, `news_title`, `news_desc_long`, `news_desc_medium`, `news_desc_short` — checked
   against the mod's localisation (`missing-localisation`, warning; skipped entirely when no
   `localisation/` folder was found, to avoid flooding mods without English loc).
-- `picture` — checked against `gfx/pictures/events/*.tga`/`.dds` (`missing-picture`, warning; same
+- `picture` — checked against `gfx/pictures/events/**/*.tga`/`.dds`, subfolders included: the value
+  is the path under the folder without its extension, so `picture = "Brasil/Dom Pedro"` resolves
+  `gfx/pictures/events/Brasil/Dom Pedro.tga` (`missing-picture`, warning; same
   skip-when-absent rule).
 - `major`, `election`, `news`, `fire_only_once`, `is_triggered_only`, `allow_multiple_instances`,
   `issue_group` — accepted as plain metadata fields, not further validated.

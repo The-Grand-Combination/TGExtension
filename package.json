@@ -178,7 +178,12 @@
           "default": true,
           "markdownDescription": "Index every mod in the workspace when the server starts, so mod-wide errors (duplicate identifiers) appear without opening a file. Turn off to index a mod only when one of its files is opened."
         },
-        "victorianTools.gamePath": {
+        "victorianTools.localisation.keyPattern": {
+      "type": "string",
+      "default": "^EVT",
+      "markdownDescription": "Regular expression deciding which `title` / `desc` / `name` values are localisation keys. A value that does not match is treated as literal display text and never reported as a missing key, so `desc = \"Death of Dom Pedro II\"` stays silent while `desc = \"EVTDESC48300\"` is still checked against `localisation/`. Leave empty to check every value."
+    },
+    "victorianTools.gamePath": {
           "type": "string",
           "default": "",
           "scope": "machine-overridable",

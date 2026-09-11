@@ -219,6 +219,14 @@ Only two top-level sections: `folders` (a bare list of tech folder names, each a
 further validated) and `schools` (each entry a modifier body, `checkModifierBody`). Anything else →
 `unknown-field`.
 
+`army_tech` and `navy_tech` are required: the engine hardcodes both and will not load without them,
+so either one missing is `missing-tech-folder` on the `folders` key.
+
+Every declared folder grants the modifier key `<folder>_research_bonus`. The index collects the
+folder names (`ModIndex.techFolders`) and derives the keys (`ModIndex.researchBonusKeys`), so
+declaring `population_tech` makes `population_tech_research_bonus` valid in technologies,
+inventions, buildings, issue options, and every modifier body.
+
 ## `common/countries/<name>.txt` → `validateCountryDefinitionFile`
 
 Top-level fields only (no recursion beyond what's described):

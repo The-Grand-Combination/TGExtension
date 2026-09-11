@@ -24,6 +24,7 @@ import {
   DATE_PATTERN,
   isEmptyCategory,
   report,
+  reportBrokenEffect,
   reportStrayEntry,
   requireNumericValue,
   walkBlockValue,
@@ -168,6 +169,9 @@ function handleProvinceHistoryField(walk: Walk, entry: Assignment): void {
     entry.value.kind === 'scalar' &&
     NO_OWNER_VALUES.has(entry.value.value.toLowerCase())
   ) {
+    return;
+  }
+  if (reportBrokenEffect(walk, entry, keyLower)) {
     return;
   }
   if (checkTableField(walk, entry, PROVINCE_HISTORY_FIELDS)) {

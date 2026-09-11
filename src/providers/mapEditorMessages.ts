@@ -4,6 +4,7 @@ import type { PopEntry, ProvinceHistory, SaveParams, SaveSection } from '../mode
 export type PageMessage =
   | { readonly type: 'ready' }
   | { readonly type: 'reload' }
+  | { readonly type: 'log'; readonly message: string }
   | { readonly type: 'select'; readonly provinceId: number; readonly popDate: string }
   | { readonly type: 'openFile'; readonly absolutePath: string; readonly line: number }
   | { readonly type: 'save'; readonly params: SaveParams };
@@ -20,6 +21,8 @@ export function asPageMessage(message: unknown): PageMessage | undefined {
     case 'ready':
     case 'reload':
       return { type: record['type'] };
+    case 'log':
+      return typeof record['message'] === 'string' ? { type: 'log', message: record['message'] } : undefined;
     case 'select':
       return typeof record['provinceId'] === 'number' && typeof record['popDate'] === 'string'
         ? { type: 'select', provinceId: record['provinceId'], popDate: record['popDate'] }

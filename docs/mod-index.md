@@ -41,7 +41,7 @@ file that references one by name.
 | `invention` | every top-level key across every `inventions/*.txt` file | duplicates checked |
 | `unit` | every top-level key across every `units/*.txt` file | duplicates checked |
 | `locKey` | every localisation key across `localisation/*.csv` | first definition wins |
-| `eventPicture` | `.tga`/`.dds` file names (extension stripped) under `gfx/pictures/events/` | |
+| `eventPicture` | `.tga`/`.dds` paths under `gfx/pictures/events/`, extension stripped, subfolders included | listed recursively, so `events/Brasil/Dom Pedro.tga` is indexed as `brasil/dom pedro` |
 | `decisionPicture` | same, under `gfx/pictures/decisions/` | |
 | `event` | every `id` under `country_event`/`province_event` across `events/*.txt` | |
 
@@ -62,6 +62,17 @@ Three more fields come from `map/` and back the [map validators](map-folder.md):
   `make_state_definition` over `region.txt`, then `region_sea.txt`, then `super_region.txt`: a block
   whose provinces are all already assigned is a meta-region and claims nothing; otherwise its
   unassigned provinces join it. On TGC this assigns exactly the 2985 land provinces.
+
+## Tech folders and their modifier keys
+
+Two fields come from `common/technology.txt`'s `folders` section:
+
+- `techFolders` — the folder names in declaration order. `army_tech` and `navy_tech` are required;
+  `validateTechFoldersFile` reports `missing-tech-folder` when either is absent.
+- `researchBonusKeys` — `<folder>_research_bonus` for each of them. The engine grants one modifier
+  key per folder, so a mod that declares `population_tech` can write
+  `population_tech_research_bonus` anywhere a modifier value is accepted. `isModifierKey` in
+  `validationWalker.ts` checks this set on top of the static `MODIFIER_KEYS` table.
 
 ## Reform classes and options
 

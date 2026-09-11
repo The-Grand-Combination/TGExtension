@@ -39,7 +39,8 @@ Entries at the top level and inside dated sub-blocks (`yyyy.m.d = { ... }`, recu
 - `PROVINCE_HISTORY_FIELDS`: `life_rating` (number), `colony`/`colonial` (number), `trade_goods`
   (good), `owner`/`controller` (country, or `---` / `null` for an uncolonized province), `terrain`
   (terrain), `add_core`/`remove_core` (country), `is_slave` (`yesno`),
-  `set_province_flag`/`clr_province_flag` (flag).
+  `set_province_flag`/`clr_province_flag` (flag). `set_province_flag` is broken in the engine and
+  reported as `broken-effect` here too.
 - `party_loyalty` — a block with required `ideology` and `loyalty_value`.
 - `state_building` — a block: `building` (required), `level` (optional number), `upgrade`
   (optional `yesno`).

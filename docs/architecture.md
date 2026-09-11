@@ -260,4 +260,5 @@ defaults and `DEFAULT_CONFIG` agree.
 | `victorianTools.validation.delay` | `300` | Idle milliseconds before a changed document is revalidated; `0` validates inline. |
 | `victorianTools.index.rebuildDelay` | `500` | Idle milliseconds before rebuilding the index of mods whose files changed on disk. |
 | `victorianTools.index.onStartup` | `true` | Index every workspace mod at startup instead of on first use. |
+| `victorianTools.localisation.keyPattern` | `^EVT` | Regex picking which `title`/`desc`/`name` values are localisation keys; a value that does not match is literal display text and is never reported missing. Empty checks every value; an invalid regex is ignored the same way. |
 | `victorianTools.trace.server` | `off` | `vscode-languageclient` trace verbosity (client-side).

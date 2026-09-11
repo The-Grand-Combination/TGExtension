@@ -91,6 +91,9 @@ export class MapEditorPanel implements vscode.Disposable {
       case 'reload':
         await this.load(panel);
         return;
+      case 'log':
+        client.outputChannel.appendLine(`Map editor page: ${message.message}`);
+        return;
       case 'select':
         await this.select(panel, client, message.provinceId, message.popDate);
         return;

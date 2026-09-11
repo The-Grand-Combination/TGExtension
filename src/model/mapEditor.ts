@@ -131,16 +131,22 @@ export interface PopsSection {
   readonly pops: readonly PopEntry[] | undefined;
 }
 
-/** Identifier lists the form offers as suggestions. */
+/** An identifier with the name the localisation gives it (the identifier itself when it has none). */
+export interface NamedIdentifier {
+  readonly id: string;
+  readonly label: string;
+}
+
+/** Identifier lists the form offers: pick lists with localised labels, plain suggestions for the rest. */
 export interface Vocabulary {
-  readonly countries: readonly string[];
-  readonly goods: readonly string[];
-  readonly terrains: readonly string[];
-  readonly cultures: readonly string[];
-  readonly religions: readonly string[];
+  readonly countries: readonly NamedIdentifier[];
+  readonly goods: readonly NamedIdentifier[];
+  readonly terrains: readonly NamedIdentifier[];
+  readonly cultures: readonly NamedIdentifier[];
+  readonly religions: readonly NamedIdentifier[];
+  readonly popTypes: readonly NamedIdentifier[];
   readonly ideologies: readonly string[];
   readonly buildings: readonly string[];
-  readonly popTypes: readonly string[];
   readonly rebelTypes: readonly string[];
 }
 

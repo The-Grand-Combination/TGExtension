@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+import { DEFAULT_LOC_KEY_PATTERN } from '../model/validationOptions.js';
 
 const EXTENSION_ID = 'TGCModdingTeam.victorian-tools';
 
@@ -113,6 +114,7 @@ suite('Victorian Tools — integration', () => {
     assert.strictEqual(properties['victorianTools.index.onStartup']?.default, true);
     assert.strictEqual(properties['victorianTools.gamePath']?.default, '');
     assert.deepStrictEqual(properties['victorianTools.activeMods']?.default, []);
+    assert.strictEqual(properties['victorianTools.localisation.keyPattern']?.default, DEFAULT_LOC_KEY_PATTERN);
   });
 
   test('registers the victoria2 language', async () => {

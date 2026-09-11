@@ -32,8 +32,11 @@ One block per technology (NCE `technology_contents`):
 
 - Scalar fields (`TECH_SCALAR_FIELDS`): `area` (identifier), `year` (number), `cost` (number),
   `unciv_military` (`yesno`), `unit` (number), `activate_unit` (a unit reference),
-  `activate_building` (a building reference), `colonial_points` (number), `plurality` (number),
-  `shared_prestige` (number).
+  `activate_building` (a building reference), `enable_crime` (a crime reference),
+  `colonial_points` (number), `plurality` (number), `shared_prestige` (number).
+  `enable_crime` is the one field here NCE does not list under `technology_contents` (it declares it
+  only on `inv_effect`); the engine accepts it on a technology, so keep it when re-deriving the
+  table from the parser.
 - `ai_chance` — weight block at `country` scope.
 - Goods maps (`TECH_GOODS_MAP_FIELDS`: `rgo_goods_output`, `rgo_goods_throughput`, `rgo_size`,
   `factory_goods_output`, `factory_goods_throughput`, `factory_goods_input`) — `good → number`

@@ -25,6 +25,14 @@ suite('technologyValidation — technologies and inventions', () => {
     );
   });
 
+  test('a technology can enable a crime', () => {
+    const text = 'tech_a = { year = 1836 cost = 100 enable_crime = machine_politics }';
+    assert.deepStrictEqual(codes(text, 'technology', 'technologies/army_tech.txt'), []);
+    assert.ok(
+      codes('tech_b = { enable_crime = not_a_crime }', 'technology', 'technologies/army_tech.txt').includes('unknown-crime'),
+    );
+  });
+
   test('invention limit, chance, and effect validate', () => {
     const text = `inv_a = { limit = { war = yes } chance = { base = 1 }
       news = yes

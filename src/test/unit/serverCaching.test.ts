@@ -296,7 +296,15 @@ suite('serverConfig', () => {
       indexOnStartup: false,
       gamePath: '',
       activeMods: [],
+      locKeyPattern: '^EVT',
     });
+  });
+
+  test('the localisation key pattern falls back to the manifest default, and an empty one is kept', () => {
+    assert.strictEqual(readServerConfig({}).locKeyPattern, '^EVT');
+    assert.strictEqual(readServerConfig({ localisation: { keyPattern: '' } }).locKeyPattern, '');
+    assert.strictEqual(readServerConfig({ localisation: { keyPattern: 7 } }).locKeyPattern, '^EVT');
+    assert.strictEqual(readServerConfig({ localisation: { keyPattern: '^(EVT|DBG)' } }).locKeyPattern, '^(EVT|DBG)');
   });
 
   test('reads the game path and the mod selection, dropping anything that is not a name', () => {

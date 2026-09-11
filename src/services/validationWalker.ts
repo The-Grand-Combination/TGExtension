@@ -1,5 +1,5 @@
 import { LOGICAL_OPERATORS, WEIGHT_BLOCK_DURATION_FIELDS } from '../data/eventStructure.js';
-import { EFFECTS } from '../data/effects.js';
+import { BROKEN_EFFECTS, EFFECTS } from '../data/effects.js';
 import { MODIFIER_KEYS } from '../data/modifierKeys.js';
 import { EFFECT_PASSTHROUGH_KEYS, IMPLICIT_SCOPES, SCOPE_CHANGERS } from '../data/scopes.js';
 import { TRIGGERS } from '../data/triggers.js';
@@ -21,6 +21,7 @@ import {
   type UsageContext,
 } from '../model/symbols.js';
 import type { FlagSets, ModIndex } from '../model/modIndex.js';
+import type { ValidationOptions } from '../model/validationOptions.js';
 import { hasIdentifier, namesOf } from './modIndex.js';
 import { didYouMean } from './suggestions.js';
 
@@ -31,6 +32,7 @@ export interface Walk {
   readonly localEventIdCounts: ReadonlyMap<string, number>;
   readonly localFlags: FlagSets;
   readonly currentFile: string | undefined;
+  readonly options: ValidationOptions;
 }
 
 const STRATA_VALUES: ReadonlySet<string> = new Set(['poor', 'middle', 'rich']);
@@ -147,6 +149,9 @@ export function walkEffectEntries(walk: Walk, entries: readonly Entry[], scope: 
 function handleEffectAssignment(walk: Walk, assignment: Assignment, scope: ScopeType): void {
   const keyLower = assignment.key.value.toLowerCase();
 
+  if (reportBrokenEffect(walk, assignment, keyLower)) {
+    return;
+  }
   if (keyLower === 'limit') {
     walkBlockValue(walk, assignment, (block) => { walkTriggerEntries(walk, block.entries, scope); });
     return;
@@ -183,6 +188,20 @@ function handleEffectAssignment(walk: Walk, assignment: Assignment, scope: Scope
     'unknown-effect',
     `Unknown effect '${assignment.key.value}'.${didYouMean(keyLower, effectCandidates(walk))}`,
   );
+}
+
+/**
+ * An effect the engine accepts but does not run (`BROKEN_EFFECTS`). The script
+ * is syntactically fine and the behavior never happens, so it is an error
+ * rather than a warning, and the argument is not checked further.
+ */
+export function reportBrokenEffect(walk: Walk, assignment: Assignment, keyLower: string): boolean {
+  const reason = BROKEN_EFFECTS[keyLower];
+  if (reason === undefined) {
+    return false;
+  }
+  report(walk, assignment, 'broken-effect', `'${assignment.key.value}' ${reason}`);
+  return true;
 }
 
 const TAG_SHAPE = /^(?!\d{3}$)[A-Za-z0-9]{3}$/;
@@ -706,12 +725,19 @@ export function checkFlagIsSet(walk: Walk, assignment: Assignment, kind: 'countr
   walk.diagnostics.push(diagnostic('warning', 'flag-never-set', message, assignment.value.range));
 }
 
-/** Loc/picture checks are warnings, and skip entirely when the source folder is absent. */
+/**
+ * Loc/picture checks are warnings, and skip entirely when the source folder is
+ * absent. A value that does not match `locKeyPattern` is literal display text
+ * (`desc = "Death of Dom Pedro II"`), not a key the engine looks up.
+ */
 export function checkLocKey(walk: Walk, assignment: Assignment): void {
   if (assignment.value.kind !== 'scalar' || isEmptyCategory(walk, 'locKey')) {
     return;
   }
   const key = assignment.value.value;
+  if (walk.options.locKeyPattern?.test(key) === false) {
+    return;
+  }
   if (!hasIdentifier(walk.index, 'locKey', key)) {
     walk.diagnostics.push(
       diagnostic(
@@ -732,6 +758,9 @@ export function checkPicture(
   if (assignment.value.kind !== 'scalar' || isEmptyCategory(walk, category)) {
     return;
   }
+  // A picture may sit in a subfolder: `picture = "Brasil/Dom Pedro"` is
+  // `gfx/pictures/events/Brasil/Dom Pedro.tga`, and the index keys it by that
+  // same path under the folder.
   const name = assignment.value.value;
   if (!hasIdentifier(walk.index, category, name)) {
     const folder = category === 'eventPicture' ? 'gfx/pictures/events' : 'gfx/pictures/decisions';

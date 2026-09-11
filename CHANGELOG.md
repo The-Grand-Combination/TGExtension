@@ -12,19 +12,49 @@ this file. This project adheres to [Keep a Changelog](https://keepachangelog.com
   hover for id and name, go-to-id). Clicking a province edits, each with its
   own Save: the `PROV<id>` localisation (ENGLISH column, other columns kept;
   optional rename of the history file to match), the province history file as
-  a full form (fields, cores, buildings, flags, `party_loyalty`,
+  a full form (fields, cores, buildings, `party_loyalty`,
   `state_building`, dated blocks) and the province's pops block of a start
   date (type, culture, religion, size, militancy, rebel type). Files are read
   through the picked mods' stack and written only into the top mod of the
   stack, copying a file from a lower layer when needed; edits are patches, so
   comments and file order survive, and an unchanged save writes nothing.
+  The map is drawn in the file's row order, as the game reads it (flipped
+  vertically compared with an image editor); loading progress and page errors
+  show in the map area and in the language server output channel.
   Requests `victorianTools/mapEditor/{map,province,save}`; services
   `textPatch.ts`, `provinceTable.ts`, `provinceLocEdit.ts`,
   `provinceHistoryEdit.ts`, `provincePopsEdit.ts`. Details in
   `docs/map-editor.md`.
 
+- `victorianTools.localisation.keyPattern`: a regular expression deciding which
+  `title` / `desc` / `name` values are localisation keys. A value that does not
+  match is literal display text and is never reported as missing, so
+  `desc = "Death of Dom Pedro II"` stays silent while `desc = "EVTDESC48300"` is
+  still checked. Default `^EVT`; empty checks every value.
+
+### Changed
+
+- `<folder>_research_bonus` modifier keys now come from the mod's own tech
+  folders in `common/technology.txt`, not from a fixed list. Declare
+  `population_tech` and `population_tech_research_bonus` becomes a valid
+  modifier everywhere modifiers are accepted.
+
 ### Fixed
 
+- `set_province_flag` is now an error (`broken-effect`): the engine accepts it
+  but does not run it. Reported in effect blocks and in province history.
+  `BROKEN_EFFECTS` in `data/effects.ts` is the table to extend if other effects
+  turn out to be broken.
+- Event and decision pictures may live in subfolders: `picture = "Brasil/Dom Pedro"`
+  now resolves `gfx/pictures/events/Brasil/Dom Pedro.tga` in both the validator
+  and the hover preview. The index lists the picture folders recursively and
+  keys each file by its path under the folder.
+- `enable_crime` is accepted in a technology body. The engine enables a crime
+  from a technology as it does from an invention effect; NCE's parser only
+  declares it on `inv_effect`, so the field table was missing it.
+- `common/technology.txt` missing `army_tech` or `navy_tech` is now an error
+  (`missing-tech-folder`). The engine hardcodes both and will not load without
+  them, so the full report flags it.
 - The integration suite looked for the extension under its pre-4.0 publisher
   id and never ran; it uses `TGCModdingTeam.victorian-tools` now.
 

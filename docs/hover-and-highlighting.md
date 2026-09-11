@@ -15,7 +15,8 @@ For the word under the cursor, the server tries, in order, the first that produc
    scope it produces, from which scopes, and whether it's trigger-only/effect-only/both.
 2. **Picture hover** (`pictureHover.ts`, `pictureDecoder.ts`, `pngEncoder.ts`) — only for
    `events`/`decisions` files, on a `picture = <name>` value. Reads the matching `.dds`/`.tga` file
-   from `gfx/pictures/{events,decisions}/`, decodes it, downscales/upscales for a readable preview
+   from `gfx/pictures/{events,decisions}/` (a value naming a subfolder, `"Brasil/Dom Pedro"`,
+   resolves under it), decodes it, downscales/upscales for a readable preview
    (upscaling pixel-doubles images narrower than 280px; downscaling caps at 560px wide), encodes it
    as a PNG data URI, and embeds it in the hover markdown (capped at 96,000 base64 characters — just
    under VS Code's ~100k hover-content truncation limit).
