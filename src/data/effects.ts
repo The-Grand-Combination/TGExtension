@@ -1,4 +1,4 @@
-import { field, scalar, type SymbolDef } from '../model/symbols.js';
+import { exploitField, field, scalar, type SymbolDef } from '../model/symbols.js';
 
 const YESNO = scalar('yesno');
 const NUMBER = scalar('number');
@@ -35,6 +35,8 @@ export const EFFECTS: Readonly<Record<string, SymbolDef>> = {
         ideology: field(false, 'ideology'),
         issue: field(false, 'issue'),
       },
+      // `<issue class> = <position>` is the other way to name the issue.
+      reformClassKeys: true,
     },
     doc: 'Consciousness change scaled by ideology/issue support.',
   },
@@ -47,6 +49,8 @@ export const EFFECTS: Readonly<Record<string, SymbolDef>> = {
         ideology: field(false, 'ideology'),
         issue: field(false, 'issue'),
       },
+      // `<issue class> = <position>` is the other way to name the issue.
+      reformClassKeys: true,
     },
     doc: 'Militancy change scaled by ideology/issue support.',
   },
@@ -149,13 +153,15 @@ export const EFFECTS: Readonly<Record<string, SymbolDef>> = {
   remove_random_military_reforms: { scopes: ['country'], arg: NUMBER, doc: 'Undo n random military reforms (unciv).' },
   build_railway_in_capital: {
     scopes: ['country'],
-    arg: { kind: 'either', scalar: YESNO, block: { kind: 'block', fields: {}, open: true } },
-    doc: 'Build railroad in the capital (options in block form).',
+    // `= 4` builds up to that level, capped by tech; `= yes` and the block form also parse.
+    arg: { kind: 'either', scalar: scalar('yesno', 'number'), block: { kind: 'block', fields: {}, open: true } },
+    doc: 'Build railroad in the capital, up to a level or as a yes/no. The engine stops reading the rest of the decision after it.',
   },
   build_fort_in_capital: {
     scopes: ['country'],
-    arg: { kind: 'either', scalar: YESNO, block: { kind: 'block', fields: {}, open: true } },
-    doc: 'Build a fort in the capital (options in block form).',
+    // `= 4` builds up to that level, capped by tech; `= yes` and the block form also parse.
+    arg: { kind: 'either', scalar: scalar('yesno', 'number'), block: { kind: 'block', fields: {}, open: true } },
+    doc: 'Build a fort in the capital, up to a level or as a yes/no. The engine stops reading the rest of the decision after it.',
   },
   activate_technology: { scopes: ['country'], arg: scalar('technology'), doc: 'Grant a technology out of order (AHD).' },
   build_factory_in_capital_state: { scopes: ['country'], arg: scalar('building'), doc: 'Build this factory in the capital state.' },
@@ -272,7 +278,11 @@ export const EFFECTS: Readonly<Record<string, SymbolDef>> = {
       block: {
         kind: 'block',
         fields: {
-          target: field(false, 'country'),
+          target: exploitField(
+            false,
+            'Tricking the AI into joining your war — use this exploit with caution.',
+            'country',
+          ),
           attacker_goal: field(false, 'block'),
           defender_goal: field(false, 'block'),
           call_ally: field(false, 'yesno'),

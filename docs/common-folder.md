@@ -171,6 +171,11 @@ Per building: `goods_cost` (a `good → number` map, keys checked against the go
 `strategic_factory`, `sail`, `steam`, `one_per_state`, `advanced_factory`, `capital`), and any
 recognized modifier key (numeric). Anything else → `unknown-building-field`.
 
+The engine keeps **one modifier per building**: a second assignment replaces the first, so every
+modifier but the last is dead code and each earlier one is `multiple-building-modifiers`. The
+building fields that share a modifier name (`infrastructure`, `fort_level`, `naval_capacity`,
+`colonial_points`) resolve as fields first and are not counted.
+
 ## `nationalvalues.txt` / `event_modifiers.txt` / `static_modifiers.txt`
 
 All three share `checkModifierBody`: every field must be `icon` or a recognized modifier key (see
@@ -247,15 +252,24 @@ Top-level fields only (no recursion beyond what's described):
 
 ## `common/countries.txt` (the TAG → file-path list)
 
-Classified as `commonOther` (see [file-classification.md](file-classification.md)) — not typed
-beyond duplicate-TAG detection and stray-entry checks via the mod index (`dynamic_tags = yes` is
-recognized as a special, non-TAG entry and excluded from the TAG list).
+Classified as `countryList` (see [file-classification.md](file-classification.md)) and validated by
+`validateCountryListFile`. Only the tag itself is checked: the path is a free string the mod
+resolves however it likes, and an unrecognized key here is not an error. `dynamic_tags = yes` is a
+file switch, not a tag, and is skipped (the index excludes it from the TAG list too).
+
+A tag in `RESERVED_COUNTRY_TAGS` is `reserved-country-tag` (error): the engine reads those three
+letters as a keyword elsewhere, so a country cannot claim them. Duplicate TAGs still come from the
+mod index.
 
 ## Modifier keys
 
 `checkModifierBody` and every "modifier value" field above accept a fixed set of **187 modifier
 keys**, extracted from the NCE engine's `modifier_base` table
 ([src/data/modifierKeys.ts](../src/data/modifierKeys.ts)):
+
+`rich_income_modifier`, `middle_income_modifier` and `poor_income_modifier` are in the table (the
+engine parses and localises them) but never applied, so using one is `broken-modifier-key`
+(warning). `low_income_modifier` is a different key and works.
 
 `admin_efficiency`, `administrative_efficiency`, `administrative_efficiency_modifier`,
 `army_organisation`, `army_organization`, `army_tech_research_bonus`, `artisan_input`,

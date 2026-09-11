@@ -11,6 +11,7 @@ export type FileType =
   | 'issues'
   | 'graphicalCulture'
   | 'countryColors'
+  | 'countryList'
   | 'cultures'
   | 'religions'
   | 'goods'
@@ -63,6 +64,7 @@ const COMMON_FILE_TYPES: Readonly<Record<string, FileType>> = {
   // A bare list of graphical culture names — the one common/ file with no `=`.
   'graphicalculturetype.txt': 'graphicalCulture',
   'country_colors.txt': 'countryColors',
+  'countries.txt': 'countryList',
   'cultures.txt': 'cultures',
   'religion.txt': 'religions',
   'goods.txt': 'goods',

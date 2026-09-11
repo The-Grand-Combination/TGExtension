@@ -33,8 +33,8 @@ for a block, and `A OR B` for effects that accept either a scalar or a block for
 | `bank` | province | number | Change bank level by n. |
 | `build_bank_in_capital` | country | yesno OR { ... } | Build a bank level in the capital (options in block form). |
 | `build_factory_in_capital_state` | country | building | Build this factory in the capital state. |
-| `build_fort_in_capital` | country | yesno OR { ... } | Build a fort in the capital (options in block form). |
-| `build_railway_in_capital` | country | yesno OR { ... } | Build railroad in the capital (options in block form). |
+| `build_fort_in_capital` | country | yesno \| number OR { ... } | Build a fort in the capital, up to the given level and never past what tech allows (`= 4`), or as a yes/no. **See the parsing caveat below.** |
+| `build_railway_in_capital` | country | yesno \| number OR { ... } | Build railroad in the capital, up to the given level and never past what tech allows (`= 4`), or as a yes/no. **See the parsing caveat below.** |
 | `build_university_in_capital` | country | yesno OR { ... } | Build a university level in the capital (options in block form). |
 | `capital` | country | province | Move the capital to this province. |
 | `casus_belli` | country | { target=country, type=cbType, [months]=number, ... } | Give this country a CB against the target. |
@@ -64,7 +64,7 @@ for a block, and `A OR B` for effects that accept either a scalar or a block for
 | `end_military_access` | country | country | Cancel military access through TAG. |
 | `end_war` | country | country | End the war with TAG (no truce, no penalty). |
 | `flashpoint_tension` | state, province | number | Change flashpoint tension (HoD). |
-| `fort` | province | number | Change fort level by n. |
+| `fort` | province | number | Change fort level by n. Any other building the mod declares in `common/buildings.txt` works the same way (`province_selector = -1`), province scope only. |
 | `government` | country | government | Change the government type. |
 | `great_wars_enabled` | any | yesno | Unlock (or lock) great wars. |
 | `ideology` | pop | { factor=number, value=ideology } | Shift pop support toward an ideology. |
@@ -111,8 +111,8 @@ for a block, and `A OR B` for effects that accept either a scalar or a block for
 | `research_points` | country | number | Add research points. |
 | `rgo_size` | province | number | Change RGO size by n. |
 | `ruling_party_ideology` | country | ideology | Put the first party of this ideology in power. |
-| `scaled_consciousness` | pop, province, state, country | { factor=number, [ideology]=ideology, [issue]=issue } | Consciousness change scaled by ideology/issue support. |
-| `scaled_militancy` | pop, province, state, country | { factor=number, [ideology]=ideology, [issue]=issue } | Militancy change scaled by ideology/issue support. |
+| `scaled_consciousness` | pop, province, state, country | { factor=number, [ideology]=ideology, [issue]=issue, [\<issue class\>]=position } | Consciousness change scaled by ideology/issue support. An issue class may name the issue instead of `issue`: `{ factor = -10 good_evil_alignment = evil_alignment }`, the position checked against that class. |
+| `scaled_militancy` | pop, province, state, country | { factor=number, [ideology]=ideology, [issue]=issue, [\<issue class\>]=position } | Militancy change scaled by ideology/issue support. An issue class may name the issue instead of `issue`: `{ factor = -10 good_evil_alignment = evil_alignment }`, the position checked against that class. |
 | `secede_province` | province, state | country \| province | Transfer province (to TAG, or id to this country). An undefined tag, `null`, or `---` uncolonizes it instead (`uncolonize-province` warning). |
 | `set_country_flag` | country, province, pop | flag | Set a country flag. |
 | `set_global_flag` | any | flag | Set a global flag. |
@@ -132,6 +132,14 @@ for a block, and `A OR B` for effects that accept either a scalar or a block for
 | `war_exhaustion` | country | number | Change war exhaustion by n. |
 | `world_wars_enabled` | any | yesno | Unlock (or lock) world wars. |
 | `years_of_research` | country | number | Add RPs equal to n years of output. |
+
+## `build_fort_in_capital` / `build_railway_in_capital` — an engine parsing bug
+
+Both work, but the engine stops reading properly once it hits one: everything after it in the
+decision is ignored, and the **next** decision is skipped except for its effects, which are
+attached to the first decision. The validator does not flag this — the script is syntactically
+fine and the bug is in how the engine reads it — so put one of these last in its decision, and
+keep in mind that the decision after it is affected too.
 
 ## Dynamic effect keys (not in the table above)
 

@@ -49,6 +49,7 @@ server skips the script parser for them and hands the raw text to the CSV valida
 | `issues.txt` | `issues` |
 | `graphicalculturetype.txt` | `graphicalCulture` (a bare list of names — the one `common/` file with no `=`) |
 | `country_colors.txt` | `countryColors` |
+| `countries.txt` | `countryList` |
 | `cultures.txt` | `cultures` |
 | `religion.txt` | `religions` |
 | `goods.txt` | `goods` |

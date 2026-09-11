@@ -90,11 +90,19 @@ export type FieldTable = Readonly<Record<string, readonly ArgKind[]>>;
 export interface ScalarArgSpec {
   readonly kind: 'scalar';
   readonly accepts: readonly ArgKind[];
+  /**
+   * What a null tag (`---`, `QQQ`, `null`) means in this position, when it is a
+   * known engine exploit rather than plain "no country". Shown instead of the
+   * generic null-tag warning.
+   */
+  readonly nullTagNote?: string;
 }
 
 export interface BlockFieldSpec {
   readonly accepts: readonly ArgKind[];
   readonly required: boolean;
+  /** See `ScalarArgSpec.nullTagNote`. */
+  readonly nullTagNote?: string;
 }
 
 export interface BlockArgSpec {
@@ -102,6 +110,12 @@ export interface BlockArgSpec {
   readonly fields: Readonly<Record<string, BlockFieldSpec>>;
   /** Permit fields not listed in `fields` (validated as unchecked). */
   readonly open?: boolean;
+  /**
+   * Also accept a reform/issue class as a field name, its value checked as one
+   * of that class's positions: `scaled_militancy = { factor = -10
+   * good_evil_alignment = evil_alignment }`.
+   */
+  readonly reformClassKeys?: boolean;
 }
 
 /** Accepts either the scalar or the block form (e.g. `war = TAG` / `war = { ... }`). */
@@ -140,4 +154,13 @@ export function scalar(...accepts: readonly ArgKind[]): ScalarArgSpec {
 
 export function field(required: boolean, ...accepts: readonly ArgKind[]): BlockFieldSpec {
   return { accepts, required };
+}
+
+/** A field whose null-tag value is a known exploit, not a plain "no country". */
+export function exploitField(
+  required: boolean,
+  nullTagNote: string,
+  ...accepts: readonly ArgKind[]
+): BlockFieldSpec {
+  return { accepts, required, nullTagNote };
 }

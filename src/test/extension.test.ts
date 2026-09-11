@@ -3,7 +3,12 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import { DEFAULT_LOC_KEY_PATTERN } from '../model/validationOptions.js';
+import {
+  DEFAULT_FLAG_NAME_PATTERN,
+  DEFAULT_LOC_KEY_PATTERN,
+  DEFAULT_IGNORE_MARKER,
+  DEFAULT_NULL_TAG_PATTERN,
+} from '../model/validationOptions.js';
 
 const EXTENSION_ID = 'TGCModdingTeam.victorian-tools';
 
@@ -115,6 +120,9 @@ suite('Victorian Tools — integration', () => {
     assert.strictEqual(properties['victorianTools.gamePath']?.default, '');
     assert.deepStrictEqual(properties['victorianTools.activeMods']?.default, []);
     assert.strictEqual(properties['victorianTools.localisation.keyPattern']?.default, DEFAULT_LOC_KEY_PATTERN);
+    assert.strictEqual(properties['victorianTools.flags.namePattern']?.default, DEFAULT_FLAG_NAME_PATTERN);
+    assert.strictEqual(properties['victorianTools.nullTags.pattern']?.default, DEFAULT_NULL_TAG_PATTERN);
+    assert.strictEqual(properties['victorianTools.ignoreMarker']?.default, DEFAULT_IGNORE_MARKER);
   });
 
   test('registers the victoria2 language', async () => {
@@ -224,6 +232,53 @@ suite('Victorian Tools — integration', () => {
       codes.includes('unknown-country'),
       `expected unknown-country for TUaR, got: [${codes.join(', ')}]`,
     );
+  });
+
+  test('ctrl+click on a report finding targets the file, line and column', async function (this: Mocha.Context): Promise<void> {
+    this.timeout(20000);
+    const root = path.join(os.tmpdir(), 'vic2report');
+    const text =
+      'Victorian Tools - Full report\nGenerated now\n\n' +
+      `${root}\n1 error, 0 warnings in 1 of 1 file\nevents/Broken.txt\n` +
+      "  6:15     error   unknown-trigger: Unknown trigger 'tags'.\n\n";
+    const document = await vscode.workspace.openTextDocument({ language: 'plaintext', content: text });
+    await vscode.window.showTextDocument(document);
+
+    const links = await vscode.commands.executeCommand<vscode.DocumentLink[]>(
+      'vscode.executeLinkProvider',
+      document.uri,
+    );
+    const finding = links.find((link) => link.range.start.line === 6);
+    assert.ok(finding, `expected a link on the finding line, got ${String(links.length)} links`);
+    // Uri.file normalizes the drive letter, so compare the way VS Code stores it.
+    assert.strictEqual(finding.target?.fsPath, vscode.Uri.file(path.join(root, 'events', 'Broken.txt')).fsPath);
+    assert.strictEqual(finding.target.fragment, 'L6,15');
+    assert.strictEqual(document.getText(finding.range), '6:15     error   unknown-trigger');
+  });
+
+  test('a map report pixel links to the Map Editor, carrying the mods it was made for', async () => {
+    const { ReportLinkProvider, REVEAL_MAP_PIXEL_COMMAND } = await import('../providers/reportLinkProvider.js');
+    const { MapReportTargets } = await import('../services/mapReportTargets.js');
+    const text =
+      'Victorian Tools - Map report\nGenerated now\nPixel positions are x, y from the top-left corner of the image.\n\n' +
+      'D:\\mod\\TGC\n1 error, 0 warnings in the map bitmaps\n' +
+      '  map/rivers.bmp (12, 7)           error   river-thick: River is 2 pixels wide here.\n\n';
+    const document = await vscode.workspace.openTextDocument({ language: 'plaintext', content: text });
+    const targets = new MapReportTargets();
+    targets.remember(document.uri.toString(), { workspaceFolders: ['D:\\mod'], mods: ['TGC'] });
+
+    const links = new ReportLinkProvider(targets).provideDocumentLinks(document);
+    assert.strictEqual(links.length, 1);
+    const target = links[0]?.target;
+    assert.strictEqual(target?.scheme, 'command');
+    assert.strictEqual(target.path, REVEAL_MAP_PIXEL_COMMAND);
+    assert.deepStrictEqual(JSON.parse(decodeURIComponent(target.query)), [
+      { workspaceFolders: ['D:\\mod'], mods: ['TGC'], file: 'map/rivers.bmp', x: 12, y: 7 },
+    ]);
+
+    // Without the mods the report was made for, the Map Editor cannot be opened.
+    targets.forget(document.uri.toString());
+    assert.deepStrictEqual(new ReportLinkProvider(targets).provideDocumentLinks(document), []);
   });
 
   test('index duplicates stay visible while the file is open', async function (this: Mocha.Context): Promise<void> {

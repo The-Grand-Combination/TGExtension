@@ -5,12 +5,15 @@ import {
   MAP_EDITOR_MAP_REQUEST,
   MAP_EDITOR_PROVINCE_REQUEST,
   MAP_EDITOR_SAVE_REQUEST,
+  MAP_EDITOR_TERRAIN_PICTURE_REQUEST,
   type MapEditorMap,
   type MapEditorMapResult,
+  type MapEditorReveal,
   type MapEditorTargetParams,
   type ProvinceResult,
   type SaveParams,
   type SaveResult,
+  type TerrainPictureResult,
 } from '../model/mapEditor.js';
 import { asPageMessage, type PageMessage } from './mapEditorMessages.js';
 import { mapEditorHtml, mapEditorNoticeHtml } from './mapEditorHtml.js';
@@ -24,6 +27,7 @@ export class MapEditorPanel implements vscode.Disposable {
   private panel: vscode.WebviewPanel | undefined;
   private params: MapEditorTargetParams | undefined;
   private map: MapEditorMap | undefined;
+  private reveal: MapEditorReveal | undefined;
 
   constructor(private readonly getClient: () => LanguageClient | undefined) {}
 
@@ -31,9 +35,13 @@ export class MapEditorPanel implements vscode.Disposable {
     this.panel?.dispose();
   }
 
-  /** Show the tab and load the map of these mods, replacing whatever it showed. */
-  async open(params: MapEditorTargetParams): Promise<void> {
+  /**
+   * Show the tab and load the map of these mods, replacing whatever it showed.
+   * With a `reveal`, the page centers on that pixel once the bitmap is decoded.
+   */
+  async open(params: MapEditorTargetParams, reveal?: MapEditorReveal): Promise<void> {
     this.params = params;
+    this.reveal = reveal;
     const panel = this.panel ?? this.createPanel();
     panel.reveal();
     await this.load(panel);
@@ -103,7 +111,21 @@ export class MapEditorPanel implements vscode.Disposable {
       case 'openFile':
         await openFileAt(message.absolutePath, message.line);
         return;
+      case 'terrainPicture':
+        await this.terrainPicture(panel, client, message.terrain);
+        return;
     }
+  }
+
+  private async terrainPicture(panel: vscode.WebviewPanel, client: LanguageClient, terrain: string): Promise<void> {
+    if (!this.params) {
+      return;
+    }
+    const result = await client.sendRequest<TerrainPictureResult>(MAP_EDITOR_TERRAIN_PICTURE_REQUEST, {
+      ...this.params,
+      terrain,
+    });
+    void panel.webview.postMessage({ type: 'terrainPicture', ...result });
   }
 
   private sendMap(panel: vscode.WebviewPanel): void {
@@ -112,6 +134,10 @@ export class MapEditorPanel implements vscode.Disposable {
     }
     const bmpUri = panel.webview.asWebviewUri(vscode.Uri.file(this.map.provincesBmpPath)).toString();
     void panel.webview.postMessage({ type: 'map', map: this.map, bmpUri });
+    if (this.reveal) {
+      void panel.webview.postMessage({ type: 'revealPixel', ...this.reveal });
+      this.reveal = undefined;
+    }
   }
 
   private async select(

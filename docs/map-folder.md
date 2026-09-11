@@ -58,8 +58,8 @@ The `province` identifier category itself comes from `definition.csv`, and `defa
 - `From` and `To` are checked as province ids.
 - `Type` must be `sea`, `land`, `impassable`, or `canal` (`unknown-adjacency-type`); NCE accepts and
   ignores `land`.
-- `sea`: when `Through` is a non-zero id, it is checked as a province, and it should be a sea zone
-  from `sea_starts` (`expected-sea-province`, warning; skipped when `sea_starts` is empty).
+- `sea`: when `Through` is a non-zero id, it is checked as a province. Whether it is in
+  `sea_starts` is **not** checked: mods route straits through land deliberately.
 - `canal`: `Through` must be the canal's province id and `Data` a canal id above zero
   (`invalid-canal`).
 
@@ -69,14 +69,11 @@ The `province` identifier category itself comes from `definition.csv`, and `defa
 a nested block is `stray-block`. Empty blocks are legal (tooltip-only meta-regions).
 
 - Each id gets the province checks above; a repeated id → `duplicate-province` (warning).
-- `sea-province-in-state` (warning): an id from `sea_starts` inside a state, except in
-  `region_sea.txt`.
-- `state-mixes-provinces` (warning): NCE's state assignment rule. A block whose provinces are
-  **all** already in a state is a meta-region and claims nothing; a block whose provinces are
-  **all** unassigned becomes a state; a block that mixes both is split, with the already-assigned
-  provinces flagged (they only join the meta-region while the rest become a new state). Ownership
-  comes from the index's replay over the three files in engine order (see
-  [mod-index.md](mod-index.md)).
+- A sea zone inside a state, and a block that mixes already-assigned with unassigned provinces,
+  are **not** reported. Both are deliberate: mods carve states that exist only to carry a
+  localisation key, and those routinely hold sea ids or overlap existing states. The index still
+  replays NCE's state assignment (`stateOfProvince`, see [mod-index.md](mod-index.md)); no
+  diagnostic reads it today.
 - Same-file duplicate names are `duplicate-identifier`. The same name in `region.txt` **and**
   `super_region.txt` is not reported: mods mirror meta-regions into `region.txt` for the vanilla
   engine, and NCE keeps the last definition.

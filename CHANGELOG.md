@@ -7,6 +7,11 @@ this file. This project adheres to [Keep a Changelog](https://keepachangelog.com
 
 ### Added
 
+- Ctrl+click on a report finding goes to it. In the full report the link opens
+  the file at the reported line and column; in the map report a finding that
+  names a pixel opens the Map Editor there, with the province under it selected.
+  The link covers the locator — `6:15     error   unknown-trigger` — and leaves
+  the message as plain text. Findings with no pixel keep no link.
 - **Map Editor** side bar row (`victorian-tools.openMapEditor`): the mod
   dialog, then a tab with `map/provinces.bmp` drawn on a canvas (pan, zoom,
   hover for id and name, go-to-id). Clicking a province edits, each with its
@@ -25,12 +30,54 @@ this file. This project adheres to [Keep a Changelog](https://keepachangelog.com
   `textPatch.ts`, `provinceTable.ts`, `provinceLocEdit.ts`,
   `provinceHistoryEdit.ts`, `provincePopsEdit.ts`. Details in
   `docs/map-editor.md`.
-
 - `victorianTools.localisation.keyPattern`: a regular expression deciding which
   `title` / `desc` / `name` values are localisation keys. A value that does not
   match is literal display text and is never reported as missing, so
   `desc = "Death of Dom Pedro II"` stays silent while `desc = "EVTDESC48300"` is
   still checked. Default `^EVT`; empty checks every value.
+- `victorianTools.flags.namePattern`: a regular expression narrowing the
+  never-set flag check, so a mod that sets some flags outside the files the
+  index reads can exempt them by name. Empty (the default) checks every flag,
+  which is the behavior before this release.
+- `victorianTools.ignoreMarker` (default `#VT - Skip Validation`): a marker
+  that silences every finding on the line it appears on. Written as a comment,
+  so it costs the mod nothing, and it is applied to the finished diagnostic list
+  — syntax, structure, semantics, the map CSVs and cross-file duplicates alike.
+  Matched literally, anywhere in the line, case-insensitively; empty turns the
+  escape hatch off. It is a comment, so it belongs at the end of a line:
+  anything after it, a closing brace included, is commented out.
+- `victorianTools.nullTags.pattern`: the tags a script uses to mean "no
+  country". Default `^(QQQ|---|null)$`, matched case-insensitively; empty
+  allows no exception.
+- The **Victorian Tools Settings** tab now edits those three patterns and the
+  ignore marker, next to the game folder and the mod selection. Each regex field
+  compiles what is typed and reports a broken pattern before it is saved, and a
+  **Default** button restores the shipped value.
+- `multiple-building-modifiers`: a building with more than one modifier value is
+  an error on each modifier but the last, since the engine keeps one per
+  building and the earlier ones never apply. Found a real case in GFM's
+  `naval_base` (`local_ship_build` silently overridden by `immigrant_attract`).
+- `missing-tech-folder`: `common/technology.txt` without `army_tech` or
+  `navy_tech` is an error. The engine hardcodes both and will not load without
+  them, so the full report flags it.
+- `reserved-country-tag`: a tag in `common/countries.txt` that the engine reads
+  as a keyword elsewhere (`AIR`, `ANY`, `CON`, `COT`, `DAY`, `DIR`, `END`,
+  `GUI`, `HOT`, `HRE`, `KEY`, `LAW`, `LOG`, `MIL`, `MIN`, `NAP`, `OOB`, `RED`,
+  `ROW`) is an error. The file is a typed file now (`countryList`); only the tag
+  is checked, the path stays a free string.
+- The full report puts errors first: the files that contain one lead the
+  report, and inside a file the errors come before the warnings. Alphabetical
+  order within each group, source order within each severity.
+- `broken-modifier-key` (warning): `rich_income_modifier`,
+  `middle_income_modifier` and `poor_income_modifier` are documented, localised
+  and parsed, but the engine never applies them. Reported wherever a modifier
+  value is accepted, with the value still checked.
+- `is_colonial_crisis` and `is_influence_crisis` (country, yesno) — HoD crisis
+  checks the wiki does not list, both without a localisation key.
+- `broken-effect`: `set_province_flag` is an error wherever it is written — an
+  effect block or province history. The engine accepts it but does not run it.
+  `BROKEN_EFFECTS` in `data/effects.ts` is the table to extend if other effects
+  turn out to be broken.
 
 ### Changed
 
@@ -38,13 +85,49 @@ this file. This project adheres to [Keep a Changelog](https://keepachangelog.com
   folders in `common/technology.txt`, not from a fixed list. Declare
   `population_tech` and `population_tech_research_bonus` becomes a valid
   modifier everywhere modifiers are accepted.
+- Null country tags are a warning wherever they appear, not just in
+  `secede_province`: `war = { target = --- }`, `add_core = QQQ`,
+  `add_attacker = null` and every other country position now report
+  `null-country-tag` instead of `unknown-country`. A tag that is merely
+  undefined is still an error.
+- `war = { target = <null tag> }` reports `null-tag-exploit` with its own note:
+  it tricks the AI into joining your war. A position where a null tag is a known
+  exploit declares that note in `data/effects.ts` through `exploitField`.
+
+### Removed
+
+- The `expected-sea-province` warning: a `sea` adjacency whose `Through` is not
+  in `sea_starts`. Mods route straits through land deliberately. The `Through`
+  province is still checked for existing.
+- The `sea-province-in-state` and `state-mixes-provinces` warnings. Both flagged
+  deliberate techniques: states that exist only to carry a localisation key hold
+  sea ids and overlap existing states by design, and the warnings buried the
+  rest of the map report. `map/region.txt` still checks unknown ids, ids past
+  `max_provinces`, repeats and non-id entries.
 
 ### Fixed
 
-- `set_province_flag` is now an error (`broken-effect`): the engine accepts it
-  but does not run it. Reported in effect blocks and in province history.
-  `BROKEN_EFFECTS` in `data/effects.ts` is the table to extend if other effects
-  turn out to be broken.
+- The snippets no longer make VS Code warn that the extension "confuses
+  snippet-variables and snippet-placeholders". 132 tab stops were written
+  `${TAG}`, which is a snippet *variable*; VS Code rewrote each into a
+  placeholder and complained. They are now written `${1:TAG}` with the indices
+  VS Code was assigning, so tab order and mirroring are unchanged.
+- `build_fort_in_capital` and `build_railway_in_capital` accept a level
+  (`= 4`), not only `yes` / a block. Documented with the engine's parsing bug:
+  everything after one of them in the decision is ignored, and the next
+  decision is skipped except for its effects.
+- `has_flashpoint` reads in province scope as well as state.
+- `scaled_militancy` / `scaled_consciousness` accept an issue class as a field
+  name, the other way to name the issue: `{ factor = -10 good_evil_alignment =
+  evil_alignment }`. The position is still checked against that class's options,
+  and a key that is not a class is still `unknown-field`.
+- A province building a mod declares in `common/buildings.txt` works as an
+  effect, the way `fort`, `railroad` and `naval_base` do: `province_selector = -1`
+  changes its level instead of being an `unknown-effect` error. Province scope
+  only, and the value must be a number.
+- `religion = THIS` / `= FROM` validates, as `culture` already did: the index
+  registers both as religion specials, so comparing a pop's religion against
+  the scope it came from is no longer `unknown-religion`.
 - Event and decision pictures may live in subfolders: `picture = "Brasil/Dom Pedro"`
   now resolves `gfx/pictures/events/Brasil/Dom Pedro.tga` in both the validator
   and the hover preview. The index lists the picture folders recursively and
@@ -52,9 +135,6 @@ this file. This project adheres to [Keep a Changelog](https://keepachangelog.com
 - `enable_crime` is accepted in a technology body. The engine enables a crime
   from a technology as it does from an invention effect; NCE's parser only
   declares it on `inv_effect`, so the field table was missing it.
-- `common/technology.txt` missing `army_tech` or `navy_tech` is now an error
-  (`missing-tech-folder`). The engine hardcodes both and will not load without
-  them, so the full report flags it.
 - The integration suite looked for the extension under its pre-4.0 publisher
   id and never ran; it uses `TGCModdingTeam.victorian-tools` now.
 

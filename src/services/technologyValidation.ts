@@ -14,6 +14,7 @@ import {
   checkTableField,
   isModifierKey,
   modifierKeyNames,
+  reportBrokenModifier,
   report,
   reportStrayEntry,
   requireNumericValue,
@@ -159,6 +160,7 @@ function handleTechnologyField(walk: Walk, entry: Assignment): boolean {
 
 function handleModifierOrUnitField(walk: Walk, entry: Assignment, keyLower: string): boolean {
   if (isModifierKey(walk, keyLower)) {
+    reportBrokenModifier(walk, entry, keyLower);
     requireNumericValue(walk, entry);
     return true;
   }

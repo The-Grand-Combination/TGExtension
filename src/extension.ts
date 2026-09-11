@@ -12,9 +12,12 @@ import { generateMapReportCommand } from './commands/generateMapReportCommand.js
 import { launchGameCommand } from './commands/launchGameCommand.js';
 import { openMapEditorCommand } from './commands/openMapEditorCommand.js';
 import type { PickMemory } from './commands/pickMods.js';
+import { revealMapPixelCommand } from './commands/revealMapPixelCommand.js';
 import { ActionsTreeProvider } from './providers/actionsTreeProvider.js';
 import { MapEditorPanel } from './providers/mapEditorPanel.js';
+import { ReportLinkProvider, REVEAL_MAP_PIXEL_COMMAND } from './providers/reportLinkProvider.js';
 import { SettingsPanel } from './providers/settingsPanel.js';
+import { MapReportTargets } from './services/mapReportTargets.js';
 
 let client: LanguageClient | undefined;
 
@@ -84,7 +87,18 @@ export function activate(context: vscode.ExtensionContext): void {
   settingsPanel.listenTo(client);
   const pickMemory = workspacePickMemory(context.workspaceState);
   const mapEditorPanel = new MapEditorPanel(() => client);
+  const mapReportTargets = new MapReportTargets();
   context.subscriptions.push(
+    // Both reports open as an untitled plain text document; the provider reads
+    // the report header before doing anything, so other ones cost a comparison.
+    vscode.languages.registerDocumentLinkProvider(
+      { scheme: 'untitled', language: 'plaintext' },
+      new ReportLinkProvider(mapReportTargets),
+    ),
+    vscode.workspace.onDidCloseTextDocument((document) => {
+      mapReportTargets.forget(document.uri.toString());
+    }),
+    vscode.commands.registerCommand(REVEAL_MAP_PIXEL_COMMAND, revealMapPixelCommand(mapEditorPanel)),
     settingsPanel,
     mapEditorPanel,
     vscode.commands.registerCommand(
@@ -100,7 +114,7 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
     vscode.commands.registerCommand(
       'victorian-tools.generateMapReport',
-      generateMapReportCommand(() => client, pickMemory),
+      generateMapReportCommand(() => client, pickMemory, mapReportTargets),
     ),
     vscode.commands.registerCommand(
       'victorian-tools.enforceColormaps',

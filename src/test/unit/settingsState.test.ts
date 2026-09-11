@@ -1,6 +1,6 @@
 import * as assert from 'node:assert';
 import type { ModDescriptor } from '../../model/modDescriptor.js';
-import { settingsHtml, settingsState } from '../../providers/settingsHtml.js';
+import { settingsHtml, settingsState, type CurrentSettings } from '../../providers/settingsHtml.js';
 
 function mod(name: string, folder: string, dependencies: readonly string[] = []): ModDescriptor {
   return { name, path: `mod/${folder}`, folder: `/game/mod/${folder}`, replacePaths: [], dependencies, descriptorPath: '' };
@@ -11,9 +11,20 @@ const sub = mod('TGC Sub', 'TGCSub', ['TGC']);
 const gfm = mod('GFM', 'GFM');
 const orphan = mod('Lost', 'Lost', ['Nobody']);
 
+function current(
+  gamePathSetting: string,
+  selected: readonly string[],
+  locKeyPattern = '^EVT',
+  flagNamePattern = '',
+  nullTagPattern = '^(QQQ|---|null)$',
+  ignoreMarker = '#VT - Skip Validation',
+): CurrentSettings {
+  return { gamePathSetting, selected, locKeyPattern, flagNamePattern, nullTagPattern, ignoreMarker };
+}
+
 suite('settingsState', () => {
   test('groups submods under their base mod and orphans last, and orders the selection for loading', () => {
-    const state = settingsState({ gameRoot: 'F:/game', mods: [sub, tgc, gfm, orphan] }, '', ['TGC Sub', 'GFM']);
+    const state = settingsState({ gameRoot: 'F:/game', mods: [sub, tgc, gfm, orphan] }, current('', ['TGC Sub', 'GFM']));
     assert.deepStrictEqual(
       state.groups.map((group) => [group.base?.name, group.submods.map((entry) => entry.name)]),
       [
@@ -28,16 +39,49 @@ suite('settingsState', () => {
   });
 
   test('warns about a selected mod whose dependency is not installed', () => {
-    const state = settingsState({ gameRoot: 'F:/game', mods: [tgc, orphan] }, 'F:/game', ['Lost']);
+    const state = settingsState({ gameRoot: 'F:/game', mods: [tgc, orphan] }, current('F:/game', ['Lost']));
     assert.strictEqual(state.warning, 'Dependency not installed: Nobody');
     assert.deepStrictEqual(state.order, ['Lost']);
     assert.strictEqual(state.gamePathSetting, 'F:/game');
   });
 
   test('carries an undefined game root through, so the page can ask for the folder', () => {
-    const state = settingsState({ gameRoot: undefined, mods: [] }, 'D:/wrong', []);
+    const state = settingsState({ gameRoot: undefined, mods: [] }, current('D:/wrong', []));
     assert.strictEqual(state.gameRoot, undefined);
     assert.deepStrictEqual(state.groups, []);
+  });
+
+  test('carries the localisation key pattern through, empty included', () => {
+    assert.strictEqual(settingsState({ gameRoot: 'F:/game', mods: [] }, current('', [])).locKeyPattern, '^EVT');
+    assert.strictEqual(
+      settingsState({ gameRoot: 'F:/game', mods: [] }, current('', [], '')).locKeyPattern,
+      '',
+      'empty is a real setting: check every value',
+    );
+    assert.strictEqual(
+      settingsState({ gameRoot: 'F:/game', mods: [] }, current('', [], '^(EVT|DBG)')).locKeyPattern,
+      '^(EVT|DBG)',
+    );
+  });
+
+  test('carries the flag name pattern through, empty being the default', () => {
+    assert.strictEqual(settingsState({ gameRoot: 'F:/game', mods: [] }, current('', [])).flagNamePattern, '');
+    assert.strictEqual(
+      settingsState({ gameRoot: 'F:/game', mods: [] }, current('', [], '^EVT', '^tgc_')).flagNamePattern,
+      '^tgc_',
+    );
+  });
+
+  test('carries the null tag pattern through, empty included', () => {
+    assert.strictEqual(
+      settingsState({ gameRoot: 'F:/game', mods: [] }, current('', [])).nullTagPattern,
+      '^(QQQ|---|null)$',
+    );
+    assert.strictEqual(
+      settingsState({ gameRoot: 'F:/game', mods: [] }, current('', [], '^EVT', '', '')).nullTagPattern,
+      '',
+      'empty is a real setting: no exception',
+    );
   });
 
   test('the page carries a nonce-locked CSP and no external resources', () => {

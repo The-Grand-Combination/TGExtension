@@ -297,6 +297,9 @@ suite('serverConfig', () => {
       gamePath: '',
       activeMods: [],
       locKeyPattern: '^EVT',
+      flagNamePattern: '',
+      nullTagPattern: '^(QQQ|---|null)$',
+      ignoreMarker: '#VT - Skip Validation',
     });
   });
 
@@ -305,6 +308,25 @@ suite('serverConfig', () => {
     assert.strictEqual(readServerConfig({ localisation: { keyPattern: '' } }).locKeyPattern, '');
     assert.strictEqual(readServerConfig({ localisation: { keyPattern: 7 } }).locKeyPattern, '^EVT');
     assert.strictEqual(readServerConfig({ localisation: { keyPattern: '^(EVT|DBG)' } }).locKeyPattern, '^(EVT|DBG)');
+  });
+
+  test('the null tag pattern defaults to the three conventional spellings', () => {
+    assert.strictEqual(readServerConfig({}).nullTagPattern, '^(QQQ|---|null)$');
+    assert.strictEqual(readServerConfig({ nullTags: { pattern: '' } }).nullTagPattern, '', 'empty allows no exception');
+    assert.strictEqual(readServerConfig({ nullTags: { pattern: '^(QQQ|XXX)$' } }).nullTagPattern, '^(QQQ|XXX)$');
+  });
+
+  test('the ignore marker defaults to the shipped one, and empty turns it off', () => {
+    assert.strictEqual(readServerConfig({}).ignoreMarker, '#VT - Skip Validation');
+    assert.strictEqual(readServerConfig({ ignoreMarker: '' }).ignoreMarker, '');
+    assert.strictEqual(readServerConfig({ ignoreMarker: 'NOLINT' }).ignoreMarker, 'NOLINT');
+    assert.strictEqual(readServerConfig({ ignoreMarker: 7 }).ignoreMarker, '#VT - Skip Validation');
+  });
+
+  test('the flag name pattern defaults to empty, which checks every flag', () => {
+    assert.strictEqual(readServerConfig({}).flagNamePattern, '');
+    assert.strictEqual(readServerConfig({ flags: { namePattern: 7 } }).flagNamePattern, '');
+    assert.strictEqual(readServerConfig({ flags: { namePattern: '^tgc_' } }).flagNamePattern, '^tgc_');
   });
 
   test('reads the game path and the mod selection, dropping anything that is not a name', () => {

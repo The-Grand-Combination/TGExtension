@@ -45,12 +45,15 @@ import {
   MAP_EDITOR_MAP_REQUEST,
   MAP_EDITOR_PROVINCE_REQUEST,
   MAP_EDITOR_SAVE_REQUEST,
+  MAP_EDITOR_TERRAIN_PICTURE_REQUEST,
   type MapEditorMapResult,
   type MapEditorTargetParams,
   type ProvinceRequestParams,
   type ProvinceResult,
   type SaveParams,
   type SaveResult,
+  type TerrainPictureParams,
+  type TerrainPictureResult,
 } from '../model/mapEditor.js';
 import { LAYOUT_CHANGED_NOTIFICATION, MODS_REQUEST, type ModDescriptor, type ModsResult } from '../model/modDescriptor.js';
 import {
@@ -62,7 +65,7 @@ import {
 import type { ModIndex } from '../model/modIndex.js';
 import { duplicateDiagnosticsByFile, duplicateDiagnosticsFor } from '../services/duplicateDiagnostics.js';
 import { validateFileText } from '../services/fileValidation.js';
-import { compileLocKeyPattern, type ValidationOptions } from '../model/validationOptions.js';
+import { compilePattern, NULL_TAG_FLAGS, type ValidationOptions } from '../model/validationOptions.js';
 import type { Palette } from '../data/mapPalettes.js';
 import { COLORMAP_FILES, planColormapFix } from '../services/colormapEnforcement.js';
 import { buildModReport, type ReportFileProvider } from '../services/fullReport.js';
@@ -109,18 +112,36 @@ const connection: Connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
 let config: ServerConfig = DEFAULT_CONFIG;
-let compiledLocKeyPattern = { source: config.locKeyPattern, options: optionsFor(config.locKeyPattern) };
+let compiled = compile(config);
 
-function optionsFor(pattern: string): ValidationOptions {
-  return { locKeyPattern: compileLocKeyPattern(pattern) };
+interface CompiledOptions {
+  readonly sources: readonly string[];
+  readonly options: ValidationOptions;
 }
 
-/** The validation options of the current configuration; the regex is compiled once per change. */
+function compile(source: ServerConfig): CompiledOptions {
+  return {
+    sources: patternSourcesOf(source),
+    options: {
+      locKeyPattern: compilePattern(source.locKeyPattern),
+      flagNamePattern: compilePattern(source.flagNamePattern),
+      nullTagPattern: compilePattern(source.nullTagPattern, NULL_TAG_FLAGS),
+      ignoreMarker: source.ignoreMarker,
+    },
+  };
+}
+
+function patternSourcesOf(source: ServerConfig): readonly string[] {
+  return [source.locKeyPattern, source.flagNamePattern, source.nullTagPattern, source.ignoreMarker];
+}
+
+/** The validation options of the current configuration; the regexes are compiled once per change. */
 function validationOptions(): ValidationOptions {
-  if (compiledLocKeyPattern.source !== config.locKeyPattern) {
-    compiledLocKeyPattern = { source: config.locKeyPattern, options: optionsFor(config.locKeyPattern) };
+  const sources = patternSourcesOf(config);
+  if (sources.some((source, position) => source !== compiled.sources[position])) {
+    compiled = compile(config);
   }
-  return compiledLocKeyPattern.options;
+  return compiled.options;
 }
 let workspaceFolders: string[] = [];
 /** The install, its mods, and the user's selection; rebuilt on config and `.mod` changes. */
@@ -796,12 +817,14 @@ const mapEditor = new MapEditorHandlers({
   ensureIndex: (layers: ModLayers): Promise<ModIndex | undefined> => modCache.ensureIndex(layers),
   fileSystem: layerFileSystem,
   readText: readModFileAsync,
+  readBytes: readModFileBytesAsync,
   writeText: writeModFileText,
   rename: renameModFile,
 });
 
 connection.onRequest(MAP_EDITOR_MAP_REQUEST, (params: MapEditorTargetParams): Promise<MapEditorMapResult> => mapEditor.map(params));
 connection.onRequest(MAP_EDITOR_PROVINCE_REQUEST, (params: ProvinceRequestParams): Promise<ProvinceResult> => mapEditor.province(params));
+connection.onRequest(MAP_EDITOR_TERRAIN_PICTURE_REQUEST, (params: TerrainPictureParams): Promise<TerrainPictureResult> => mapEditor.terrainPictureFor(params));
 connection.onRequest(MAP_EDITOR_SAVE_REQUEST, async (params: SaveParams): Promise<SaveResult> => {
   const result = await mapEditor.save(params);
   connection.console.log(

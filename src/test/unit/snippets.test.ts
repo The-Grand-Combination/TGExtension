@@ -64,18 +64,16 @@ suite('snippets — file health', () => {
       }
     });
 
-    // Anything VS Code cannot parse as a tab stop, a placeholder, a choice, or a
-    // variable is inserted as literal text, which is never what a snippet wants.
-    test(`${file}: every \${...} is valid snippet syntax`, () => {
+    // Anything VS Code cannot parse as a tab stop, a placeholder or a choice is
+    // inserted as literal text, which is never what a snippet wants. A bare name
+    // parses, but as a snippet *variable*: VS Code rewrites it into a placeholder
+    // and warns that the extension confuses the two. Tab stops are ${1:name}.
+    test(`${file}: every \${...} is a numbered tab stop`, () => {
       for (const [name, snippet] of Object.entries(snippets)) {
         for (const match of bodyOf(snippet).matchAll(/\$\{([^}]*)\}/g)) {
           const inner = match[1] ?? '';
-          const valid =
-            /^\d+$/.test(inner) ||
-            /^\d+:/.test(inner) ||
-            /^\d+\|.*\|$/.test(inner) ||
-            /^[A-Za-z_][A-Za-z_0-9]*$/.test(inner);
-          assert.ok(valid, `${name} inserts '\${${inner}}' as literal text`);
+          const valid = /^\d+$/.test(inner) || /^\d+:/.test(inner) || /^\d+\|.*\|$/.test(inner);
+          assert.ok(valid, `${name} should write '\${${inner}}' as a numbered tab stop`);
         }
       }
     });
@@ -140,7 +138,7 @@ const PLACEHOLDER_VALUES: Readonly<Record<string, string>> = {
 function expand(snippet: Snippet): string {
   return bodyOf(snippet)
     .replace(/\$\{\d+\|([^,|]*)[^|]*\|\}/g, '$1')
-    .replace(/\$\{([A-Z_]+)\}/g, (whole, name: string) => PLACEHOLDER_VALUES[name] ?? whole)
+    .replace(/\$\{\d+:([A-Z_]+)\}/g, (whole, name: string) => PLACEHOLDER_VALUES[name] ?? whole)
     .replace(/\$\{\d+:([^}]*)\}/g, '$1')
     .replace(/\$\{?\d+\}?/g, '');
 }

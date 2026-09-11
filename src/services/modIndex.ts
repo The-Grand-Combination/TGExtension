@@ -540,8 +540,9 @@ class IndexBuild {
 
   private indexCommonData(): void {
     const provider = this.provider;
-    // Specials: THIS/FROM back-references, `owner` as a tag value, the cultural
-    // `union`/`this_union` keywords, and `factory` meaning "any factory building".
+    // Specials: THIS/FROM back-references (a scope's own culture/religion, as in
+    // `religion = THIS` inside a pop weight), `owner` as a tag value, the
+    // cultural `union`/`this_union` keywords, and `factory` meaning "any factory".
     this.put('country', countryTagOccurrences(provider), {
       specials: ['this', 'from', 'owner', 'this_union'],
       checkDuplicates: true,
@@ -549,7 +550,10 @@ class IndexBuild {
     const cultures = groupThenItemOccurrences(provider, 'common/cultures.txt');
     this.put('culture', cultures.items, { specials: ['this', 'from', 'union'], checkDuplicates: true });
     this.put('cultureGroup', cultures.groups, { checkDuplicates: true });
-    this.put('religion', groupThenItemOccurrences(provider, 'common/religion.txt').items, { checkDuplicates: true });
+    this.put('religion', groupThenItemOccurrences(provider, 'common/religion.txt').items, {
+      specials: ['this', 'from'],
+      checkDuplicates: true,
+    });
     this.put('good', groupThenItemOccurrences(provider, 'common/goods.txt').items, { checkDuplicates: true });
     this.put('ideology', groupThenItemOccurrences(provider, 'common/ideologies.txt').items, { checkDuplicates: true });
     this.put('trait', groupThenItemOccurrences(provider, 'common/traits.txt').items);

@@ -183,6 +183,21 @@
       "default": "^EVT",
       "markdownDescription": "Regular expression deciding which `title` / `desc` / `name` values are localisation keys. A value that does not match is treated as literal display text and never reported as a missing key, so `desc = \"Death of Dom Pedro II\"` stays silent while `desc = \"EVTDESC48300\"` is still checked against `localisation/`. Leave empty to check every value."
     },
+    "victorianTools.flags.namePattern": {
+      "type": "string",
+      "default": "",
+      "markdownDescription": "Regular expression narrowing the never-set flag check. A country or global flag whose name does not match is never reported as checked-but-never-set, which exempts flags a mod sets outside the indexed files. Empty (the default) checks every flag."
+    },
+    "victorianTools.nullTags.pattern": {
+      "type": "string",
+      "default": "^(QQQ|---|null)$",
+      "markdownDescription": "Regular expression matching the tags a script uses to mean *no country*. A country value that matches is reported as a warning (`null-country-tag`) instead of an unknown-tag error, so `war = { target = --- }` and `secede_province = QQQ` stay legible. Matched case-insensitively. Leave empty to allow no exception: every unknown tag is then an error."
+    },
+    "victorianTools.ignoreMarker": {
+      "type": "string",
+      "default": "#VT - Skip Validation",
+      "markdownDescription": "A marker that silences every finding on the line it appears on. Write it as a comment (`prestige = 5 #VT - Skip Validation`) so the game ignores it. Matched anywhere in the line, case-insensitively, and it silences every rule: syntax, structure, semantics, the map CSVs and cross-file duplicates. Leave empty to turn the escape hatch off."
+    },
     "victorianTools.gamePath": {
           "type": "string",
           "default": "",

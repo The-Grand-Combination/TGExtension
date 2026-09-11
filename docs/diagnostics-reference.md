@@ -49,21 +49,32 @@ Used across every file type that walks triggers/effects/weight-blocks/field tabl
 | `wrong-context` | error | A scope-changer restricted to trigger-only or effect-only is used in the other context. |
 | `wrong-scope` | error | A trigger/effect/scope-changer is used from a scope not in its allowed set (message lists the valid scopes). |
 | `unknown-trigger` | error | A key in trigger position isn't a known trigger, scope-changer, or resolvable dynamic key. Includes a "did you mean" suggestion. |
-| `unknown-effect` | error | Same, in effect position. |
+| `unknown-effect` | error | Same, in effect position. Building names from `common/buildings.txt` resolve here too, as `<building> = n` changes its level in province scope. |
 | `expected-value` | error | A key that must hold a scalar has a block instead. |
 | `invalid-value` | error | A scalar's raw text doesn't match any accepted kind for that field (or a `<`/`>`/`<=`/`>=` comparison is used on a non-number). |
 | `unknown-<category>` | error | A scalar argument doesn't match any accepted identifier category (see the category list above); message names the category and suggests a close match. |
 | `unknown-event-id` | error | An `event`-typed scalar argument (not the block form) doesn't match any indexed event id. |
 | `broken-effect` | error | An effect the engine parses and accepts but does not run correctly (`BROKEN_EFFECTS` in `data/effects.ts`). Today that is `set_province_flag`. Reported in effect blocks and in province history, and the argument is not checked further. |
+| `null-country-tag` | warning | A country value is a null tag — one matching `victorianTools.nullTags.pattern`, by default `QQQ`, `---` or `null`. The script means "no country", so it is not the `unknown-country` error. A tag that is merely undefined still is. |
+| `null-tag-exploit` | warning | A null tag in a position where it is a known engine exploit rather than plain "no country". Today that is `war = { target = <null tag> }`, which tricks the AI into joining your war. The position declares the note in `data/effects.ts` (`exploitField`). |
 | `uncolonize-province` | warning | `secede_province` given a tag the mod never defines (`QQQ` by convention), `null`, or `---`: the province goes to no one and is uncolonized (NCE `annex_to_null_province`). A deliberate modding trick that can crash the game, so it is not the `unknown-country` error. |
 | `expected-block` | error | A key that must hold `{ ... }` has a scalar instead (also reused by many per-file validators for the same purpose). |
 | `unknown-field` | error | A block field isn't in that block's known field table (generic; many validators reuse this exact code with a context-specific message). |
 | `missing-field` | error | A required block field is absent. |
 | `invalid-color` | error | A `color = { ... }` isn't exactly three plain numeric scalars (wrong count, a non-number entry, or comma-separated values). |
 | `unknown-reform-option` | error | A reform-class value isn't any position of that class's option pool in `issues.txt` (issue options for party/political/social classes, reform options for economic/military ones), matching NCE's lookup. |
-| `flag-never-set` | warning | A checked `has_country_flag`/`has_global_flag` value is never set anywhere in the mod (or the current buffer); also fires when the flag exists only in the *other* namespace. |
+| `flag-never-set` | warning | A checked `has_country_flag`/`has_global_flag` value is never set anywhere in the mod (or the current buffer); also fires when the flag exists only in the *other* namespace. `victorianTools.flags.namePattern` narrows which flag names the check applies to; empty (the default) checks every flag. |
 | `missing-localisation` | warning | A loc-key field's value has no matching key in `localisation/*.csv` (skipped when the mod has no localisation at all, and when the value does not match `victorianTools.localisation.keyPattern` — default `^EVT` — which marks it as literal display text). |
 | `missing-picture` | warning | An event/decision `picture` value has no matching file under `gfx/pictures/{events,decisions}/` (skipped when that folder is absent). The value may name a subfolder — `picture = "Brasil/Dom Pedro"` is `gfx/pictures/events/Brasil/Dom Pedro.tga`. |
+
+## Silencing a line
+
+Any finding can be suppressed at the source: put `victorianTools.ignoreMarker` (default
+`#VT - Skip Validation`) on the line and every finding that starts there is dropped. The marker is
+a Paradox comment, so the game ignores it, and it is applied to the finished diagnostic list — the
+codes below, the map CSVs and the cross-file duplicates alike. Being a comment, it belongs at the
+**end** of a line: anything after it, a closing brace included, is commented out. Matched literally
+(spacing included) but case-insensitively; an empty setting turns the escape hatch off.
 
 ## Events / decisions (`semanticValidation.ts`)
 
@@ -86,12 +97,15 @@ Used across every file type that walks triggers/effects/weight-blocks/field tabl
 | `unknown-issue-option-field` | An unrecognized field inside an `issues.txt` option body. |
 | `unknown-rule` | An `issues.txt` option's `rules` block has a key outside the fixed 33 game-rule toggles. |
 | `unknown-country` | A `country_colors.txt` top-level key isn't a known TAG. |
+| `reserved-country-tag` | A `common/countries.txt` tag is one the engine reads as a keyword elsewhere (`RESERVED_COUNTRY_TAGS` in `data/commonStructure.ts`), so a country cannot claim it. |
 | `unknown-modifier-key` | A modifier-body field isn't `icon`, one of the 187 known modifier keys, or a `<folder>_research_bonus` key granted by a tech folder of `common/technology.txt`. |
+| `broken-modifier-key` | warning | A modifier key the engine documents, localises and parses but never applies (`BROKEN_MODIFIER_KEYS` in `data/modifierKeys.ts`): `rich_income_modifier`, `middle_income_modifier`, `poor_income_modifier`. Valid script that does nothing, so it is a warning and the value is still checked. |
 | `missing-tech-folder` | `common/technology.txt` does not declare `army_tech` or `navy_tech`; the engine hardcodes both and will not load without them. |
 | `unknown-culture-field` | An unrecognized field in a `cultures.txt` group or culture body. |
 | `unknown-religion-field` / `unknown-good-field` | An unrecognized field in a `religion.txt`/`goods.txt` item body. |
 | `unknown-ideology-field` | An unrecognized field in an `ideologies.txt` item body. |
 | `unknown-government-field` | A `governments.txt` body key is neither a known field nor a known ideology toggle. |
+| `multiple-building-modifiers` | A building body has more than one modifier value. The engine keeps one per building, so every modifier but the last is dead code. Building fields that share a modifier name (`infrastructure`, `fort_level`, `naval_capacity`, `colonial_points`) are fields, not modifiers, and are not counted. |
 | `unknown-building-field` | An unrecognized field in a `buildings.txt` body. |
 | `unknown-static-modifier` | A `static_modifiers.txt` top-level name isn't one of the engine's 39 fixed names. |
 | `unknown-trait-stat` | A `traits.txt` leader stat isn't one of the fixed stat names. |
@@ -135,15 +149,12 @@ Shared codes reused here with map-specific messages: `unknown-field`, `unknown-m
 | `province-id-too-large` | error | A province id is at or above `default.map` `max_provinces`. |
 | `unknown-province` | error | A province id is not defined in `map/definition.csv`. |
 | `duplicate-province` | warning | The same id is listed twice in one state/continent/climate/`sea_starts`, or has two `positions.txt` blocks. |
-| `sea-province-in-state` | warning | A `sea_starts` id sits inside a state in `region.txt`/`super_region.txt`. |
-| `state-mixes-provinces` | warning | A region block mixes provinces already in a state with unassigned ones; NCE splits it. |
 | `province-already-assigned` | warning | A province appears in two continents or two climates; the engine keeps the last. |
 | `unknown-terrain` | error | A terrain palette `type` names no category defined in `terrain.txt`. |
 | `duplicate-palette-index` | warning | A `terrain.bmp` palette index is mapped by two palette entries. |
 | `csv-too-few-fields` | error | A CSV data row has fewer fields than the engine reads (4 for `definition.csv`, 5 for `adjacencies.csv`). |
 | `duplicate-color` | error | Two `definition.csv` provinces share an RGB color. |
 | `unknown-adjacency-type` | error | An `adjacencies.csv` `Type` is not `sea`, `land`, `impassable`, or `canal`. |
-| `expected-sea-province` | warning | A `sea` adjacency passes `Through` a province not in `sea_starts`. |
 | `ignored-adjacency` | warning | A row with `To <= 0` and a type other than `impassable`; the engine skips it. |
 | `invalid-canal` | error | A `canal` row lacks the canal province in `Through` or a canal id above zero in `Data`. |
 

@@ -80,6 +80,37 @@ export const BUILDING_FIELDS: FieldTable = {
   capital: ['yesno'],
 };
 
+/**
+ * Three-letter tokens the engine reads as keywords elsewhere (order of battle,
+ * GUI and script files), so a country may not claim them. Declaring one in
+ * common/countries.txt makes the game misread the tag.
+ *
+ * `PAN`, `PHI` and `WIN` are deliberately absent: vanilla ships Panjab and the
+ * Philippines under the first two, and TGC ships the West Indies under the
+ * third, so they are usable in practice.
+ */
+export const RESERVED_COUNTRY_TAGS: ReadonlySet<string> = new Set([
+  'air',
+  'any',
+  'con',
+  'cot',
+  'day',
+  'dir',
+  'end',
+  'gui',
+  'hot',
+  'hre',
+  'key',
+  'law',
+  'log',
+  'mil',
+  'min',
+  'nap',
+  'oob',
+  'red',
+  'row',
+]);
+
 /** Leader trait stats (NCE trait). */
 export const TRAIT_FIELDS: ReadonlySet<string> = new Set([
   'organisation',

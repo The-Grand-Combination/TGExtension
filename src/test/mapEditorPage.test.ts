@@ -3,20 +3,36 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import type { MapEditorMap } from '../model/mapEditor.js';
+import type { MapEditorMap, MapEditorReveal } from '../model/mapEditor.js';
 import { mapEditorHtml } from '../providers/mapEditorHtml.js';
 import { encodeBmp24 } from './unit/bmpFixtures.js';
 
 const TGC_MAP = 'F:/SteamLibrary/steamapps/common/Victoria 2/mod/TGC/map/provinces.bmp';
 
-/** Drive the Map Editor page in a real webview and collect what it logs until the map is ready or fails. */
-async function loadPage(bmpPath: string, definitions: MapEditorMap['definitions'], timeoutMs: number): Promise<string[]> {
+interface PageRun {
+  readonly logs: string[];
+  /** Province ids the page asked the host for, in order. */
+  readonly selected: number[];
+}
+
+/**
+ * Drive the Map Editor page in a real webview and collect what it logs until the
+ * map is ready or fails. With a `reveal`, the run goes on until the page picks a
+ * province for that pixel.
+ */
+async function loadPage(
+  bmpPath: string,
+  definitions: MapEditorMap['definitions'],
+  timeoutMs: number,
+  reveal?: MapEditorReveal,
+): Promise<PageRun> {
   const folder = path.dirname(bmpPath);
   const panel = vscode.window.createWebviewPanel('victorianTools.mapEditorTest', 'Map Editor test', vscode.ViewColumn.One, {
     enableScripts: true,
     localResourceRoots: [vscode.Uri.file(folder)],
   });
   const logs: string[] = [];
+  const selected: number[] = [];
   const map: MapEditorMap = {
     kind: 'ready',
     targetName: 'Test',
@@ -30,15 +46,27 @@ async function loadPage(bmpPath: string, definitions: MapEditorMap['definitions'
   };
   const done = new Promise<void>((resolve) => {
     const timer = setTimeout(resolve, timeoutMs);
-    panel.webview.onDidReceiveMessage((message: { type?: string; message?: string }) => {
+    const finish = (): void => {
+      clearTimeout(timer);
+      resolve();
+    };
+    panel.webview.onDidReceiveMessage((message: { type?: string; message?: string; provinceId?: number }) => {
       if (message.type === 'ready') {
         const bmpUri = panel.webview.asWebviewUri(vscode.Uri.file(bmpPath)).toString();
         void panel.webview.postMessage({ type: 'map', map, bmpUri });
+      } else if (message.type === 'select' && message.provinceId !== undefined) {
+        selected.push(message.provinceId);
+        finish();
       } else if (message.type === 'log' && message.message !== undefined) {
         logs.push(message.message);
-        if (message.message.startsWith('map ready') || message.message.startsWith('Could not') || message.message.startsWith('Page error')) {
-          clearTimeout(timer);
-          resolve();
+        if (message.message.startsWith('Could not') || message.message.startsWith('Page error')) {
+          finish();
+        } else if (message.message.startsWith('map ready')) {
+          if (reveal) {
+            void panel.webview.postMessage({ type: 'revealPixel', ...reveal });
+          } else {
+            finish();
+          }
         }
       }
     });
@@ -46,7 +74,7 @@ async function loadPage(bmpPath: string, definitions: MapEditorMap['definitions'
   panel.webview.html = mapEditorHtml(panel.webview.cspSource);
   await done;
   panel.dispose();
-  return logs;
+  return { logs, selected };
 }
 
 suite('Map Editor page', () => {
@@ -55,7 +83,7 @@ suite('Map Editor page', () => {
     const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'vic2-map-'));
     const bmpPath = path.join(folder, 'provinces.bmp');
     fs.writeFileSync(bmpPath, encodeBmp24(4, 2, [1, 1, 2, 2, 3, 3, 4, 4]));
-    const logs = await loadPage(bmpPath, [{ id: 1, color: 1, name: 'One' }], 20000);
+    const { logs } = await loadPage(bmpPath, [{ id: 1, color: 1, name: 'One' }], 20000);
     assert.ok(logs.includes('map ready; overlay none'), `page did not finish or the overlay stayed: ${logs.join(' | ')}`);
   });
 
@@ -65,8 +93,26 @@ suite('Map Editor page', () => {
       this.skip();
       return;
     }
-    const logs = await loadPage(TGC_MAP, [{ id: 1, color: 0xcce598, name: 'Sitka' }], 110000);
+    const { logs } = await loadPage(TGC_MAP, [{ id: 1, color: 0xcce598, name: 'Sitka' }], 110000);
     assert.ok(logs.includes('map ready; overlay none'), `page did not finish or the overlay stayed: ${logs.join(' | ')}`);
+  });
+
+  // A map report pixel is top-down, the canvas draws the file's rows as the game
+  // reads them, so revealing one has to flip y. Without the flip these two swap.
+  test('a revealed pixel selects the province under it, flipping the report y', async function () {
+    this.timeout(30000);
+    const folder = fs.mkdtempSync(path.join(os.tmpdir(), 'vic2-reveal-'));
+    const bmpPath = path.join(folder, 'provinces.bmp');
+    // Top row of the image is color 1, bottom row is color 3.
+    fs.writeFileSync(bmpPath, encodeBmp24(4, 2, [1, 1, 1, 1, 3, 3, 3, 3]));
+    const definitions = [
+      { id: 11, color: 1, name: 'Top' },
+      { id: 33, color: 3, name: 'Bottom' },
+    ];
+    const top = await loadPage(bmpPath, definitions, 20000, { file: 'map/provinces.bmp', x: 0, y: 0 });
+    assert.deepStrictEqual(top.selected, [11], top.logs.join(' | '));
+    const bottom = await loadPage(bmpPath, definitions, 20000, { file: 'map/provinces.bmp', x: 0, y: 1 });
+    assert.deepStrictEqual(bottom.selected, [33], bottom.logs.join(' | '));
   });
 });
 

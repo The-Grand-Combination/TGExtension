@@ -152,6 +152,65 @@ suite('common/ file validators — common data files', () => {
     assert.ok(codes('schools = { s = { nope = 1 } }', 'techFolders', 'common/technology.txt').includes('unknown-modifier-key'));
   });
 
+  test('a building takes only one modifier; the earlier ones are dead', () => {
+    const one = 'scriptorium = { type = scriptorium time = 180 max_level = 6 province = yes research_points = 0.01 }';
+    assert.deepStrictEqual(codes(one, 'buildings', 'common/buildings.txt'), []);
+
+    const two = 'scriptorium = { type = scriptorium research_points = 0.01 research_points_modifier = 0.001 }';
+    assert.deepStrictEqual(codes(two, 'buildings', 'common/buildings.txt'), ['multiple-building-modifiers']);
+
+    const three = 'x = { type = x research_points = 1 prestige = 1 leadership = 1 }';
+    assert.deepStrictEqual(
+      codes(three, 'buildings', 'common/buildings.txt'),
+      ['multiple-building-modifiers', 'multiple-building-modifiers'],
+      'every modifier but the last is reported',
+    );
+  });
+
+  test('building fields that share a modifier name are not counted as modifiers', () => {
+    // infrastructure, fort_level and naval_capacity are building fields first.
+    const text = 'fort = { type = fort infrastructure = 1 fort_level = 2 naval_capacity = 1 research_points = 0.01 }';
+    assert.deepStrictEqual(codes(text, 'buildings', 'common/buildings.txt'), []);
+  });
+
+  test('the three income modifiers warn: the engine parses but never applies them', () => {
+    const codesOf = (body: string): string[] => codes(body, 'eventModifiers', 'common/event_modifiers.txt');
+    assert.deepStrictEqual(codesOf('m = { rich_income_modifier = 0.1 }'), ['broken-modifier-key']);
+    assert.deepStrictEqual(codesOf('m = { middle_income_modifier = 0.1 }'), ['broken-modifier-key']);
+    assert.deepStrictEqual(codesOf('m = { poor_income_modifier = 0.1 }'), ['broken-modifier-key']);
+    assert.deepStrictEqual(codesOf('m = { low_income_modifier = 0.1 }'), [], 'low_income_modifier works');
+    assert.deepStrictEqual(codesOf('m = { prestige = 1 }'), []);
+    // Still a modifier: the value is checked and the key is not "unknown".
+    assert.deepStrictEqual(
+      codesOf('m = { rich_income_modifier = lots }').sort(),
+      ['broken-modifier-key', 'invalid-value'],
+    );
+  });
+
+  test('countries.txt rejects the tags the engine reserves', () => {
+    const ok = 'REB = "countries/Rebels.txt"\nENG = "countries/England.txt"\ndynamic_tags = yes\nD01 = "countries/Dynamic.txt"\n';
+    assert.deepStrictEqual(codes(ok, 'countryList', 'common/countries.txt'), []);
+
+    assert.deepStrictEqual(
+      codes('OOB = "countries/Oob.txt"\n', 'countryList', 'common/countries.txt'),
+      ['reserved-country-tag'],
+    );
+    assert.deepStrictEqual(
+      codes('hre = "countries/Hre.txt"\n', 'countryList', 'common/countries.txt'),
+      ['reserved-country-tag'],
+      'case does not matter',
+    );
+    assert.deepStrictEqual(
+      codes('MIL = "a.txt"\nLOG = "b.txt"\nNAP = "c.txt"\n', 'countryList', 'common/countries.txt'),
+      ['reserved-country-tag', 'reserved-country-tag', 'reserved-country-tag'],
+    );
+    // Vanilla ships Panjab and the Philippines under these, and TGC the West Indies.
+    assert.deepStrictEqual(
+      codes('PAN = "a.txt"\nPHI = "b.txt"\nWIN = "c.txt"\n', 'countryList', 'common/countries.txt'),
+      [],
+    );
+  });
+
   test('country definitions: color, graphical culture, parties, unit names', () => {
     const text = 'color = { 1 2 3 } graphical_culture = Generic party = { name = "x" start_date = 1836.1.1 end_date = 1936.1.1 ideology = liberal slavery = yes_slavery } unit_names = { infantry = { "1st" "2nd" } }';
     assert.deepStrictEqual(codes(text, 'countryDefinition', 'common/countries/England.txt'), []);

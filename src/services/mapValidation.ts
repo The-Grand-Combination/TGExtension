@@ -160,15 +160,18 @@ function requireNumberList(walk: Walk, list: Block): void {
 // --- region.txt / region_sea.txt / super_region.txt ----------------------------------
 
 function validateRegionFile(walk: Walk, document: Document): void {
-  const seaFile = walk.currentFile?.toLowerCase().endsWith('region_sea.txt') ?? false;
   for (const state of blockKeysOf(document)) {
-    walkBlockValue(walk, state, (block) => { validateStateBlock(walk, state, block, seaFile); });
+    walkBlockValue(walk, state, (block) => { validateStateBlock(walk, state, block); });
   }
 }
 
-function validateStateBlock(walk: Walk, state: Assignment, block: Block, seaFile: boolean): void {
+/**
+ * A state is a province list. Sea zones inside one, and a block that mixes
+ * already-assigned with unassigned provinces, are both deliberate techniques
+ * (states that only carry a localisation key, for one), so neither is reported.
+ */
+function validateStateBlock(walk: Walk, state: Assignment, block: Block): void {
   const seen = new Set<string>();
-  const provinces: Scalar[] = [];
   for (const entry of block.entries) {
     if (entry.kind !== 'scalar') {
       reportListEntry(walk, entry, `'${state.key.value}'`);
@@ -182,36 +185,6 @@ function validateStateBlock(walk: Walk, state: Assignment, block: Block, seaFile
       continue;
     }
     seen.add(entry.value);
-    provinces.push(entry);
-    if (!seaFile && walk.index.seaProvinces.has(entry.value)) {
-      push(walk, 'warning', 'sea-province-in-state', `Province ${entry.value} is a sea zone (default.map sea_starts) but is listed in state '${state.key.value}'.`, entry.range);
-    }
-  }
-  checkMixedState(walk, state, provinces);
-}
-
-/**
- * NCE splits a block that mixes already-assigned and unassigned provinces: the
- * unassigned ones become a new state and the rest only join a meta-region.
- */
-function checkMixedState(walk: Walk, state: Assignment, provinces: readonly Scalar[]): void {
-  const stateLower = state.key.value.toLowerCase();
-  const ownerOf = (scalar: Scalar): string | undefined => {
-    const owner = walk.index.stateOfProvince.get(scalar.value);
-    return owner !== undefined && owner !== stateLower ? owner : undefined;
-  };
-  const claimed = provinces.filter((scalar) => ownerOf(scalar) !== undefined);
-  if (claimed.length === 0 || claimed.length === provinces.length) {
-    return;
-  }
-  for (const scalar of claimed) {
-    push(
-      walk,
-      'warning',
-      'state-mixes-provinces',
-      `Province ${scalar.value} already belongs to state '${ownerOf(scalar) ?? ''}'. '${state.key.value}' mixes assigned and unassigned provinces, so the engine splits it.`,
-      scalar.range,
-    );
   }
 }
 

@@ -160,7 +160,7 @@ function validateAdjacenciesCsv(text: string, index: ModIndex): Diagnostic[] {
         type.range,
       );
     } else if (typeLower === 'sea') {
-      checkSeaThrough(out, index, through);
+      checkSeaThrough(out, through);
     } else if (typeLower === 'canal') {
       checkCanalRow(out, through, data);
     }
@@ -189,21 +189,16 @@ function checkImpassableRow(out: CsvDiagnostics, row: CsvRow, from: CsvField, ty
   }
 }
 
-/** A strait crossing is controlled by the sea zone in `Through`. */
-function checkSeaThrough(out: CsvDiagnostics, index: ModIndex, through: CsvField): void {
+/**
+ * A strait crossing is controlled by the province in `Through`. Whether that
+ * province is in `sea_starts` is not checked: mods route straits through land
+ * deliberately.
+ */
+function checkSeaThrough(out: CsvDiagnostics, through: CsvField): void {
   if (!WHOLE_NUMBER.test(through.text) || Number(through.text) === 0) {
     return;
   }
-  if (!out.checkKnownProvince(through)) {
-    return;
-  }
-  if (index.seaProvinces.size > 0 && !index.seaProvinces.has(through.text)) {
-    out.warning(
-      'expected-sea-province',
-      `Province ${through.text} is not a sea zone (not in default.map sea_starts), but a sea adjacency passes through it.`,
-      through.range,
-    );
-  }
+  out.checkKnownProvince(through);
 }
 
 /** Canals need the canal province in `Through` and a canal id (1-based) in `Data`. */

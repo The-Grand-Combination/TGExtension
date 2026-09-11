@@ -50,12 +50,10 @@ suite('mapValidation — region files', () => {
     assert.deepStrictEqual(codes('ENG_1 = { 1 }\n5\n', 'mapRegion'), ['stray-value']);
   });
 
-  test('warns when a block mixes provinces already in a state with unassigned ones', () => {
-    assert.deepStrictEqual(codes('MIXED = { 1 3 }\n', 'mapRegion', 'map/super_region.txt'), ['state-mixes-provinces']);
-  });
-
-  test('warns about sea zones inside a state, except in region_sea.txt', () => {
-    assert.deepStrictEqual(codes('SEA_1 = { 900 }\n', 'mapRegion'), ['sea-province-in-state']);
+  test('sea zones in a state, and a block mixing assigned with unassigned provinces, are allowed', () => {
+    // Both are deliberate techniques (a state that only carries a loc key, for one).
+    assert.deepStrictEqual(codes('MIXED = { 1 3 }\n', 'mapRegion', 'map/super_region.txt'), []);
+    assert.deepStrictEqual(codes('SEA_1 = { 900 }\n', 'mapRegion'), []);
     assert.deepStrictEqual(codes('SEA_1 = { 900 }\n', 'mapRegion', 'map/region_sea.txt'), []);
   });
 });
@@ -152,7 +150,7 @@ suite('mapCsvValidation — adjacencies.csv', () => {
     assert.deepStrictEqual(csvCodes(`${header}1;999;sea;900;0;x\n`, 'mapAdjacencies'), ['unknown-province']);
     assert.deepStrictEqual(csvCodes(`${header}1;9999;sea;900;0;x\n`, 'mapAdjacencies'), ['province-id-too-large']);
     assert.deepStrictEqual(csvCodes(`${header}1;2;strait;900;0;x\n`, 'mapAdjacencies'), ['unknown-adjacency-type']);
-    assert.deepStrictEqual(csvCodes(`${header}1;2;sea;619;0;x\n`, 'mapAdjacencies'), ['expected-sea-province']);
+    assert.deepStrictEqual(csvCodes(`${header}1;2;sea;619;0;x\n`, 'mapAdjacencies'), []);
     assert.deepStrictEqual(csvCodes(`${header}1;2;sea;999;0;x\n`, 'mapAdjacencies'), ['unknown-province']);
     assert.deepStrictEqual(csvCodes(`${header}1;3;canal;619;0;x\n`, 'mapAdjacencies'), ['invalid-canal']);
     assert.deepStrictEqual(csvCodes(`${header}1;3;canal;0;1;x\n`, 'mapAdjacencies'), ['invalid-canal']);

@@ -13,10 +13,20 @@ import {
   type ProvinceResult,
   type SaveParams,
   type SaveResult,
+  type TerrainPictureParams,
+  type TerrainPictureResult,
+  type TerrainSection,
 } from '../model/mapEditor.js';
 import type { ModIndex } from '../model/modIndex.js';
+import { decodeBmp, indicesOf, type BmpImage } from '../services/bmpDecoder.js';
 import { vocabularyOf } from '../services/mapEditorVocabulary.js';
-import { listLayeredFilesRecursive, resolveLayeredFile, type LayerFileSystem, type ModLayers } from '../services/modLayers.js';
+import {
+  listLayeredFiles,
+  listLayeredFilesRecursive,
+  resolveLayeredFile,
+  type LayerFileSystem,
+  type ModLayers,
+} from '../services/modLayers.js';
 import { isInsideRoot, type FileLocation } from '../services/modLayout.js';
 import {
   findHistoryFile,
@@ -46,8 +56,15 @@ import {
   provinceIdsInPopsFile,
   renderPopsFile,
 } from '../services/provincePopsEdit.js';
-import { parseProvinceDefinitions } from '../services/provinceTable.js';
+import { parseProvinceDefinitions, parseProvinceRows } from '../services/provinceTable.js';
 import { parseDocument } from '../services/syntaxValidation.js';
+import {
+  dominantTerrainByProvince,
+  terrainPictureDataUri,
+  terrainSpriteTextures,
+  terrainTypeByIndex,
+  textureCandidates,
+} from '../services/terrainPictures.js';
 import { applyPatches } from '../services/textPatch.js';
 
 /** What the Map Editor needs from the server: the mod stack, its index, and file access. */
@@ -58,12 +75,23 @@ export interface MapEditorHost {
   readonly ensureIndex: (layers: ModLayers) => Promise<ModIndex | undefined>;
   readonly fileSystem: LayerFileSystem;
   readonly readText: (absolutePath: string) => Promise<string | undefined>;
+  readonly readBytes: (absolutePath: string) => Promise<Uint8Array | undefined>;
   readonly writeText: (absolutePath: string, text: string) => Promise<boolean>;
   readonly rename: (fromPath: string, toPath: string) => Promise<boolean>;
 }
 
 const PROVINCES_FOLDER = 'history/provinces';
 const POPS_FOLDER = 'history/pops';
+/** Width the terrain picture is scaled to before it is sent to the page. */
+const TERRAIN_PICTURE_MAX_WIDTH = 440;
+
+/** What a stack knows about terrain pictures; built once per stack, on the first map request. */
+interface TerrainInfo {
+  /** Terrain name (lowercase) → texture path, from `GFX_terrainimg_<terrain>` sprites. */
+  readonly textures: ReadonlyMap<string, string>;
+  /** Province id → the terrain category most of its terrain.bmp pixels carry. */
+  readonly dominant: ReadonlyMap<number, string>;
+}
 
 /** A resolved target: the mod that receives edits, the stack it is read with, and the stack's index. */
 interface Target {
@@ -80,12 +108,17 @@ interface Target {
 export class MapEditorHandlers {
   /** `<layers key>#<date>` → province id → relative path of the pops file holding its block. */
   private readonly popsFilesByDate = new Map<string, Map<number, string>>();
+  private readonly terrainByLayers = new Map<string, Promise<TerrainInfo>>();
+  /** Terrain pictures by absolute path, as sent to the page; a miss is remembered too. */
+  private readonly pictureByPath = new Map<string, string | undefined>();
 
   constructor(private readonly host: MapEditorHost) {}
 
-  /** Mod files changed on disk: which pops file holds which province may have changed. */
+  /** Mod files changed on disk: pops files, terrain sprites and pictures may all have changed. */
   invalidate(): void {
     this.popsFilesByDate.clear();
+    this.terrainByLayers.clear();
+    this.pictureByPath.clear();
   }
 
   async map(params: MapEditorTargetParams): Promise<MapEditorMapResult> {
@@ -99,6 +132,8 @@ export class MapEditorHandlers {
       return { kind: 'unavailable', reason: 'The picked mods have no map/provinces.bmp or map/definition.csv.' };
     }
     const definitions = parseProvinceDefinitions((await this.host.readText(definitionPath)) ?? '');
+    // Reading both bitmaps takes a moment; start now so the first click finds it done.
+    void this.terrainInfo(target.layers);
     const popPaths = this.listRecursive(target.layers, POPS_FOLDER);
     const popDates = popDatesOf(popPaths);
     return {
@@ -137,6 +172,16 @@ export class MapEditorHandlers {
     }
   }
 
+  /** The picture of one terrain, for the page to preview a terrain the user picked but has not saved. */
+  async terrainPictureFor(params: TerrainPictureParams): Promise<TerrainPictureResult> {
+    const target = await this.resolveTarget(params);
+    if (typeof target === 'string') {
+      return { terrain: params.terrain, pictureDataUri: undefined };
+    }
+    const info = await this.terrainInfo(target.layers);
+    return { terrain: params.terrain, pictureDataUri: await this.terrainPicture(target.layers, info, params.terrain) };
+  }
+
   // --- Reading ------------------------------------------------------------------
 
   private async resolveTarget(params: MapEditorTargetParams): Promise<Target | string> {
@@ -157,15 +202,113 @@ export class MapEditorHandlers {
     const definitions = parseProvinceDefinitions(
       definitionPath === undefined ? '' : ((await this.host.readText(definitionPath)) ?? ''),
     );
+    const history = await this.readHistory(target, provinceId);
     return {
       id: provinceId,
       definitionName: definitions.find((definition) => definition.id === provinceId)?.name ?? '',
       isSea: target.index.seaProvinces.has(String(provinceId)),
       localisation: this.readLocalisation(target, provinceId),
-      history: await this.readHistory(target, provinceId),
+      history,
       pops: await this.readPops(target, provinceId, popDate),
+      terrain: await this.readTerrain(target, provinceId, history),
       vocabulary: vocabularyOf(target.index),
     };
+  }
+
+  // --- Terrain ------------------------------------------------------------------
+
+  /** The history's `terrain`, else the dominant terrain.bmp category; the picture of whichever has one. */
+  private async readTerrain(target: Target, provinceId: number, history: HistorySection): Promise<TerrainSection> {
+    const info = await this.terrainInfo(target.layers);
+    const fromHistory = history.data?.terrain;
+    const dominant = info.dominant.get(provinceId);
+    const name = fromHistory ?? dominant;
+    for (const candidate of new Set([name, dominant])) {
+      const picture = candidate === undefined ? undefined : await this.terrainPicture(target.layers, info, candidate);
+      if (picture !== undefined) {
+        return { name, fromHistory: fromHistory !== undefined, dominant, pictureDataUri: picture };
+      }
+    }
+    return { name, fromHistory: fromHistory !== undefined, dominant, pictureDataUri: undefined };
+  }
+
+  private async terrainPicture(layers: ModLayers, info: TerrainInfo, terrain: string): Promise<string | undefined> {
+    const texture = info.textures.get(terrain.toLowerCase());
+    if (texture === undefined) {
+      return undefined;
+    }
+    for (const relativePath of textureCandidates(texture)) {
+      const absolutePath = this.resolve(layers, relativePath);
+      if (absolutePath !== undefined) {
+        return this.pictureAt(absolutePath);
+      }
+    }
+    return undefined;
+  }
+
+  private async pictureAt(absolutePath: string): Promise<string | undefined> {
+    if (!this.pictureByPath.has(absolutePath)) {
+      const bytes = await this.host.readBytes(absolutePath);
+      this.pictureByPath.set(
+        absolutePath,
+        bytes === undefined ? undefined : terrainPictureDataUri(bytes, path.basename(absolutePath), TERRAIN_PICTURE_MAX_WIDTH),
+      );
+    }
+    return this.pictureByPath.get(absolutePath);
+  }
+
+  private terrainInfo(layers: ModLayers): Promise<TerrainInfo> {
+    const cached = this.terrainByLayers.get(layers.key);
+    if (cached) {
+      return cached;
+    }
+    const building = this.buildTerrainInfo(layers).catch((): TerrainInfo => ({ textures: new Map(), dominant: new Map() }));
+    this.terrainByLayers.set(layers.key, building);
+    return building;
+  }
+
+  private async buildTerrainInfo(layers: ModLayers): Promise<TerrainInfo> {
+    const textures = new Map<string, string>();
+    for (const name of listLayeredFiles(layers, this.host.fileSystem, 'interface', '.gfx')) {
+      const absolutePath = this.resolve(layers, `interface/${name}`);
+      const text = absolutePath === undefined ? undefined : await this.host.readText(absolutePath);
+      if (text !== undefined) {
+        for (const [terrain, texture] of terrainSpriteTextures(parseDocument(text).document)) {
+          if (!textures.has(terrain)) {
+            textures.set(terrain, texture);
+          }
+        }
+      }
+    }
+    return { textures, dominant: await this.dominantTerrains(layers) };
+  }
+
+  private async dominantTerrains(layers: ModLayers): Promise<Map<number, string>> {
+    const provinces = await this.readBitmap(layers, 'map/provinces.bmp');
+    const terrain = await this.readBitmap(layers, 'map/terrain.bmp');
+    const terrainTextPath = this.resolve(layers, 'map/terrain.txt');
+    const definitionPath = this.resolve(layers, 'map/definition.csv');
+    if (!provinces || !terrain || terrainTextPath === undefined || definitionPath === undefined) {
+      return new Map();
+    }
+    const comparable =
+      terrain.bitsPerPixel === 8 &&
+      provinces.bitsPerPixel !== 8 &&
+      provinces.width === terrain.width &&
+      provinces.height === terrain.height;
+    if (!comparable) {
+      return new Map();
+    }
+    const typeByIndex = terrainTypeByIndex(parseDocument((await this.host.readText(terrainTextPath)) ?? '').document);
+    const rows = parseProvinceRows((await this.host.readText(definitionPath)) ?? '');
+    return dominantTerrainByProvince(provinces, indicesOf(terrain), rows, typeByIndex);
+  }
+
+  private async readBitmap(layers: ModLayers, relativePath: string): Promise<BmpImage | undefined> {
+    const absolutePath = this.resolve(layers, relativePath);
+    const bytes = absolutePath === undefined ? undefined : await this.host.readBytes(absolutePath);
+    const decoded = bytes === undefined ? undefined : decodeBmp(bytes);
+    return decoded?.kind === 'image' ? decoded.image : undefined;
   }
 
   private readLocalisation(target: Target, provinceId: number): LocSection {

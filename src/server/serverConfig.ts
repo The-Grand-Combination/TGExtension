@@ -1,5 +1,10 @@
 import type { Connection } from 'vscode-languageserver/node';
-import { DEFAULT_LOC_KEY_PATTERN } from '../model/validationOptions.js';
+import {
+  DEFAULT_FLAG_NAME_PATTERN,
+  DEFAULT_LOC_KEY_PATTERN,
+  DEFAULT_IGNORE_MARKER,
+  DEFAULT_NULL_TAG_PATTERN,
+} from '../model/validationOptions.js';
 
 /** The server's view of `victorianTools.*`, mirroring the manifest defaults. */
 export interface ServerConfig {
@@ -16,6 +21,12 @@ export interface ServerConfig {
   readonly activeMods: readonly string[];
   /** Regex source deciding which loc field values are keys; empty checks every value. */
   readonly locKeyPattern: string;
+  /** Regex source narrowing the never-set flag check; empty checks every flag. */
+  readonly flagNamePattern: string;
+  /** Regex source of the tags meaning "no country"; empty allows no exception. */
+  readonly nullTagPattern: string;
+  /** A line carrying this marker is not reported; empty turns the escape hatch off. */
+  readonly ignoreMarker: string;
 }
 
 export const DEFAULT_CONFIG: ServerConfig = {
@@ -26,6 +37,9 @@ export const DEFAULT_CONFIG: ServerConfig = {
   gamePath: '',
   activeMods: [],
   locKeyPattern: DEFAULT_LOC_KEY_PATTERN,
+  flagNamePattern: DEFAULT_FLAG_NAME_PATTERN,
+  nullTagPattern: DEFAULT_NULL_TAG_PATTERN,
+  ignoreMarker: DEFAULT_IGNORE_MARKER,
 };
 
 const VALIDATION_DELAY_RANGE = { min: 0, max: 5000 } as const;
@@ -40,7 +54,6 @@ export function readServerConfig(configuration: unknown): ServerConfig {
   const root = asRecord(configuration);
   const validation = asRecord(root?.['validation']);
   const index = asRecord(root?.['index']);
-  const localisation = asRecord(root?.['localisation']);
   return {
     validationEnabled: readBoolean(validation?.['enable'], DEFAULT_CONFIG.validationEnabled),
     validationDelayMs: readMilliseconds(
@@ -56,7 +69,22 @@ export function readServerConfig(configuration: unknown): ServerConfig {
     indexOnStartup: readBoolean(index?.['onStartup'], DEFAULT_CONFIG.indexOnStartup),
     gamePath: readString(root?.['gamePath']),
     activeMods: readStringList(root?.['activeMods']),
-    locKeyPattern: readPattern(localisation?.['keyPattern']),
+    ...readRuleConfig(root),
+  };
+}
+
+/** The four rule-tuning strings; each is taken as typed, or falls back to its manifest default. */
+function readRuleConfig(
+  root: Record<string, unknown> | undefined,
+): Pick<ServerConfig, 'locKeyPattern' | 'flagNamePattern' | 'nullTagPattern' | 'ignoreMarker'> {
+  const localisation = asRecord(root?.['localisation']);
+  const flags = asRecord(root?.['flags']);
+  const nullTags = asRecord(root?.['nullTags']);
+  return {
+    locKeyPattern: readPattern(localisation?.['keyPattern'], DEFAULT_LOC_KEY_PATTERN),
+    flagNamePattern: readPattern(flags?.['namePattern'], DEFAULT_FLAG_NAME_PATTERN),
+    nullTagPattern: readPattern(nullTags?.['pattern'], DEFAULT_NULL_TAG_PATTERN),
+    ignoreMarker: readPattern(root?.['ignoreMarker'], DEFAULT_IGNORE_MARKER),
   };
 }
 
@@ -67,6 +95,9 @@ export function configEquals(left: ServerConfig, right: ServerConfig): boolean {
     left.indexRebuildDelayMs === right.indexRebuildDelayMs &&
     left.indexOnStartup === right.indexOnStartup &&
     left.locKeyPattern === right.locKeyPattern &&
+    left.flagNamePattern === right.flagNamePattern &&
+    left.nullTagPattern === right.nullTagPattern &&
+    left.ignoreMarker === right.ignoreMarker &&
     layoutConfigEquals(left, right)
   );
 }
@@ -97,8 +128,8 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 /** An absent pattern falls back to the manifest default; an empty one is the user's "check everything". */
-function readPattern(value: unknown): string {
-  return typeof value === 'string' ? value : DEFAULT_LOC_KEY_PATTERN;
+function readPattern(value: unknown, fallback: string): string {
+  return typeof value === 'string' ? value : fallback;
 }
 
 function readString(value: unknown): string {

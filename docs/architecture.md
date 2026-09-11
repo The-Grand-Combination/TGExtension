@@ -53,8 +53,8 @@ way.
   (`images/vicIItools.png`, the "V" icon of the previous extension) with its `Actions` tree view
   (`providers/actionsTreeProvider.ts`: Generate Full Report, Map Report, Enforce Colormaps, Launch
   Game, Map Editor, Settings), the
-  **Victorian Tools Settings** tab (`providers/settingsPanel.ts`, a webview panel over plain
-  settings) and the **Map Editor** tab (`providers/mapEditorPanel.ts`, see
+  **Victorian Tools Settings** tab (`providers/settingsPanel.ts`, a webview panel over the
+  `gamePath`, `activeMods`, the three rule patterns and the ignore marker) and the **Map Editor** tab (`providers/mapEditorPanel.ts`, see
   [map-editor.md](map-editor.md)). No analysis logic.
 - **Server** (`src/server/`) — the LSP adapter. `server.ts` owns the `TextDocuments` manager and
   the request handlers; `modCache.ts` caches mod roots and their indexes; `boundedCache.ts` is the
@@ -153,9 +153,22 @@ answering while a mod is scanned: on TGC the whole report takes about 0.65 s and
 server for more than ~60 ms. Offsets become 1-based line/column positions, and `renderReportText`
 (`services/reportText.ts`) produces a plain-text document: a header with the generation time, then
 per mod root its totals and, per file with findings, one line per finding
-(`line:column  severity  code: message`). The client opens it as an untitled plain-text editor and
+(`line:column  severity  code: message`). **Errors lead**: the files that contain one come first
+(alphabetical within that group, then the rest), and inside a file the errors come before the
+warnings, each severity in source order. The client opens it as an untitled plain-text editor and
 shows the error/warning totals. Unsaved editor buffers are not part of the report; the index used is
 the cached one for that root.
+
+### Ctrl+click
+
+Both reports are plain text, so the clickable spots are read back out of the rendered text by
+`reportLinks` ([services/reportLinks.ts](../src/services/reportLinks.ts)): a mod root is the line a
+totals line follows, a file path line is the one every finding under it belongs to. `ReportLinkProvider`
+([providers/reportLinkProvider.ts](../src/providers/reportLinkProvider.ts)) turns each into a
+`DocumentLink` and is registered for `untitled` plain text, returning nothing unless the first line is
+a report header. The link covers the locator — `6:15     error   unknown-trigger` — and leaves the
+message as text. A file target is `file:…#L<line>,<column>`, the fragment VS Code reads as a
+selection; a map pixel target is a `command:` URI (see the map report below).
 
 ## Map report
 
@@ -168,6 +181,13 @@ each target mod that ships a map file of its own, the server reads `provinces.bm
 section per mod with `map/<file> (x, y)  severity  code: message` lines. Rules and calibration in
 [map-images.md](map-images.md). It is separate from the full report so that pixel findings do not
 crowd out the file findings.
+
+A finding that names a pixel is a link to `victorian-tools.revealMapPixel`
+(`commands/revealMapPixelCommand.ts`), which opens the Map Editor there. The rendered text names mod
+roots, not mod names, and the Map Editor needs the names, so the command remembers which mods each
+report document was made for in `MapReportTargets`
+([services/mapReportTargets.ts](../src/services/mapReportTargets.ts)), dropped when the document
+closes. A finding with no pixel gets no link.
 
 ## Map editor
 
@@ -260,5 +280,8 @@ defaults and `DEFAULT_CONFIG` agree.
 | `victorianTools.validation.delay` | `300` | Idle milliseconds before a changed document is revalidated; `0` validates inline. |
 | `victorianTools.index.rebuildDelay` | `500` | Idle milliseconds before rebuilding the index of mods whose files changed on disk. |
 | `victorianTools.index.onStartup` | `true` | Index every workspace mod at startup instead of on first use. |
-| `victorianTools.localisation.keyPattern` | `^EVT` | Regex picking which `title`/`desc`/`name` values are localisation keys; a value that does not match is literal display text and is never reported missing. Empty checks every value; an invalid regex is ignored the same way. |
+| `victorianTools.localisation.keyPattern` | `^EVT` | Regex picking which `title`/`desc`/`name` values are localisation keys; a value that does not match is literal display text and is never reported missing. Empty checks every value; an invalid regex is ignored the same way. Editable from the **Victorian Tools Settings** tab, which compiles what is typed and says so before it is saved. |
+| `victorianTools.flags.namePattern` | `` (empty) | Regex narrowing the never-set flag check; a flag whose name does not match is never reported. Empty checks every flag. Editable from the **Victorian Tools Settings** tab. |
+| `victorianTools.ignoreMarker` | `#VT - Skip Validation` | A marker that silences every finding on the line it appears on. Write it as a comment so the game ignores it. Matched literally, anywhere in the line, case-insensitively. Empty turns it off. Editable from the **Victorian Tools Settings** tab. |
+| `victorianTools.nullTags.pattern` | `^(QQQ\|---\|null)$` | Regex matching the tags meaning "no country". A country value that matches warns instead of erroring; matched case-insensitively. Empty allows no exception. Editable from the **Victorian Tools Settings** tab. |
 | `victorianTools.trace.server` | `off` | `vscode-languageclient` trace verbosity (client-side).

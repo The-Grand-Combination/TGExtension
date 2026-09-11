@@ -1,16 +1,18 @@
 import { LOGICAL_OPERATORS, WEIGHT_BLOCK_DURATION_FIELDS } from '../data/eventStructure.js';
 import { BROKEN_EFFECTS, EFFECTS } from '../data/effects.js';
-import { MODIFIER_KEYS } from '../data/modifierKeys.js';
+import { BROKEN_MODIFIER_KEYS, MODIFIER_KEYS } from '../data/modifierKeys.js';
 import { EFFECT_PASSTHROUGH_KEYS, IMPLICIT_SCOPES, SCOPE_CHANGERS } from '../data/scopes.js';
 import { TRIGGERS } from '../data/triggers.js';
 import type { Assignment, Block, Entry } from '../model/ast.js';
 import { asBlock, firstByKey } from '../model/astQuery.js';
 import { diagnostic, type Diagnostic } from '../model/diagnostic.js';
+import type { Range } from '../model/range.js';
 import {
   CATEGORY_LABELS,
   type ArgKind,
   type ArgSpec,
   type BlockArgSpec,
+  type BlockFieldSpec,
   type FieldTable,
   type IdentifierCategory,
   type ScalarArgSpec,
@@ -179,6 +181,12 @@ function handleEffectAssignment(walk: Walk, assignment: Assignment, scope: Scope
     checkSymbol(walk, assignment, definition, scope);
     return;
   }
+  // `fort`, `railroad` and `naval_base` are in the table; a province building a
+  // mod declares in common/buildings.txt changes level the same way.
+  if (hasIdentifier(walk.index, 'building', keyLower)) {
+    checkSymbol(walk, assignment, PROVINCE_BUILDING_EFFECT, scope);
+    return;
+  }
   if (handleDynamicEffectKey(walk, assignment, keyLower)) {
     return;
   }
@@ -204,7 +212,19 @@ export function reportBrokenEffect(walk: Walk, assignment: Assignment, keyLower:
   return true;
 }
 
+/** `<province building> = n` changes its level, as `fort = 1` does. */
+const PROVINCE_BUILDING_EFFECT: SymbolDef = {
+  scopes: ['province'],
+  arg: { kind: 'scalar', accepts: ['number'] },
+  doc: 'Change this province building level by n.',
+};
+
 const TAG_SHAPE = /^(?!\d{3}$)[A-Za-z0-9]{3}$/;
+
+/** A tag the script uses to mean "no country" (`QQQ`, `---`, `null` by default). */
+export function isNullTag(walk: Walk, raw: string): boolean {
+  return walk.options.nullTagPattern?.test(raw) === true;
+}
 
 /**
  * `secede_province = <tag the mod never defines>` (`QQQ` by convention), `null`,
@@ -217,7 +237,7 @@ function reportUncolonize(walk: Walk, assignment: Assignment): boolean {
     return false;
   }
   const raw = assignment.value.value;
-  const explicit = raw.toLowerCase() === 'null' || raw === '---';
+  const explicit = isNullTag(walk, raw);
   const undefinedTag = TAG_SHAPE.test(raw) && !hasIdentifier(walk.index, 'country', raw);
   if (!explicit && !undefinedTag) {
     return false;
@@ -464,6 +484,21 @@ function reportScalarMismatch(
     report(walk, assignment, 'unknown-event-id', `Event ${raw} is not defined in this mod.`);
     return;
   }
+  // A null tag in a country position is deliberate, so it is a warning wherever
+  // it appears, not an unknown-tag error. Positions where it is a known engine
+  // exploit carry their own note (`war = { target = --- }`).
+  if (categories.includes('country') && isNullTag(walk, raw)) {
+    const exploit = spec.nullTagNote;
+    walk.diagnostics.push(
+      diagnostic(
+        'warning',
+        exploit === undefined ? 'null-country-tag' : 'null-tag-exploit',
+        exploit ?? `'${raw}' is a null country tag: '${assignment.key.value}' targets no country.`,
+        valueRange(assignment),
+      ),
+    );
+    return;
+  }
   if (primary !== undefined) {
     const labels = categories.map((category) => CATEGORY_LABELS[category]).join(' or ');
     const candidates = categories.flatMap((category) => namesOf(walk.index, category));
@@ -490,20 +525,27 @@ function checkBlockArg(walk: Walk, assignment: Assignment, spec: BlockArgSpec): 
     if (entry.kind !== 'assignment') {
       continue;
     }
-    const fieldSpec = spec.fields[entry.key.value.toLowerCase()];
+    const keyLower = entry.key.value.toLowerCase();
+    const fieldSpec = spec.fields[keyLower];
     if (fieldSpec) {
-      checkArg(walk, entry, fieldSpecToArg(fieldSpec.accepts));
+      checkArg(walk, entry, fieldSpecToArg(fieldSpec));
+    } else if (spec.reformClassKeys === true && hasIdentifier(walk.index, 'reformClass', keyLower)) {
+      checkReformOption(walk, entry, keyLower);
     } else if (spec.open !== true) {
       report(walk, entry, 'unknown-field', `Unknown field '${entry.key.value}' in '${assignment.key.value}'.`);
     }
   }
 }
 
-function fieldSpecToArg(accepts: readonly ArgKind[]): ArgSpec {
-  if (accepts.length === 1 && accepts[0] === 'block') {
+function fieldSpecToArg(spec: BlockFieldSpec): ArgSpec {
+  if (spec.accepts.length === 1 && spec.accepts[0] === 'block') {
     return { kind: 'block', fields: {}, open: true };
   }
-  return { kind: 'scalar', accepts };
+  return {
+    kind: 'scalar',
+    accepts: spec.accepts,
+    ...(spec.nullTagNote === undefined ? {} : { nullTagNote: spec.nullTagNote }),
+  };
 }
 
 function checkRequiredFields(
@@ -644,11 +686,28 @@ export function modifierKeyNames(walk: Walk): readonly string[] {
 
 /** `<modifier> = number` (NCE modifier_base); false when the key is not a modifier. */
 export function checkModifierValueField(walk: Walk, entry: Assignment): boolean {
-  if (!isModifierKey(walk, entry.key.value.toLowerCase())) {
+  const keyLower = entry.key.value.toLowerCase();
+  if (!isModifierKey(walk, keyLower)) {
     return false;
   }
+  reportBrokenModifier(walk, entry, keyLower);
   requireNumericValue(walk, entry);
   return true;
+}
+
+/**
+ * A modifier key the engine parses but never applies (`BROKEN_MODIFIER_KEYS`).
+ * The value is still checked: it is valid script that simply does nothing, so
+ * this is a warning, not an error.
+ */
+export function reportBrokenModifier(walk: Walk, entry: Assignment, keyLower: string): void {
+  const reason = BROKEN_MODIFIER_KEYS[keyLower];
+  if (reason === undefined) {
+    return;
+  }
+  walk.diagnostics.push(
+    diagnostic('warning', 'broken-modifier-key', `'${entry.key.value}' ${reason}`, entry.key.range),
+  );
 }
 
 /** `Unknown <label> '<key>'.` plus a spelling suggestion drawn from `candidates`. */
@@ -692,6 +751,11 @@ export function report(walk: Walk, at: Assignment, code: string, message: string
   walk.diagnostics.push(diagnostic('error', code, message, at.key.range));
 }
 
+/** Point at the value when there is one; a block has no single token to blame. */
+function valueRange(assignment: Assignment): Range {
+  return assignment.value.kind === 'scalar' ? assignment.value.range : assignment.key.range;
+}
+
 export function isEmptyCategory(walk: Walk, category: IdentifierCategory): boolean {
   return (walk.index.identifiers.get(category)?.size ?? 0) === 0;
 }
@@ -699,30 +763,56 @@ export function isEmptyCategory(walk: Walk, category: IdentifierCategory): boole
 /** Flags set by the game engine itself, not by mod files. */
 const ENGINE_SET_GLOBAL_FLAGS: ReadonlySet<string> = new Set(['project_alice']);
 
-/** Warn when a checked flag is never set anywhere in the mod (or this buffer). */
-export function checkFlagIsSet(walk: Walk, assignment: Assignment, kind: 'country' | 'global'): void {
+type FlagKind = 'country' | 'global';
+
+/**
+ * Warn when a checked flag is never set anywhere in the mod (or this buffer).
+ * `flagNamePattern` narrows which flag names the check applies to; a mod that
+ * sets some flags outside the indexed files can exempt them that way.
+ */
+export function checkFlagIsSet(walk: Walk, assignment: Assignment, kind: FlagKind): void {
   if (assignment.value.kind !== 'scalar') {
     return;
   }
-  const indexed = kind === 'country' ? walk.index.countryFlagsSet : walk.index.globalFlagsSet;
+  const flag = assignment.value.value;
+  if (!flagIsNeverSet(walk, flag, kind)) {
+    return;
+  }
+  walk.diagnostics.push(
+    diagnostic('warning', 'flag-never-set', flagNeverSetMessage(walk, flag, kind), assignment.value.range),
+  );
+}
+
+/** The name is in scope, the mod indexes flags at all, and nothing sets this one. */
+function flagIsNeverSet(walk: Walk, flag: string, kind: FlagKind): boolean {
+  if (walk.options.flagNamePattern?.test(flag) === false) {
+    return false;
+  }
+  const indexed = flagsOf(walk, kind);
   const local = kind === 'country' ? walk.localFlags.country : walk.localFlags.global;
   if (indexed.size === 0 && local.size === 0) {
-    return;
+    return false;
   }
-  const flagLower = assignment.value.value.toLowerCase();
+  const flagLower = flag.toLowerCase();
   if (indexed.has(flagLower) || local.has(flagLower)) {
-    return;
+    return false;
   }
-  if (kind === 'global' && ENGINE_SET_GLOBAL_FLAGS.has(flagLower)) {
-    return;
-  }
+  return !(kind === 'global' && ENGINE_SET_GLOBAL_FLAGS.has(flagLower));
+}
 
-  const otherNamespace = kind === 'country' ? walk.index.globalFlagsSet : walk.index.countryFlagsSet;
+/** A flag set only in the other namespace is a different mistake, and says so. */
+function flagNeverSetMessage(walk: Walk, flag: string, kind: FlagKind): string {
+  const flagLower = flag.toLowerCase();
   const label = kind === 'country' ? 'Country' : 'Global';
-  const message = otherNamespace.has(flagLower)
-    ? `${label} flag '${assignment.value.value}' is only ever set as a ${kind === 'country' ? 'global' : 'country'} flag — country and global flags are separate namespaces.`
-    : `${label} flag '${assignment.value.value}' is checked but never set by any event, decision, CB, or history file.${didYouMean(flagLower, indexed)}`;
-  walk.diagnostics.push(diagnostic('warning', 'flag-never-set', message, assignment.value.range));
+  if (flagsOf(walk, kind === 'country' ? 'global' : 'country').has(flagLower)) {
+    const other = kind === 'country' ? 'global' : 'country';
+    return `${label} flag '${flag}' is only ever set as a ${other} flag — country and global flags are separate namespaces.`;
+  }
+  return `${label} flag '${flag}' is checked but never set by any event, decision, CB, or history file.${didYouMean(flagLower, flagsOf(walk, kind))}`;
+}
+
+function flagsOf(walk: Walk, kind: FlagKind): ReadonlySet<string> {
+  return kind === 'country' ? walk.index.countryFlagsSet : walk.index.globalFlagsSet;
 }
 
 /**

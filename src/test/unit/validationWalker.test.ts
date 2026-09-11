@@ -2,6 +2,7 @@ import * as assert from 'node:assert';
 import type { FileType } from '../../model/fileType.js';
 import { validateSemantics } from '../../services/semanticValidation.js';
 import { parseDocument } from '../../services/syntaxValidation.js';
+import { DEFAULT_VALIDATION_OPTIONS, type ValidationOptions } from '../../model/validationOptions.js';
 import { buildTestIndex } from './testIndex.js';
 
 const index = buildTestIndex();
@@ -13,6 +14,11 @@ function codes(text: string, fileType: FileType = 'event', currentFile = 'events
 
 function eventWithTrigger(trigger: string): string {
   return `country_event = { id = 1 title = "t" desc = "d" is_triggered_only = yes trigger = { ${trigger} } option = { name = "o" } }`;
+}
+
+/** Default options with one rule overridden, so a new option does not break every test. */
+function options(overrides: Partial<ValidationOptions>): ValidationOptions {
+  return { ...DEFAULT_VALIDATION_OPTIONS, ...overrides };
 }
 
 function eventWithOption(effects: string): string {
@@ -182,6 +188,31 @@ suite('validationWalker — effects', () => {
     );
   });
 
+  test('a building declared by the mod changes level like fort does', () => {
+    // steel_factory and fort are both in the test index's common/buildings.txt.
+    assert.deepStrictEqual(codes(eventWithOption('any_owned = { fort = 1 }')), []);
+    assert.deepStrictEqual(codes(eventWithOption('any_owned = { steel_factory = -1 }')), []);
+    assert.ok(codes(eventWithOption('any_owned = { steel_factory = lots }')).includes('invalid-value'));
+    assert.ok(codes(eventWithOption('steel_factory = -1')).includes('wrong-scope'), 'province scope only');
+    assert.deepStrictEqual(codes(eventWithOption('any_owned = { not_a_building = -1 }')), ['unknown-effect']);
+  });
+
+  test('scaled_militancy names the issue by class as well as by issue', () => {
+    // The test index has the class `slavery` with `yes_slavery` / `no_slavery`.
+    assert.deepStrictEqual(codes(eventWithOption('scaled_militancy = { factor = -10 slavery = yes_slavery }')), []);
+    assert.deepStrictEqual(codes(eventWithOption('scaled_consciousness = { factor = 1 issue = yes_slavery }')), []);
+    assert.deepStrictEqual(codes(eventWithOption('scaled_militancy = { factor = 1 ideology = liberal }')), []);
+    assert.ok(
+      codes(eventWithOption('scaled_militancy = { factor = -10 slavery = maybe_slavery }')).includes('unknown-reform-option'),
+      'the position is still checked against the class',
+    );
+    assert.deepStrictEqual(
+      codes(eventWithOption('scaled_militancy = { factor = -10 not_a_class = x }')),
+      ['unknown-field'],
+      'a key that is not a class is still unknown',
+    );
+  });
+
   test('good as stockpile effect takes a number', () => {
     assert.deepStrictEqual(codes(eventWithOption('small_arms = 25')), []);
   });
@@ -246,9 +277,13 @@ suite('validationWalker — localisation and pictures', () => {
   test('an empty key pattern checks every value', () => {
     const text =
       'country_event = { id = 1 title = "NOPE_TITLE" desc = "d" is_triggered_only = yes option = { name = "o" } }';
-    const found = validateSemantics(parseDocument(text).document, 'event', index, 'events/Test.txt', {
-      locKeyPattern: undefined,
-    });
+    const found = validateSemantics(
+      parseDocument(text).document,
+      'event',
+      index,
+      'events/Test.txt',
+      options({ locKeyPattern: undefined }),
+    );
     assert.deepStrictEqual(found.map((item) => item.code), ['missing-localisation']);
   });
 
@@ -333,6 +368,136 @@ suite('validationWalker — never-set flags', () => {
     assert.ok(first, 'expected a diagnostic');
     assert.strictEqual(first.severity, 'warning');
     assert.ok(first.message.includes("'known_flag'"), first.message);
+  });
+});
+
+suite('validationWalker — symbols the wiki does not list', () => {
+  test('the capital builders take a level as well as yes/no', () => {
+    assert.deepStrictEqual(codes(eventWithOption('build_fort_in_capital = 4')), []);
+    assert.deepStrictEqual(codes(eventWithOption('build_railway_in_capital = 4')), []);
+    assert.deepStrictEqual(codes(eventWithOption('build_fort_in_capital = yes')), []);
+    assert.ok(codes(eventWithOption('build_fort_in_capital = tall')).includes('invalid-value'));
+  });
+
+  test('the two crisis checks are country-scope yes/no triggers', () => {
+    assert.deepStrictEqual(codes(eventWithTrigger('is_colonial_crisis = yes')), []);
+    assert.deepStrictEqual(codes(eventWithTrigger('is_influence_crisis = yes')), []);
+  });
+
+  test('has_flashpoint reads in province scope as well as state', () => {
+    assert.deepStrictEqual(codes(eventWithTrigger('any_owned_province = { has_flashpoint = yes }')), []);
+    assert.deepStrictEqual(codes(eventWithTrigger('any_state = { has_flashpoint = yes }')), []);
+  });
+});
+
+suite('validationWalker — null country tags', () => {
+  test('war = { target = --- } warns about the AI-join exploit by name', () => {
+    const war = 'war = { attacker_goal = { casus_belli = acquire_all_cores } call_ally = yes target = --- }';
+    const found = validateSemantics(
+      parseDocument(eventWithOption(war)).document,
+      'event',
+      index,
+      'events/Test.txt',
+    );
+    const first = found[0];
+    assert.ok(first, 'expected a diagnostic');
+    assert.strictEqual(first.code, 'null-tag-exploit');
+    assert.strictEqual(first.severity, 'warning');
+    assert.ok(first.message.includes('Tricking the AI into joining your war'), first.message);
+    assert.strictEqual(found.length, 1, 'the exploit note replaces the generic null-tag warning');
+  });
+
+  test('a null tag elsewhere keeps the generic warning', () => {
+    const found = validateSemantics(
+      parseDocument(eventWithOption('add_casus_belli = { target = --- type = acquire_all_cores }')).document,
+      'event',
+      index,
+      'events/Test.txt',
+    );
+    assert.deepStrictEqual(found.map((item) => item.code), ['null-country-tag']);
+  });
+
+  test('the three conventional spellings are covered, in any case', () => {
+    for (const tag of ['QQQ', 'qqq', '---', 'null', 'NULL']) {
+      assert.deepStrictEqual(codes(eventWithOption('war = ' + tag)), ['null-country-tag'], tag);
+    }
+  });
+
+  test('a tag that is merely undefined is still an error', () => {
+    assert.deepStrictEqual(codes(eventWithOption('war = ZZZ')), ['unknown-country']);
+    assert.deepStrictEqual(codes(eventWithTrigger('tag = ZZZ')), ['unknown-country']);
+  });
+
+  test('it applies in triggers and in block fields alike', () => {
+    assert.deepStrictEqual(codes(eventWithTrigger('tag = ---')), ['null-country-tag']);
+    assert.deepStrictEqual(codes(eventWithOption('relation = { who = --- value = -20 }')), ['null-country-tag']);
+  });
+
+  test('an empty pattern allows no exception at all', () => {
+    const found = validateSemantics(
+      parseDocument(eventWithOption('war = ---')).document,
+      'event',
+      index,
+      'events/Test.txt',
+      options({ nullTagPattern: undefined }),
+    );
+    assert.deepStrictEqual(found.map((item) => item.code), ['unknown-country']);
+  });
+
+  test('secede_province keeps its own message about uncolonizing', () => {
+    assert.deepStrictEqual(codes(eventWithOption('any_owned = { secede_province = --- }')), ['uncolonize-province']);
+  });
+
+  test('defined tags are unaffected', () => {
+    assert.deepStrictEqual(codes(eventWithOption('war = FRA')), []);
+  });
+});
+
+suite('validationWalker — THIS/FROM as a culture or religion value', () => {
+  test('religion = THIS compares a pop against the scope it came from', () => {
+    assert.deepStrictEqual(codes(eventWithTrigger('any_pop = { religion = THIS }')), []);
+    assert.deepStrictEqual(codes(eventWithTrigger('any_pop = { religion = this }')), []);
+    assert.deepStrictEqual(codes(eventWithTrigger('any_pop = { religion = FROM }')), []);
+  });
+
+  test('it works inside a weight block, where the idiom appears', () => {
+    const weight = 'ai_chance = { factor = 1 modifier = { factor = -0.1 NOT = { religion = THIS } } }';
+    assert.deepStrictEqual(codes(eventWithOption(weight)), []);
+  });
+
+  test('it works in a pop_types.txt weight, where the scope is the pop itself', () => {
+    const weight = 'promotion_chance = { factor = 1 modifier = { factor = -0.1 NOT = { religion = this } } }';
+    assert.deepStrictEqual(codes(weight, 'popChances', 'common/pop_types.txt'), []);
+  });
+
+  test('named religions still resolve and unknown ones are errors', () => {
+    assert.deepStrictEqual(codes(eventWithTrigger('any_pop = { religion = catholic }')), []);
+    assert.deepStrictEqual(codes(eventWithTrigger('any_pop = { religion = zoroastrian }')), ['unknown-religion']);
+  });
+});
+
+suite('validationWalker — flag name pattern', () => {
+  function flagCodes(flagNamePattern: RegExp | undefined): string[] {
+    const text = eventWithTrigger('has_country_flag = never_set_anywhere');
+    return validateSemantics(
+      parseDocument(text).document,
+      'event',
+      index,
+      'events/Test.txt',
+      options({ flagNamePattern }),
+    ).map((item) => item.code);
+  }
+
+  test('no pattern checks every flag, as before', () => {
+    assert.deepStrictEqual(flagCodes(undefined), ['flag-never-set']);
+  });
+
+  test('a flag whose name is outside the pattern is not reported', () => {
+    assert.deepStrictEqual(flagCodes(/^tgc_/), []);
+  });
+
+  test('a flag whose name matches is still reported', () => {
+    assert.deepStrictEqual(flagCodes(/^never_/), ['flag-never-set']);
   });
 });
 

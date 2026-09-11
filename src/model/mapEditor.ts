@@ -7,6 +7,7 @@
 export const MAP_EDITOR_MAP_REQUEST = 'victorianTools/mapEditor/map';
 export const MAP_EDITOR_PROVINCE_REQUEST = 'victorianTools/mapEditor/province';
 export const MAP_EDITOR_SAVE_REQUEST = 'victorianTools/mapEditor/save';
+export const MAP_EDITOR_TERRAIN_PICTURE_REQUEST = 'victorianTools/mapEditor/terrainPicture';
 
 export interface MapEditorTargetParams {
   /** File-system paths of the open workspace folders. */
@@ -41,6 +42,15 @@ export interface MapEditorMap {
 }
 
 export type MapEditorMapResult = MapEditorMap | { readonly kind: 'unavailable'; readonly reason: string };
+
+/** A place on the map to show once it is loaded, as a map report finding names it. */
+export interface MapEditorReveal {
+  /** The bitmap the finding is about, mod-root-relative. */
+  readonly file: string;
+  /** 0-based, origin at the top-left corner of the image. */
+  readonly x: number;
+  readonly y: number;
+}
 
 export interface ProvinceRequestParams extends MapEditorTargetParams {
   readonly provinceId: number;
@@ -150,6 +160,17 @@ export interface Vocabulary {
   readonly rebelTypes: readonly string[];
 }
 
+/** The terrain the province view would show for the province. */
+export interface TerrainSection {
+  /** `terrain = x` from the history file, else the category most terrain.bmp pixels of the province carry. */
+  readonly name: string | undefined;
+  readonly fromHistory: boolean;
+  /** The category most terrain.bmp pixels carry: what the province falls back to without `terrain = x`. */
+  readonly dominant: string | undefined;
+  /** PNG data URI of the `GFX_terrainimg_<terrain>` picture, when the stack has one. */
+  readonly pictureDataUri: string | undefined;
+}
+
 export interface ProvinceDetails {
   readonly id: number;
   readonly definitionName: string;
@@ -157,7 +178,17 @@ export interface ProvinceDetails {
   readonly localisation: LocSection;
   readonly history: HistorySection;
   readonly pops: PopsSection;
+  readonly terrain: TerrainSection;
   readonly vocabulary: Vocabulary;
+}
+
+export interface TerrainPictureParams extends MapEditorTargetParams {
+  readonly terrain: string;
+}
+
+export interface TerrainPictureResult {
+  readonly terrain: string;
+  readonly pictureDataUri: string | undefined;
 }
 
 export type ProvinceResult =

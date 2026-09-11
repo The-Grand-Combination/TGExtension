@@ -55,6 +55,33 @@ suite('fullReport', () => {
     assert.strictEqual(broken.uri, 'file:///mod/events/Broken.txt');
   });
 
+  test('errors come first: the files that have one, and the findings inside a file', async () => {
+    const mixed: Readonly<Record<string, string>> = {
+      // Warnings only: a missing loc key and a flag nothing ever sets.
+      'events/AllWarnings.txt':
+        'country_event = { id = 1 title = "EVTNAME_NOPE" desc = "d" is_triggered_only = yes\n' +
+        '  trigger = { has_country_flag = never_set_flag }\n  option = { name = "o" } }\n',
+      // A warning on line 2 and an error on line 3, in that source order.
+      'events/Zmixed.txt':
+        'country_event = { id = 2 title = "t" desc = "d" is_triggered_only = yes\n' +
+        '  trigger = { has_country_flag = never_set_flag\n    tags = ENG }\n  option = { name = "o" } }\n',
+    };
+    const mixedReport = await buildModReport('/mod', {
+      readFile: (relativePath): Promise<string | undefined> => Promise.resolve(mixed[relativePath]),
+      listFilesRecursive: (folder): string[] => Object.keys(mixed).filter((key) => key.startsWith(`${folder}/`)),
+      fileUri: (relativePath): string => `file:///mod/${relativePath}`,
+    }, buildTestIndex());
+
+    assert.deepStrictEqual(
+      mixedReport.files.map((file) => file.path),
+      ['events/Zmixed.txt', 'events/AllWarnings.txt'],
+      'the file with an error leads, even though it sorts last by path',
+    );
+    const severities = mixedReport.files[0]?.diagnostics.map((item) => item.severity);
+    assert.strictEqual(severities?.[0], 'error', 'the error leads inside the file, though it is on a later line');
+    assert.ok(severities.slice(1).every((severity) => severity === 'warning'));
+  });
+
   test('counts errors and warnings', () => {
     assert.strictEqual(report.errorCount, 2);
     assert.strictEqual(report.warningCount, 0);

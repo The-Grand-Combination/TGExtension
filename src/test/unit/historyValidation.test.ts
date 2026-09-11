@@ -43,7 +43,9 @@ suite('historyValidation — history files', () => {
   test('province history: --- and null mean no owner', () => {
     assert.deepStrictEqual(codes('owner = ---\ncontroller = ---', 'historyProvince', 'history/provinces/x.txt'), []);
     assert.deepStrictEqual(codes('owner = null', 'historyProvince', 'history/provinces/x.txt'), []);
-    assert.deepStrictEqual(codes('add_core = ---', 'historyProvince', 'history/provinces/x.txt'), ['unknown-country']);
+    // owner/controller take it silently; elsewhere a null tag is the warning, not an error.
+    assert.deepStrictEqual(codes('add_core = ---', 'historyProvince', 'history/provinces/x.txt'), ['null-country-tag']);
+    assert.deepStrictEqual(codes('add_core = ZZZ', 'historyProvince', 'history/provinces/x.txt'), ['unknown-country']);
   });
 
   test('pops history: province ids, pop types, and pop fields', () => {
@@ -76,7 +78,10 @@ suite('historyValidation — history files', () => {
       1861.1.1 = { add_attacker = ENG add_defender = FRA war_goal = { casus_belli = acquire_all_cores actor = ENG receiver = FRA } }`;
     assert.deepStrictEqual(codes(text, 'historyWars', 'history/wars/x.txt'), []);
     assert.ok(
-      codes('1861.1.1 = { add_attacker = QQQ }', 'historyWars', 'history/wars/x.txt').includes('unknown-country'),
+      codes('1861.1.1 = { add_attacker = ZZZ }', 'historyWars', 'history/wars/x.txt').includes('unknown-country'),
+    );
+    assert.ok(
+      codes('1861.1.1 = { add_attacker = QQQ }', 'historyWars', 'history/wars/x.txt').includes('null-country-tag'),
     );
   });
 });

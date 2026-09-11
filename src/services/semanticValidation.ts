@@ -10,6 +10,7 @@ import { validateCbTypeFile } from './cbTypeValidation.js';
 import { validateCommonOtherFile } from './commonOtherValidation.js';
 import { validateCountryColorsFile } from './countryColorsValidation.js';
 import { validateCountryDefinitionFile } from './countryDefinitionValidation.js';
+import { validateCountryListFile } from './countryListValidation.js';
 import { validateCulturesFile } from './cultureValidation.js';
 import { validateDecisionFile } from './decisionValidation.js';
 import { validateEventFile } from './eventValidation.js';
@@ -81,6 +82,7 @@ const FILE_VALIDATORS: Readonly<Partial<Record<FileType, FileValidator>>> = {
   invention: validateInventionFile,
   newsScript: validateNewsFile,
   countryColors: validateCountryColorsFile,
+  countryList: validateCountryListFile,
   cultures: validateCulturesFile,
   religions: validateReligionsFile,
   goods: validateGoodsFile,

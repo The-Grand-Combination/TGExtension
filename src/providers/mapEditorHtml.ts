@@ -87,7 +87,11 @@ const PAGE_STYLE = String.raw`
   #loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #ccc; font-size: 1.1em; background: rgba(0, 0, 0, 0.55); }
   #loading[hidden], #tooltip[hidden] { display: none; }
   #side { width: 420px; flex: none; overflow-y: auto; border-left: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, #444)); padding: 10px 14px 24px; box-sizing: border-box; }
+  .header { margin: 0 -14px; padding: 12px 14px 10px; background-size: cover; background-position: center; }
+  .header.pictured { aspect-ratio: 374 / 94; display: flex; align-items: flex-end; color: #fff; text-shadow: 0 1px 3px #000, 0 0 8px #000; box-sizing: border-box; }
+  .header.pictured .file, .header.pictured .id { opacity: 0.95; }
   h1 { font-size: 1.2em; margin: 6px 0 2px; display: flex; align-items: baseline; gap: 8px; min-width: 0; white-space: nowrap; }
+  .header.pictured h1 { margin: 0; flex: 1; }
   h1 .id { font-weight: 400; opacity: 0.7; flex: none; }
   h1 .file { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 400; }
   h1 .badge { flex: none; }
@@ -120,7 +124,8 @@ const PAGE_STYLE = String.raw`
   .row input, .row select, .row .combo { flex: 1; }
   .row .narrow { flex: 0 0 70px; }
   .combo { position: relative; min-width: 0; display: flex; }
-  .combo input { width: 100%; }
+  .combo input { width: 100%; padding-right: 22px; }
+  .combo::after { content: ''; position: absolute; right: 4px; top: 0; bottom: 0; margin: auto; width: 16px; height: 16px; pointer-events: none; background-color: var(--vscode-foreground); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M7.976 10.072l4.357-4.357.62.618L8.284 11h-.618L3 6.333l.619-.618 4.357 4.357z'/%3E%3C/svg%3E") center / 16px no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M7.976 10.072l4.357-4.357.62.618L8.284 11h-.618L3 6.333l.619-.618 4.357 4.357z'/%3E%3C/svg%3E") center / 16px no-repeat; }
   .combo-list { position: absolute; top: 100%; left: 0; min-width: 100%; max-width: 380px; z-index: 10; max-height: 240px; overflow-y: auto; background: var(--vscode-editorSuggestWidget-background, var(--vscode-editorWidget-background, #252526)); color: var(--vscode-editorSuggestWidget-foreground, var(--vscode-foreground)); border: 1px solid var(--vscode-editorSuggestWidget-border, var(--vscode-widget-border, #454545)); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); }
   .combo-item { padding: 3px 8px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .combo-item.active, .combo-item:hover { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
@@ -161,9 +166,14 @@ const PAGE_SCRIPT = String.raw`
   var view = { scale: 1, x: 0, y: 0 };
   var selection = null;      // { id, color, canvas, x, y, width, height }
   var details = null;
+  var pendingReveal = null;  // { file, x, y } from a map report link, applied once the bitmap is decoded
   var popDate = '';
   var saving = false;
   var activeTab = 'definition';
+  var terrainPictures = {};      // terrain name -> data URI or null (asked, none), per map
+  var headerBox = null;
+  var headerTerrainLabel = null;
+  var previewTerrain = '';       // the terrain the header currently shows
 
   var mapArea = document.getElementById('mapArea');
   var canvas = document.getElementById('canvas');
@@ -260,12 +270,14 @@ const PAGE_SCRIPT = String.raw`
       var active = list.querySelector('.active');
       if (active) { active.scrollIntoView({ block: 'nearest' }); }
     }
+    // Only an entry of the list (or nothing) can be picked; other text reverts to the current value.
     function commit() {
       var text = input.value.trim();
       if (text === labelOf(selected)) { return; }
+      if (text === '') { pick(''); return; }
       var lower = text.toLowerCase();
       var match = entries.find(function (entry) { return entry.label.toLowerCase() === lower || entry.id.toLowerCase() === lower; });
-      pick(match ? match.id : text);
+      if (match) { pick(match.id); } else if (shown.length === 1 && !shown[0].empty) { pick(shown[0].id); } else { setValue(selected); }
     }
     input.addEventListener('focus', function () { input.select(); activeIndex = -1; render(''); });
     input.addEventListener('input', function () { activeIndex = -1; render(input.value.trim()); });
@@ -379,6 +391,7 @@ const PAGE_SCRIPT = String.raw`
           render();
           setStatus(decoded.width + ' x ' + decoded.height + ', ' + definitionById.size + ' provinces');
           log('map ready; overlay ' + getComputedStyle(loading).display);
+          applyReveal();
         });
       })
       .catch(function (error) {
@@ -565,6 +578,29 @@ const PAGE_SCRIPT = String.raw`
     view = { scale: scale, x: mapArea.clientWidth / 2 - centerX * scale, y: mapArea.clientHeight / 2 - centerY * scale };
     selectProvince(id);
   }
+  // The map report gives pixels as an image editor shows them, top-left origin,
+  // while the canvas draws the file's rows as the game reads them. That flips y.
+  function applyReveal() {
+    if (!pendingReveal || !image) { return; }
+    var reveal = pendingReveal;
+    pendingReveal = null;
+    var point = { x: reveal.x, y: image.height - 1 - reveal.y };
+    if (point.x < 0 || point.y < 0 || point.x >= image.width || point.y >= image.height) {
+      setStatus('Pixel ' + reveal.x + ', ' + reveal.y + ' is outside the map.', 'warning');
+      return;
+    }
+    var scale = Math.max(view.scale, 8);
+    view = { scale: scale, x: mapArea.clientWidth / 2 - point.x * scale, y: mapArea.clientHeight / 2 - point.y * scale };
+    var id = provinceAt(point);
+    var where = reveal.file + ' at ' + reveal.x + ', ' + reveal.y;
+    if (id === undefined || seaIds.has(id)) {
+      render();
+      setStatus(where + (id === undefined ? ': no province there.' : ': province ' + id + ' is sea.'), 'warning');
+      return;
+    }
+    selectProvince(id);
+    setStatus(where + ': province ' + id);
+  }
 
   document.getElementById('gotoButton').addEventListener('click', function () {
     var id = Number(document.getElementById('goto').value);
@@ -582,11 +618,22 @@ const PAGE_SCRIPT = String.raw`
     var definition = definitionById.get(id);
     var title = details && details.localisation.text ? details.localisation.text : (definition ? definition.name : '');
     var tooltip = 'definition.csv: ' + (definition ? definition.name : '(no row)') + '\nEdits go to ' + map.targetName + '\n' + map.targetRoot;
-    side.append(h('h1', { title: tooltip },
+    var terrain = details ? details.terrain : null;
+    var terrainLabel = terrain && terrain.name ? (function () {
+      var entry = details.vocabulary.terrains.find(function (item) { return item.id === terrain.name; });
+      return entry ? entry.label : terrain.name;
+    })() : '';
+    headerTerrainLabel = h('span', { class: 'file' }, terrainLabel || map.targetName);
+    var heading = h('h1', { title: tooltip + (terrainLabel ? '\nTerrain: ' + terrainLabel + (terrain.fromHistory ? ' (from the history file)' : ' (from terrain.bmp)') : '') },
       title || 'Province ' + id,
       h('span', { class: 'id' }, '- ' + id + ' -'),
-      h('span', { class: 'file' }, map.targetName),
-      seaIds.has(id) ? h('span', { class: 'badge' }, 'sea') : null));
+      headerTerrainLabel,
+      seaIds.has(id) ? h('span', { class: 'badge' }, 'sea') : null);
+    headerBox = h('div', { class: 'header' }, heading);
+    previewTerrain = terrain && terrain.name ? terrain.name : '';
+    if (terrain && terrain.name && terrain.pictureDataUri) { terrainPictures[terrain.name] = terrain.pictureDataUri; }
+    applyHeaderPicture(terrain ? terrain.pictureDataUri : null);
+    side.append(headerBox);
     if (!details) { side.append(h('p', { class: 'hint' }, 'Loading…')); return; }
     renderDatalists(details.vocabulary);
     var history = historySections();
@@ -608,7 +655,26 @@ const PAGE_SCRIPT = String.raw`
       } }, labels[name]);
     }));
     names.forEach(function (key) { panes[key].hidden = key !== activeTab; });
-    side.append(tabs, names.map(function (name) { return panes[name]; }));
+    side.append(tabs);
+    names.forEach(function (name) { side.append(panes[name]); });
+  }
+
+  function applyHeaderPicture(uri) {
+    if (!headerBox) { return; }
+    headerBox.classList.toggle('pictured', !!uri);
+    headerBox.style.backgroundImage = uri ? 'linear-gradient(rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.55)), url(' + uri + ')' : '';
+  }
+  /** Show the picture of the terrain the form now holds (or the bitmap's terrain when cleared), fetching it once per map. */
+  function showTerrain(name) {
+    var effective = name || (details && details.terrain.dominant) || '';
+    previewTerrain = effective;
+    if (headerTerrainLabel) {
+      var entry = details.vocabulary.terrains.find(function (item) { return item.id === effective; });
+      headerTerrainLabel.textContent = entry ? entry.label : (effective || map.targetName);
+    }
+    if (!effective) { applyHeaderPicture(null); return; }
+    if (effective in terrainPictures) { applyHeaderPicture(terrainPictures[effective]); return; }
+    vscode.postMessage({ type: 'terrainPicture', terrain: effective });
   }
 
   function renderDatalists(vocabulary) {
@@ -705,6 +771,7 @@ const PAGE_SCRIPT = String.raw`
       grid.append(h('label', null, spec[1]), inputs[spec[0]]);
     });
     // Ticked writes is_slave = yes; unticked drops the line (the game's default is no).
+    if (topLevel) { inputs.terrain.addEventListener('input', function () { showTerrain(String(inputs.terrain.value)); }); }
     var isSlave = h('input', { type: 'checkbox' });
     isSlave.checked = (data.isSlave || '').toLowerCase() === 'yes';
     grid.append(h('label', null, 'Slave state'), h('div', null, isSlave));
@@ -854,10 +921,14 @@ const PAGE_SCRIPT = String.raw`
       idByColor = new Map(); definitionById = new Map(); seaIds = new Set(map.seaProvinces);
       map.definitions.forEach(function (definition) { idByColor.set(definition.color, definition.id); definitionById.set(definition.id, definition); });
       popDate = map.popDates[0] || '';
+      terrainPictures = {};
       targetBox.textContent = map.targetName;
       selection = null; details = null;
       side.replaceChildren(h('p', { class: 'hint' }, 'Click a province on the map to edit it.'));
       loadMap(message.bmpUri);
+    } else if (message.type === 'revealPixel') {
+      pendingReveal = { file: message.file, x: message.x, y: message.y };
+      applyReveal();
     } else if (message.type === 'details') {
       details = message.details;
       renderSide(details.id);
@@ -876,6 +947,9 @@ const PAGE_SCRIPT = String.raw`
     } else if (message.type === 'error') {
       saving = false;
       setStatus(message.message, 'error');
+    } else if (message.type === 'terrainPicture') {
+      terrainPictures[message.terrain] = message.pictureDataUri || null;
+      if (message.terrain === previewTerrain) { applyHeaderPicture(message.pictureDataUri || null); }
     }
   }
   vscode.postMessage({ type: 'ready' });

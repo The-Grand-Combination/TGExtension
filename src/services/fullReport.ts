@@ -1,4 +1,4 @@
-import type { Diagnostic } from '../model/diagnostic.js';
+import type { Diagnostic, DiagnosticSeverity } from '../model/diagnostic.js';
 import { classifyFile } from '../model/fileType.js';
 import type { FileReport, ModReport, ReportDiagnostic } from '../model/fullReport.js';
 import type { ModIndex } from '../model/modIndex.js';
@@ -67,8 +67,23 @@ export async function buildModReport(
     fileCount,
     errorCount: diagnostics.filter((item) => item.severity === 'error').length,
     warningCount: diagnostics.filter((item) => item.severity === 'warning').length,
-    files,
+    files: errorsFirst(files),
   };
+}
+
+/** Severity order for the report: what breaks the game comes before what smells. */
+const SEVERITY_RANK: Readonly<Record<DiagnosticSeverity, number>> = {
+  error: 0,
+  warning: 1,
+  information: 2,
+  hint: 3,
+};
+
+/** Files with an error lead the report; the rest keep the path order they were read in. */
+function errorsFirst(files: readonly FileReport[]): FileReport[] {
+  const hasError = (file: FileReport): number =>
+    file.diagnostics.some((item) => item.severity === 'error') ? 0 : 1;
+  return [...files].sort((a, b) => hasError(a) - hasError(b) || a.path.localeCompare(b.path));
 }
 
 function reportFor(
@@ -91,6 +106,7 @@ function reportFiles(provider: ReportFileProvider): string[] {
     .sort((a, b) => a.localeCompare(b));
 }
 
+/** Errors first inside a file too, each severity then in source order. */
 function toReportDiagnostics(text: string, diagnostics: readonly Diagnostic[]): ReportDiagnostic[] {
   const lineStarts = lineStartsOf(text);
   return diagnostics
@@ -98,7 +114,12 @@ function toReportDiagnostics(text: string, diagnostics: readonly Diagnostic[]): 
       const { line, character } = positionAt(lineStarts, item.range.start);
       return { line, character, severity: item.severity, code: item.code, message: item.message };
     })
-    .sort((a, b) => a.line - b.line || a.character - b.character);
+    .sort(
+      (a, b) =>
+        SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] ||
+        a.line - b.line ||
+        a.character - b.character,
+    );
 }
 
 function lineStartsOf(text: string): number[] {

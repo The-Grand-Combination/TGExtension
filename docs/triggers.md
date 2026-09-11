@@ -96,7 +96,7 @@ shape (`...` marks a block that also accepts unlisted fields unchecked). See
 | `has_empty_adjacent_state` | province, state | yesno | Borders an uncolonised state. |
 | `has_faction` | country, pop | identifier | A rebel faction of this type is active (pop: is member). |
 | `has_factories` | country, state | yesno | State has factories. |
-| `has_flashpoint` | state | yesno | State has a flashpoint (HoD). |
+| `has_flashpoint` | state, province | yesno | State or province has flashpoint tension (HoD). No localisation key, so the tooltip is blank in game. |
 | `has_global_flag` | any | flag | The global flag has been set. |
 | `has_leader` | country | string | Has a leader with this name. |
 | `has_national_minority` | country, province, state | yesno | Pops of multiple cultures present. |
@@ -111,6 +111,8 @@ shape (`...` marks a block that also accepts unlisted fields unchecked). See
 | `has_unclaimed_cores` | country | yesno | Core provinces we do not own exist. |
 | `have_core_in` | country | country | We have cores on TAG provinces. |
 | `in_default` | country | yesno \| country | Country has defaulted (optionally to TAG). |
+| `is_colonial_crisis` | country | yesno | The current crisis is over uncolonized land (HoD). No localisation key. |
+| `is_influence_crisis` | country | yesno | The current crisis is over influence in a country (HoD). No localisation key. |
 | `in_sphere` | country | country | We are in the sphere of TAG. |
 | `industrial_score` | country | number \| country | Industrial score at least n (or vs TAG). |
 | `invention` | country, province, pop | invention | Invention has activated. |
@@ -213,7 +215,7 @@ shape (`...` marks a block that also accepts unlisted fields unchecked). See
 | `recruited_percentage` | country, pop | number | Fraction of regiments recruited. |
 | `region` | province, state, pop | stateRegion | Province is in this region/state. |
 | `relation` | country | { who=country, value=number } | Relations with TAG at least the value. |
-| `religion` | country, pop | religion | State/pop religion matches. |
+| `religion` | country, pop | religion | State/pop religion matches; `THIS`/`FROM` compares against the scope it came from, the idiom in pop weights (`NOT = { religion = THIS }`). |
 | `revanchism` | country, pop | number | Revanchism at least x. |
 | `revolt_percentage` | country | number | Fraction of provinces in revolt. |
 | `rich_strata_everyday_needs` | country, province, state, pop | number | Rich everyday needs satisfaction. |

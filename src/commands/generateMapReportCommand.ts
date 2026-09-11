@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { LanguageClient } from 'vscode-languageclient/node';
 import { MAP_REPORT_REQUEST, type MapReportParams, type MapReportResult } from '../model/mapAudit.js';
+import type { MapReportTargets } from '../services/mapReportTargets.js';
 import { pickMods, type PickMemory } from './pickMods.js';
 
 /**
@@ -12,6 +13,7 @@ import { pickMods, type PickMemory } from './pickMods.js';
 export function generateMapReportCommand(
   getClient: () => LanguageClient | undefined,
   memory: PickMemory,
+  targets: MapReportTargets,
 ): () => Promise<void> {
   return async (): Promise<void> => {
     const client = getClient();
@@ -35,12 +37,17 @@ export function generateMapReportCommand(
       { location: vscode.ProgressLocation.Notification, title: 'Victorian Tools: checking the map bitmaps…' },
       () => client.sendRequest<MapReportResult>(MAP_REPORT_REQUEST, params),
     );
-    await showReport(result);
+    await showReport(result, params, targets);
   };
 }
 
-async function showReport(result: MapReportResult): Promise<void> {
+async function showReport(
+  result: MapReportResult,
+  params: MapReportParams,
+  targets: MapReportTargets,
+): Promise<void> {
   const document = await vscode.workspace.openTextDocument({ language: 'plaintext', content: result.text });
+  targets.remember(document.uri.toString(), params);
   await vscode.window.showTextDocument(document, { preview: false });
   const audited = result.reports.filter((report) => report.audited);
   if (audited.length === 0) {

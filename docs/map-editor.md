@@ -14,6 +14,12 @@ a province shows and edits three things about it, each with its own **Save**:
    with type, culture, religion and size. A pop's `militancy` / `rebel_type`, when the file has
    them, are kept as they are.
 
+The panel header shows the province view's terrain picture behind the name: the sprite
+`GFX_terrainimg_<terrain>` of `interface/*.gfx` (the `.dds` twin of a declared `.tga` is accepted,
+as the game does), where the terrain is the history file's `terrain = x` or, failing that, the
+category most of the province's `terrain.bmp` pixels carry through `map/terrain.txt`. Both bitmaps
+are read once per mod stack, when the map opens.
+
 The side panel has two tabs: **Definition** (localisation and history) and **Pops**. Owner,
 controller, cores, trade goods, terrain, pop type, culture and religion are pick lists over the
 mod's identifiers, labelled with their localised names (`USA - United States of America`, `Grain`,
@@ -23,6 +29,12 @@ The rows are drawn in the order the file stores them, which is how the game read
 appears flipped vertically compared with an image editor. Hovering shows the id and the `definition.csv` name; the **Go** box centers the map on an id;
 **Fit** shows the whole map; **Reload** re-reads the map and the mod files. Sea provinces (from
 `sea_starts`) are marked as such but edit like any other.
+
+Ctrl+click on a Map Report finding that names a pixel opens the editor there and selects the province
+under it, reading the map with the mods that report was made for. The report gives pixels as an image
+editor shows them, so the reveal flips y against the drawn rows (`height - 1 - y`). A finding about
+`terrain.bmp` or `rivers.bmp` goes to the same place on the province map, and the status line says
+which file it was about.
 
 ## Which mod is edited
 

@@ -196,6 +196,17 @@ export const MODIFIER_KEYS: ReadonlySet<string> = new Set([
   "war_exhaustion",
 ]);
 
+/**
+ * Modifier keys the engine documents, localises and parses, but never applies.
+ * Writing one is dead weight rather than a mistake, so it is a warning. The
+ * value completes the sentence after the key name.
+ */
+export const BROKEN_MODIFIER_KEYS: Readonly<Record<string, string>> = {
+  rich_income_modifier: 'is read but never applied by the engine, so it has no effect.',
+  middle_income_modifier: 'is read but never applied by the engine, so it has no effect.',
+  poor_income_modifier: 'is read but never applied by the engine, so it has no effect.',
+};
+
 /** Every tech folder in common/technology.txt grants this modifier key. */
 export function researchBonusKey(techFolder: string): string {
   return `${techFolder.toLowerCase()}_research_bonus`;

@@ -17,7 +17,7 @@ file that references one by name.
 | `country` | `common/countries.txt` (scalar-valued assignments, `dynamic_tags` excluded) | specials: `this`, `from`, `owner`, `this_union`; duplicate TAGs checked |
 | `culture` | `common/cultures.txt` items (group → item) | specials: `this`, `from`, `union`; duplicates checked |
 | `cultureGroup` | `common/cultures.txt` groups | duplicates checked |
-| `religion` | `common/religion.txt` items | duplicates checked |
+| `religion` | `common/religion.txt` items | specials: `this`, `from`; duplicates checked |
 | `good` | `common/goods.txt` items | duplicates checked |
 | `ideology` | `common/ideologies.txt` items | duplicates checked |
 | `trait` | `common/traits.txt` items (personality/background → name) | |
@@ -61,7 +61,9 @@ Three more fields come from `map/` and back the [map validators](map-folder.md):
 - `stateOfProvince` — province id → the state that first claimed it, replaying NCE's
   `make_state_definition` over `region.txt`, then `region_sea.txt`, then `super_region.txt`: a block
   whose provinces are all already assigned is a meta-region and claims nothing; otherwise its
-  unassigned provinces join it. On TGC this assigns exactly the 2985 land provinces.
+  unassigned provinces join it. On TGC this assigns exactly the 2985 land provinces. No diagnostic
+  reads this today: the rule that did (`state-mixes-provinces`) was dropped because mods split
+  states deliberately.
 
 ## Tech folders and their modifier keys
 
