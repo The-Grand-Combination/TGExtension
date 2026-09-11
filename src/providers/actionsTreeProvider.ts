@@ -27,6 +27,12 @@ const ACTIONS: readonly { label: string; command: string; icon: string; tooltip:
     tooltip: 'Pick the mods to play with (pre-filled with the mods being worked on) and start Victoria 2.',
   },
   {
+    label: 'Map Editor',
+    command: 'victorian-tools.openMapEditor',
+    icon: 'globe',
+    tooltip: 'Open the province map of the selected mods; click a province to edit its name, history file and pops.',
+  },
+  {
     label: 'Settings',
     command: 'victorian-tools.openSettings',
     icon: 'settings-gear',

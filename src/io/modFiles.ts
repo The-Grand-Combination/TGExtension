@@ -83,6 +83,30 @@ export async function writeModFileBytes(filePath: string, bytes: Uint8Array): Pr
   }
 }
 
+/** Write a text file in the game's windows-1252 encoding, creating its folders; false when the write fails. */
+export async function writeModFileText(filePath: string, text: string): Promise<boolean> {
+  try {
+    await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
+    await fsPromises.writeFile(filePath, text, 'latin1');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Move a file; false when the source is missing, the target exists, or the move fails. */
+export async function renameModFile(fromPath: string, toPath: string): Promise<boolean> {
+  if (!fileExists(fromPath) || fileExists(toPath)) {
+    return false;
+  }
+  try {
+    await fsPromises.rename(fromPath, toPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Every file under a folder, recursively, as forward-slash paths relative to `rootPath`. */
 export function listFilesRecursive(rootPath: string, relativeFolder: string): string[] {
   const found: string[] = [];

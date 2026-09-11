@@ -610,9 +610,22 @@ export function checkReformOption(walk: Walk, assignment: Assignment, classNameL
   }
 }
 
+/**
+ * A modifier value key: the static NCE set plus the `<folder>_research_bonus`
+ * key every tech folder of the mod grants.
+ */
+export function isModifierKey(walk: Walk, keyLower: string): boolean {
+  return MODIFIER_KEYS.has(keyLower) || walk.index.researchBonusKeys.has(keyLower);
+}
+
+/** Every modifier key the mod accepts, for `didYouMean` candidate lists. */
+export function modifierKeyNames(walk: Walk): readonly string[] {
+  return [...MODIFIER_KEYS, ...walk.index.researchBonusKeys];
+}
+
 /** `<modifier> = number` (NCE modifier_base); false when the key is not a modifier. */
 export function checkModifierValueField(walk: Walk, entry: Assignment): boolean {
-  if (!MODIFIER_KEYS.has(entry.key.value.toLowerCase())) {
+  if (!isModifierKey(walk, entry.key.value.toLowerCase())) {
     return false;
   }
   requireNumericValue(walk, entry);

@@ -10,10 +10,10 @@ import {
 import type { DiagnosticSeverity } from '../model/diagnostic.js';
 import { PROVINCES_BMP, RIVERS_BMP, TERRAIN_BMP, type MapFinding, type MapImageFile, type Pixel } from '../model/mapAudit.js';
 import type { ModIndex } from '../model/modIndex.js';
-import { csvRows } from '../parser/csv.js';
 import { decodeBmp, formatRgb, indicesOf, type BmpImage } from './bmpDecoder.js';
 import { paletteEquals, paletteOf } from './bmpPalette.js';
 import { terrainPaletteIndices } from './mapValidation.js';
+import { parseProvinceRows } from './provinceTable.js';
 import { analyzeRivers } from './riverAnalysis.js';
 import { yieldToEventLoop } from './scheduling.js';
 import { parseDocument } from './syntaxValidation.js';
@@ -84,17 +84,12 @@ interface ProvinceTable {
 function provinceTable(definitionText: string, index: ModIndex): ProvinceTable {
   const idByColor = new Uint16Array(1 << 24);
   const names = new Map<number, string>();
-  for (const row of csvRows(definitionText, { skipHeader: true })) {
-    const [id, red, green, blue, name] = row.fields;
-    const color = packColor(red?.text, green?.text, blue?.text);
-    if (id === undefined || color === undefined) {
-      continue;
-    }
-    if (id.text === '') {
-      idByColor[color] = LAKE;
-    } else if (/^\d+$/.test(id.text) && Number(id.text) > 0 && Number(id.text) < LAKE) {
-      idByColor[color] = Number(id.text);
-      names.set(Number(id.text), name?.text ?? '');
+  for (const row of parseProvinceRows(definitionText)) {
+    if (row.id === undefined) {
+      idByColor[row.color] = LAKE;
+    } else if (row.id < LAKE) {
+      idByColor[row.color] = row.id;
+      names.set(row.id, row.name);
     }
   }
   const isSea = new Uint8Array(LAKE + 1);
@@ -102,14 +97,6 @@ function provinceTable(definitionText: string, index: ModIndex): ProvinceTable {
     isSea[Number(sea)] = 1;
   }
   return { idByColor, names, isSea };
-}
-
-function packColor(red: string | undefined, green: string | undefined, blue: string | undefined): number | undefined {
-  const parts = [red, green, blue].map((text) => (text !== undefined && /^\d+$/.test(text) ? Number(text) : -1));
-  if (parts.some((part) => part < 0 || part > 255)) {
-    return undefined;
-  }
-  return ((parts[0] ?? 0) << 16) | ((parts[1] ?? 0) << 8) | (parts[2] ?? 0);
 }
 
 function describeProvince(table: ProvinceTable, id: number): string {

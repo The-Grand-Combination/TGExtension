@@ -31,6 +31,9 @@ is treated as a genuine mod bug, not as a reason to widen a rule.
 - [map-images.md](map-images.md) — the map bitmaps (`provinces.bmp`, `terrain.bmp`, `rivers.bmp`):
   what the engine does with them, the cross-checks and river rules of the **Map Report** action,
   and the **Enforce Colormaps** action.
+- [map-editor.md](map-editor.md) — the **Map Editor** action: the province map tab, how a click
+  resolves to a province, and how the localisation, history file and pops of a province are read
+  through the mod stack and patched into the target mod.
 - [mod-index.md](mod-index.md) — the identifier index built from the mod (what counts as a valid
   TAG, culture, event id, flag, localisation key, picture, ...), and cross-file checks (duplicates,
   event ids, flags-never-set).

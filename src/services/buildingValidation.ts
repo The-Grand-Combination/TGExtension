@@ -1,5 +1,4 @@
 import { BUILDING_FIELDS } from '../data/commonStructure.js';
-import { MODIFIER_KEYS } from '../data/modifierKeys.js';
 import type { Block, Document } from '../model/ast.js';
 import { blockKeysOf } from '../model/astQuery.js';
 import {
@@ -7,6 +6,7 @@ import {
   checkModifierValueField,
   checkTableField,
   eachAssignment,
+  modifierKeyNames,
   reportStrayEntry,
   reportUnknownKey,
   walkBlockValue,
@@ -36,7 +36,7 @@ function validateBuildingBody(walk: Walk, block: Block): void {
     }
     reportUnknownKey(walk, entry, 'unknown-building-field', 'building field', [
       ...Object.keys(BUILDING_FIELDS),
-      ...MODIFIER_KEYS,
+      ...modifierKeyNames(walk),
     ]);
   });
 }

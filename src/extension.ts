@@ -10,8 +10,10 @@ import { enforceColormapsCommand } from './commands/enforceColormapsCommand.js';
 import { generateFullReportCommand } from './commands/generateFullReportCommand.js';
 import { generateMapReportCommand } from './commands/generateMapReportCommand.js';
 import { launchGameCommand } from './commands/launchGameCommand.js';
+import { openMapEditorCommand } from './commands/openMapEditorCommand.js';
 import type { PickMemory } from './commands/pickMods.js';
 import { ActionsTreeProvider } from './providers/actionsTreeProvider.js';
+import { MapEditorPanel } from './providers/mapEditorPanel.js';
 import { SettingsPanel } from './providers/settingsPanel.js';
 
 let client: LanguageClient | undefined;
@@ -81,8 +83,14 @@ export function activate(context: vscode.ExtensionContext): void {
   const settingsPanel = new SettingsPanel(() => client);
   settingsPanel.listenTo(client);
   const pickMemory = workspacePickMemory(context.workspaceState);
+  const mapEditorPanel = new MapEditorPanel(() => client);
   context.subscriptions.push(
     settingsPanel,
+    mapEditorPanel,
+    vscode.commands.registerCommand(
+      'victorian-tools.openMapEditor',
+      openMapEditorCommand(() => client, pickMemory, mapEditorPanel),
+    ),
     vscode.commands.registerCommand('victorian-tools.restartServer', (): void => {
       void client?.restart();
     }),

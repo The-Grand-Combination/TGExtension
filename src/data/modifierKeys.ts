@@ -2,6 +2,9 @@
  * National/provincial modifier value keys, extracted from the NCE parser
  * (modifier_base in parser_defs.txt). Valid as numeric fields in technology,
  * invention, national focus, and modifier bodies.
+ *
+ * The `<folder>_research_bonus` keys of vanilla's tech folders are listed here
+ * as a baseline; a mod's own folders add theirs through `researchBonusKey`.
  */
 export const MODIFIER_KEYS: ReadonlySet<string> = new Set([
   "admin_efficiency",
@@ -192,3 +195,8 @@ export const MODIFIER_KEYS: ReadonlySet<string> = new Set([
   "unit_start_experience",
   "war_exhaustion",
 ]);
+
+/** Every tech folder in common/technology.txt grants this modifier key. */
+export function researchBonusKey(techFolder: string): string {
+  return `${techFolder.toLowerCase()}_research_bonus`;
+}

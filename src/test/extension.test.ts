@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
-const EXTENSION_ID = 'sparta.victorian-tools';
+const EXTENSION_ID = 'TGCModdingTeam.victorian-tools';
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -51,6 +51,7 @@ suite('Victorian Tools — integration', () => {
     assert.ok(commands.includes('victorian-tools.enforceColormaps'));
     assert.ok(commands.includes('victorian-tools.launchGame'));
     assert.ok(commands.includes('victorian-tools.openSettings'));
+    assert.ok(commands.includes('victorian-tools.openMapEditor'));
     const extension = vscode.extensions.getExtension(EXTENSION_ID);
     const packageJson = extension?.packageJSON as {
       contributes?: {

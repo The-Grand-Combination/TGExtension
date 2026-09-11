@@ -2,7 +2,7 @@
   "name": "victorian-tools",
   "displayName": "Victorian Tools",
   "description": "Tooling for Victoria 2 mod files: a language server that parses Paradox script and validates it inline.",
-  "version": "4.0.1",
+  "version": "4.1.0",
   "publisher": "TGCModdingTeam",
   "private": true,
   "license": "MIT",
@@ -118,6 +118,12 @@
         "title": "Launch Game",
         "category": "Victorian Tools",
         "icon": "$(play)"
+      },
+      {
+        "command": "victorian-tools.openMapEditor",
+        "title": "Open Map Editor",
+        "category": "Victorian Tools",
+        "icon": "$(globe)"
       },
       {
         "command": "victorian-tools.openSettings",

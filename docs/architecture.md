@@ -52,9 +52,10 @@ way.
   `victorian-tools.generateFullReport`, and the "Victorian Tools" activity bar container
   (`images/vicIItools.png`, the "V" icon of the previous extension) with its `Actions` tree view
   (`providers/actionsTreeProvider.ts`: Generate Full Report, Map Report, Enforce Colormaps, Launch
-  Game, Settings) and the
+  Game, Map Editor, Settings), the
   **Victorian Tools Settings** tab (`providers/settingsPanel.ts`, a webview panel over plain
-  settings). No analysis logic.
+  settings) and the **Map Editor** tab (`providers/mapEditorPanel.ts`, see
+  [map-editor.md](map-editor.md)). No analysis logic.
 - **Server** (`src/server/`) — the LSP adapter. `server.ts` owns the `TextDocuments` manager and
   the request handlers; `modCache.ts` caches mod roots and their indexes; `boundedCache.ts` is the
   LRU used for rendered picture hovers; `serverConfig.ts` holds the typed settings accessors;
@@ -167,6 +168,18 @@ each target mod that ships a map file of its own, the server reads `provinces.bm
 section per mod with `map/<file> (x, y)  severity  code: message` lines. Rules and calibration in
 [map-images.md](map-images.md). It is separate from the full report so that pixel findings do not
 crowd out the file findings.
+
+## Map editor
+
+The side bar action **Map Editor** (`victorian-tools.openMapEditor`,
+`commands/openMapEditorCommand.ts`) uses the same mod dialog and target resolution, then opens a
+webview tab (`providers/mapEditorPanel.ts` + `mapEditorHtml.ts`). Three requests
+([model/mapEditor.ts](../src/model/mapEditor.ts), handled by
+[server/mapEditorHandlers.ts](../src/server/mapEditorHandlers.ts)) carry the map description, one
+province's localisation/history/pops, and one section's save; the page fetches and decodes
+`provinces.bmp` itself. Saves are text patches computed by `vscode`-free services
+(`provinceLocEdit.ts`, `provinceHistoryEdit.ts`, `provincePopsEdit.ts` over `textPatch.ts`) and
+written only into the top mod of the stack. Behaviour and rules in [map-editor.md](map-editor.md).
 
 ## Mod root discovery and file classification
 

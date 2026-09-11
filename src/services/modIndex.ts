@@ -1,3 +1,4 @@
+import { researchBonusKey } from '../data/modifierKeys.js';
 import { asBlock, assignmentsOf, blockKeysOf, firstByKey, scalarValueOf } from '../model/astQuery.js';
 import type { Assignment, Block, Document, Entry } from '../model/ast.js';
 import type {
@@ -213,6 +214,14 @@ function techSchoolOccurrences(provider: ModFileProvider): IdentifierOccurrence[
     filePath,
     range: assignment.key.range,
   }));
+}
+
+/** Tech folder names from common/technology.txt, in declaration order. */
+function techFolderNames(provider: ModFileProvider): string[] {
+  const document = parseRelative(provider, 'common/technology.txt');
+  const folders = document ? firstByKey(document.entries, 'folders') : undefined;
+  const block = folders ? asBlock(folders.value) : undefined;
+  return block ? blockKeysOf(block).map((assignment) => assignment.key.value.toLowerCase()) : [];
 }
 
 function folderOccurrences(provider: ModFileProvider, folder: string): IdentifierOccurrence[] {
@@ -466,6 +475,7 @@ class IndexBuild {
   private issues: IssueIndex = emptyIssueIndex();
   private defaultMap: DefaultMapData = { maxProvinces: undefined, seaProvinces: new Set() };
   private stateOfProvince = new Map<string, string>();
+  private techFolders: string[] = [];
 
   readonly steps: readonly (() => void)[] = [
     (): void => { this.indexCommonData(); },
@@ -494,6 +504,8 @@ class IndexBuild {
       maxProvinces: this.defaultMap.maxProvinces,
       seaProvinces: this.defaultMap.seaProvinces,
       stateOfProvince: this.stateOfProvince,
+      techFolders: this.techFolders,
+      researchBonusKeys: new Set(this.techFolders.map(researchBonusKey)),
     };
   }
 
@@ -582,6 +594,7 @@ class IndexBuild {
   }
 
   private indexTechnology(): void {
+    this.techFolders = techFolderNames(this.provider);
     this.put('technology', folderOccurrences(this.provider, 'technologies'), { checkDuplicates: true });
     this.put('invention', folderOccurrences(this.provider, 'inventions'), { checkDuplicates: true });
     this.put('unit', folderOccurrences(this.provider, 'units'), { checkDuplicates: true });

@@ -55,6 +55,15 @@ accepts it, the extension does too.
 - Ctrl+Click a localisation key to jump to its line in the CSV.
 
 
+## Map Editor
+
+Open the province map from the Victorian Tools side bar and click a province
+to edit it in place: its name (`PROV<id>` localisation), its history file
+(owner, cores, life rating, buildings, party loyalty, dated blocks and more,
+as a form) and its pops for a start date (one row per pop). Files are read
+through the mod stack and written only into the mod being edited, as minimal
+patches that keep comments and ordering intact.
+
 ## Documentation and source
 
 The full reference, including every diagnostic code, every recognized trigger

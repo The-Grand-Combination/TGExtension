@@ -1,5 +1,4 @@
 import { STATIC_MODIFIER_NAMES } from '../data/commonStructure.js';
-import { MODIFIER_KEYS } from '../data/modifierKeys.js';
 import type { Assignment, Block, Document } from '../model/ast.js';
 import { blockKeysOf } from '../model/astQuery.js';
 import { didYouMean } from './suggestions.js';
@@ -7,6 +6,7 @@ import {
   checkArg,
   checkModifierValueField,
   eachAssignment,
+  modifierKeyNames,
   report,
   requireNumericValue,
   walkBlockValue,
@@ -35,7 +35,7 @@ export function checkModifierField(walk: Walk, entry: Assignment): void {
       walk,
       entry,
       'unknown-modifier-key',
-      `Unknown modifier '${entry.key.value}'.${didYouMean(entry.key.value.toLowerCase(), MODIFIER_KEYS)}`,
+      `Unknown modifier '${entry.key.value}'.${didYouMean(entry.key.value.toLowerCase(), modifierKeyNames(walk))}`,
     );
   }
 }

@@ -3,6 +3,31 @@
 All notable changes to the "victorian-tools" extension will be documented in
 this file. This project adheres to [Keep a Changelog](https://keepachangelog.com/).
 
+## [4.1.0]
+
+### Added
+
+- **Map Editor** side bar row (`victorian-tools.openMapEditor`): the mod
+  dialog, then a tab with `map/provinces.bmp` drawn on a canvas (pan, zoom,
+  hover for id and name, go-to-id). Clicking a province edits, each with its
+  own Save: the `PROV<id>` localisation (ENGLISH column, other columns kept;
+  optional rename of the history file to match), the province history file as
+  a full form (fields, cores, buildings, flags, `party_loyalty`,
+  `state_building`, dated blocks) and the province's pops block of a start
+  date (type, culture, religion, size, militancy, rebel type). Files are read
+  through the picked mods' stack and written only into the top mod of the
+  stack, copying a file from a lower layer when needed; edits are patches, so
+  comments and file order survive, and an unchanged save writes nothing.
+  Requests `victorianTools/mapEditor/{map,province,save}`; services
+  `textPatch.ts`, `provinceTable.ts`, `provinceLocEdit.ts`,
+  `provinceHistoryEdit.ts`, `provincePopsEdit.ts`. Details in
+  `docs/map-editor.md`.
+
+### Fixed
+
+- The integration suite looked for the extension under its pre-4.0 publisher
+  id and never ran; it uses `TGCModdingTeam.victorian-tools` now.
+
 ## [4.0.1]
 
 ### Changed

@@ -58,6 +58,10 @@ export interface ModIndex {
   readonly countryFlagsSet: ReadonlySet<string>;
   /** Global flags set anywhere in the mod. */
   readonly globalFlagsSet: ReadonlySet<string>;
+  /** Tech folder names from common/technology.txt, in declaration order. */
+  readonly techFolders: readonly string[];
+  /** `<folder>_research_bonus` modifier keys the mod's tech folders grant. */
+  readonly researchBonusKeys: ReadonlySet<string>;
   /** `max_provinces` from map/default.map; province ids must stay below it. */
   readonly maxProvinces: number | undefined;
   /** Province ids listed under `sea_starts` in map/default.map. */

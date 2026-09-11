@@ -1,5 +1,4 @@
 import { ISSUE_OPTION_FIELDS, OPTION_RULES_KEYS } from '../data/commonStructure.js';
-import { MODIFIER_KEYS } from '../data/modifierKeys.js';
 import type { Assignment, Block, Document } from '../model/ast.js';
 import { asBlock, blockKeysOf } from '../model/astQuery.js';
 import {
@@ -7,6 +6,7 @@ import {
   checkModifierValueField,
   checkTableField,
   eachAssignment,
+  modifierKeyNames,
   report,
   reportUnknownKey,
   walkBlockValue,
@@ -63,7 +63,7 @@ function handleIssueOptionField(walk: Walk, entry: Assignment): void {
   }
   reportUnknownKey(walk, entry, 'unknown-issue-option-field', 'issue option field', [
     ...Object.keys(ISSUE_OPTION_FIELDS),
-    ...MODIFIER_KEYS,
+    ...modifierKeyNames(walk),
   ]);
 }
 

@@ -5,7 +5,6 @@ import {
   UNIT_MODIFIER_FIELDS,
   UNIT_MODIFIER_TARGETS,
 } from '../data/technologyStructure.js';
-import { MODIFIER_KEYS } from '../data/modifierKeys.js';
 import type { Assignment, Block, Document } from '../model/ast.js';
 import { asBlock, blockKeysOf } from '../model/astQuery.js';
 import { hasIdentifier } from './modIndex.js';
@@ -13,6 +12,8 @@ import { didYouMean } from './suggestions.js';
 import {
   checkKeyedNumberMap,
   checkTableField,
+  isModifierKey,
+  modifierKeyNames,
   report,
   reportStrayEntry,
   requireNumericValue,
@@ -39,7 +40,7 @@ export function validateTechnologyFile(walk: Walk, document: Document): void {
           walk,
           entry,
           'unknown-tech-field',
-          `Unknown technology field '${entry.key.value}'.${didYouMean(entry.key.value.toLowerCase(), [...Object.keys(TECH_SCALAR_FIELDS), ...MODIFIER_KEYS])}`,
+          `Unknown technology field '${entry.key.value}'.${didYouMean(entry.key.value.toLowerCase(), [...Object.keys(TECH_SCALAR_FIELDS), ...modifierKeyNames(walk)])}`,
         );
       }
     }
@@ -63,7 +64,7 @@ export function validateInventionFile(walk: Walk, document: Document): void {
           walk,
           entry,
           'unknown-invention-field',
-          `Unknown invention field '${entry.key.value}'.${didYouMean(entry.key.value.toLowerCase(), ['limit', 'chance', 'news', 'effect', ...MODIFIER_KEYS])}`,
+          `Unknown invention field '${entry.key.value}'.${didYouMean(entry.key.value.toLowerCase(), ['limit', 'chance', 'news', 'effect', ...modifierKeyNames(walk)])}`,
         );
       }
     }
@@ -103,7 +104,7 @@ function validateInventionEffect(walk: Walk, block: Block): void {
       walk,
       entry,
       'unknown-invention-effect',
-      `Unknown invention effect field '${entry.key.value}'.${didYouMean(entry.key.value.toLowerCase(), [...Object.keys(INVENTION_EFFECT_SCALAR_FIELDS), ...MODIFIER_KEYS])}`,
+      `Unknown invention effect field '${entry.key.value}'.${didYouMean(entry.key.value.toLowerCase(), [...Object.keys(INVENTION_EFFECT_SCALAR_FIELDS), ...modifierKeyNames(walk)])}`,
     );
   }
 }
@@ -157,7 +158,7 @@ function handleTechnologyField(walk: Walk, entry: Assignment): boolean {
 }
 
 function handleModifierOrUnitField(walk: Walk, entry: Assignment, keyLower: string): boolean {
-  if (MODIFIER_KEYS.has(keyLower)) {
+  if (isModifierKey(walk, keyLower)) {
     requireNumericValue(walk, entry);
     return true;
   }

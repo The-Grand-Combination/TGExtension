@@ -23,7 +23,9 @@ import {
   readModFileAsync,
   readModFileBytes,
   readModFileBytesAsync,
+  renameModFile,
   writeModFileBytes,
+  writeModFileText,
 } from '../io/modFiles.js';
 import {
   ENFORCE_COLORMAPS_REQUEST,
@@ -39,6 +41,17 @@ import {
   type FullReportResult,
   type ModReport,
 } from '../model/fullReport.js';
+import {
+  MAP_EDITOR_MAP_REQUEST,
+  MAP_EDITOR_PROVINCE_REQUEST,
+  MAP_EDITOR_SAVE_REQUEST,
+  type MapEditorMapResult,
+  type MapEditorTargetParams,
+  type ProvinceRequestParams,
+  type ProvinceResult,
+  type SaveParams,
+  type SaveResult,
+} from '../model/mapEditor.js';
 import { LAYOUT_CHANGED_NOTIFICATION, MODS_REQUEST, type ModDescriptor, type ModsResult } from '../model/modDescriptor.js';
 import {
   MAP_REPORT_REQUEST,
@@ -80,6 +93,7 @@ import { pictureHoverAt, pictureHoverMarkdown, type PictureHover } from '../serv
 import { renderMapReportText, renderReportText } from '../services/reportText.js';
 import { resolveKeyAt, symbolHoverMarkdown } from '../services/symbolHover.js';
 import { BoundedCache } from './boundedCache.js';
+import { MapEditorHandlers } from './mapEditorHandlers.js';
 import { ModCache, type ModContext } from './modCache.js';
 import {
   configEquals,
@@ -222,6 +236,7 @@ function applyLayout(): void {
   layout = loadLayout();
   logLayout();
   modCache.resetLocations();
+  mapEditor.invalidate();
   warmIndexes();
   validateAllOpen();
   void connection.sendNotification(LAYOUT_CHANGED_NOTIFICATION);
@@ -419,6 +434,7 @@ function rebuildChangedIndexes(): void {
   for (const fsPath of changed) {
     pictureCache.delete(fsPath);
   }
+  mapEditor.invalidate();
   if (changed.some((fsPath) => fsPath.toLowerCase().endsWith('.mod'))) {
     applyLayout();
     return;
@@ -751,6 +767,30 @@ async function enforceColormap(absolutePath: string, palette: Palette, dryRun: b
   const written = await writeModFileBytes(absolutePath, plan.fixed);
   return { path: absolutePath, outcome: written ? 'fixed' : 'write-failed' };
 }
+
+// --- Map Editor --------------------------------------------------------------------
+
+const mapEditor = new MapEditorHandlers({
+  targets: (params: MapEditorTargetParams): FileLocation[] => reportTargets(params),
+  modNameOf: (root: string): string => layout.mods.find((mod) => mod.folder === root)?.name ?? path.basename(root),
+  ensureIndex: (layers: ModLayers): Promise<ModIndex | undefined> => modCache.ensureIndex(layers),
+  fileSystem: layerFileSystem,
+  readText: readModFileAsync,
+  writeText: writeModFileText,
+  rename: renameModFile,
+});
+
+connection.onRequest(MAP_EDITOR_MAP_REQUEST, (params: MapEditorTargetParams): Promise<MapEditorMapResult> => mapEditor.map(params));
+connection.onRequest(MAP_EDITOR_PROVINCE_REQUEST, (params: ProvinceRequestParams): Promise<ProvinceResult> => mapEditor.province(params));
+connection.onRequest(MAP_EDITOR_SAVE_REQUEST, async (params: SaveParams): Promise<SaveResult> => {
+  const result = await mapEditor.save(params);
+  connection.console.log(
+    result.ok
+      ? `Map editor: province ${String(params.provinceId)} ${params.section} saved (${result.written.join(', ') || 'no change'})`
+      : `Map editor: province ${String(params.provinceId)} ${params.section} not saved: ${result.reason}`,
+  );
+  return result;
+});
 
 documents.listen(connection);
 connection.listen();
