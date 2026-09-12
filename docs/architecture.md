@@ -53,8 +53,9 @@ way.
   (`images/vicIItools.png`, the "V" icon of the previous extension) with its `Actions` tree view
   (`providers/actionsTreeProvider.ts`: Generate Full Report, Map Report, Enforce Colormaps, Launch
   Game, Map Editor, Settings), the
-  **Victorian Tools Settings** tab (`providers/settingsPanel.ts`, a webview panel over the
-  `gamePath`, `activeMods`, the three rule patterns and the ignore marker) and the **Map Editor** tab (`providers/mapEditorPanel.ts`, see
+  **Victorian Tools Settings** tab (`providers/settingsPanel.ts`, a webview panel in two tabs:
+  *Extension* over `gamePath`, the ignore marker, the Country Colors tint and `activeMods`, and
+  *Regex Patterns* over the four regular-expression settings) and the **Map Editor** tab (`providers/mapEditorPanel.ts`, see
   [map-editor.md](map-editor.md)). No analysis logic.
 - **Server** (`src/server/`) — the LSP adapter. `server.ts` owns the `TextDocuments` manager and
   the request handlers; `modCache.ts` caches mod roots and their indexes; `boundedCache.ts` is the
@@ -104,12 +105,13 @@ way.
   `cbTypeStructure.ts`, `rebelTypeStructure.ts`, `popTypeStructure.ts`, `technologyStructure.ts`,
   `historyStructure.ts`, `commonStructure.ts`, `mapStructure.ts`). This is the layer re-calibrated
   against the TGC corpus on every change (see the root [README.md](README.md)).
-- **IO** (`src/io/modFiles.ts`) — the only place that touches `node:fs`. Finds a lone mod root
-  (walks up from a document until a folder containing `common/` is found), checks that files and
-  folders exist, reads files as `latin1` (Victoria 2 script is windows-1252 but its identifiers are
-  ASCII, so latin1 decoding is sufficient), and lists files in a folder by extension. Returns
-  strings; parsing happens elsewhere. Which folders a file is read through is decided one layer up,
-  by `services/modLayout.ts` and `services/modLayers.ts` (see
+- **IO** (`src/io/modFiles.ts`, `src/io/textCodec.ts`) — the only place that touches `node:fs`, and
+  the only place bytes become text. `modFiles.ts` finds a lone mod root (walks up from a document
+  until a folder containing `common/` is found), checks that files and folders exist, reads and
+  writes files, and lists files in a folder by extension. Every text read and write takes a
+  `Codepage` from `textCodec.ts`; see [encoding.md](encoding.md) for why it is a setting and not a
+  constant. Returns strings; parsing happens elsewhere. Which folders a file is read through is
+  decided one layer up, by `services/modLayout.ts` and `services/modLayers.ts` (see
   [mods-and-submods.md](mods-and-submods.md)).
 
 ## The AST (`src/model/ast.ts`)
@@ -295,4 +297,5 @@ defaults and `DEFAULT_CONFIG` agree.
 | `victorianTools.ignoreMarker` | `#VT - Skip Validation` | A marker that silences every finding on the line it appears on. Write it as a comment so the game ignores it. Matched literally, anywhere in the line, case-insensitively. Empty turns it off. Editable from the **Victorian Tools Settings** tab. |
 | `victorianTools.nullTags.pattern` | `^(QQQ\|---\|null)$` | Regex matching the tags meaning "no country". A country value that matches warns instead of erroring; matched case-insensitively. Empty allows no exception. Editable from the **Victorian Tools Settings** tab. |
 | `victorianTools.mapEditor.countryColorsTint` | `82` | Percent of the owner's colour in the Map Editor's **Country Colors** layer; the rest is the province's own colour. Client-side only. Editable from the **Victorian Tools Settings** tab (a slider). |
+| `victorianTools.mapEditor.provinceFolderPattern` | `` (empty) | Regex narrowing which subfolders of `history/provinces` the Map Editor reads, matched against the subfolder alone, case-insensitively. Empty uses every folder. It exists for a total conversion that declares the whole vanilla province set as empty placeholders; see [map-editor.md](map-editor.md). A change re-reads the mod stack, so the cached province owners go with it. Editable from the **Regex Patterns** tab of the **Victorian Tools Settings** page. |
 | `victorianTools.trace.server` | `off` | `vscode-languageclient` trace verbosity (client-side).

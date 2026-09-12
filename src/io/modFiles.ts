@@ -1,11 +1,13 @@
 import * as fs from 'node:fs';
 import * as fsPromises from 'node:fs/promises';
 import * as path from 'node:path';
+import { decodeText, encodeText, type Codepage } from './textCodec.js';
 
 /**
  * File access for Victoria 2 mod folders. Wraps `node:fs` so services stay
- * pure; identifiers are ASCII, so latin1 decoding is sufficient for the
- * windows-1252 files the game uses.
+ * pure. Text goes through `textCodec`: the game stores script and localisation
+ * in a single-byte code page that the caller picks, so every text read and
+ * write takes one.
  */
 
 /** Walk up from a file or folder until a directory containing `common/` is found. */
@@ -39,18 +41,18 @@ export function isDirectory(directoryPath: string): boolean {
   }
 }
 
-export function readModFile(filePath: string): string | undefined {
+export function readModFile(filePath: string, codepage: Codepage): string | undefined {
   try {
-    return fs.readFileSync(filePath, 'latin1');
+    return decodeText(fs.readFileSync(filePath), codepage);
   } catch {
     return undefined;
   }
 }
 
 /** `readModFile` for callers that read many files at once; reads run on the thread pool. */
-export async function readModFileAsync(filePath: string): Promise<string | undefined> {
+export async function readModFileAsync(filePath: string, codepage: Codepage): Promise<string | undefined> {
   try {
-    return await fsPromises.readFile(filePath, 'latin1');
+    return decodeText(await fsPromises.readFile(filePath), codepage);
   } catch {
     return undefined;
   }
@@ -83,11 +85,21 @@ export async function writeModFileBytes(filePath: string, bytes: Uint8Array): Pr
   }
 }
 
-/** Write a text file in the game's windows-1252 encoding, creating its folders; false when the write fails. */
-export async function writeModFileText(filePath: string, text: string): Promise<boolean> {
+/**
+ * Write a text file in the mod's code page, creating its folders. False when the
+ * write fails *or* when a character has no byte in that code page — nothing is
+ * written in either case, so a name the code page cannot hold never lands as
+ * mangled bytes. Callers that want to say which character it was ask
+ * `unrepresentableIn` first.
+ */
+export async function writeModFileText(filePath: string, text: string, codepage: Codepage): Promise<boolean> {
+  const bytes = encodeText(text, codepage);
+  if (!bytes) {
+    return false;
+  }
   try {
     await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
-    await fsPromises.writeFile(filePath, text, 'latin1');
+    await fsPromises.writeFile(filePath, bytes);
     return true;
   } catch {
     return false;

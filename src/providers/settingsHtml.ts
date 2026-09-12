@@ -32,6 +32,8 @@ export interface SettingsState {
   readonly nullTagPattern: string;
   /** `victorianTools.ignoreMarker`; empty means no line can be silenced. */
   readonly ignoreMarker: string;
+  /** `victorianTools.mapEditor.provinceFolderPattern`; empty means every subfolder is used. */
+  readonly provinceFolderPattern: string;
   /** `victorianTools.mapEditor.countryColorsTint`, 0-100. */
   readonly countryColorsTint: number;
   readonly warning?: string;
@@ -44,6 +46,7 @@ export interface CurrentSettings {
   readonly flagNamePattern: string;
   readonly nullTagPattern: string;
   readonly ignoreMarker: string;
+  readonly provinceFolderPattern: string;
   readonly countryColorsTint: number;
 }
 
@@ -62,6 +65,7 @@ export function settingsState(installed: ModsResult, current: CurrentSettings): 
     flagNamePattern: current.flagNamePattern,
     nullTagPattern: current.nullTagPattern,
     ignoreMarker: current.ignoreMarker,
+    provinceFolderPattern: current.provinceFolderPattern,
     countryColorsTint: current.countryColorsTint,
     ...(missing.length === 0 ? {} : { warning: `Dependency not installed: ${missing.join(', ')}` }),
   };
@@ -87,9 +91,12 @@ function entryOf(mod: ModDescriptor): ModEntry {
 }
 
 /**
- * The settings page. It holds no data of its own: it renders the `state`
- * messages it receives and posts `gamePath`, `browse`, `select`, `locKeyPattern`,
- * `flagNamePattern`, `nullTagPattern`, `ignoreMarker` or `refresh`.
+ * The settings page, in two tabs: **Extension** (the install, the skip marker,
+ * the Map Editor tint and the mod selection) and **Regex Patterns** (every field
+ * that is a regular expression). It holds no data of its own beyond which tab is
+ * open: it renders the `state` messages it receives and posts `gamePath`,
+ * `browse`, `select`, `locKeyPattern`, `flagNamePattern`, `nullTagPattern`,
+ * `provinceFolderPattern`, `ignoreMarker`, `countryColorsTint` or `refresh`.
  * Styling uses the editor's theme variables.
  */
 export function settingsHtml(cspSource: string): string {
@@ -132,10 +139,24 @@ export function settingsHtml(cspSource: string): string {
   code { font-family: var(--vscode-editor-font-family); font-size: 0.95em; }
   input[type=range] { flex: 1; }
   .value { min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+  nav.tabs { display: flex; gap: 4px; margin: 0 0 8px; border-bottom: 1px solid var(--vscode-panel-border, transparent); }
+  nav.tabs button { background: none; color: var(--vscode-panelTitle-inactiveForeground, var(--vscode-foreground));
+    border: none; border-bottom: 1px solid transparent; border-radius: 0; padding: 6px 12px; opacity: 0.8; }
+  nav.tabs button:hover { background: var(--vscode-list-hoverBackground); }
+  nav.tabs button[aria-selected=true] { color: var(--vscode-panelTitle-activeForeground, var(--vscode-foreground));
+    border-bottom-color: var(--vscode-panelTitle-activeBorder, var(--vscode-focusBorder)); opacity: 1; }
+  section > h2:first-child { margin-top: 12px; }
 </style>
 </head>
 <body>
 <h1>Victorian Tools Settings</h1>
+
+<nav class="tabs">
+  <button id="extensionTab" aria-selected="true">Extension</button>
+  <button id="patternsTab" aria-selected="false">Regex Patterns</button>
+</nav>
+
+<section id="extensionPane">
 
 <h2>Game folder</h2>
 <p class="hint">The Victoria 2 install: the folder holding <code>mod/</code>, <code>common/</code> and <code>map/</code>. Leave empty to detect it above the workspace folder. Mods are read on top of the game files they do not <code>replace_path</code>. Stored in your user settings (<code>victorianTools.gamePath</code>).</p>
@@ -145,6 +166,32 @@ export function settingsHtml(cspSource: string): string {
   <button id="save" class="secondary">Save</button>
 </div>
 <div id="gameStatus" class="status"></div>
+
+<h2>Skip-validation marker</h2>
+<p class="hint">Write this on a line and every finding on it is silenced. Make it a comment so the game ignores it: <code>prestige = 5 #VT - Skip Validation</code>. Matched anywhere in the line, case-insensitively, and it silences every rule &mdash; syntax, structure, semantics, the map CSVs and cross-file duplicates. It is literal text, not a regular expression. Leave empty to turn the escape hatch off. Stored in the workspace settings (<code>victorianTools.ignoreMarker</code>).</p>
+<div class="field">
+  <input id="ignoreMarker" type="text" placeholder="Empty: no line can be silenced" spellcheck="false">
+  <button id="ignoreDefault" class="secondary">Default</button>
+  <button id="ignoreSave" class="secondary">Save</button>
+</div>
+<div id="ignoreStatus" class="status"></div>
+
+<h2>Map Editor: Country Colors tint</h2>
+<p class="hint">How much of each province's colour comes from its owner's <code>color</code> when the <b>Country Colors</b> layer is on; the rest is the province's own <code>definition.csv</code> colour, which keeps neighbours apart. <code>100</code> paints every province of a country the same; <code>0</code> shows the plain map. Stored in your user settings (<code>victorianTools.mapEditor.countryColorsTint</code>); the default is <code>82</code>.</p>
+<div class="field">
+  <input id="tint" type="range" min="0" max="100" step="1">
+  <span id="tintValue" class="value"></span>
+  <button id="tintDefault" class="secondary">Default</button>
+</div>
+
+<h2>Mods and submods</h2>
+<p class="hint">Nothing needs ticking for everyday work: every mod is read on top of the game files it does not <code>replace_path</code>, and a submod on top of the mods it depends on. Tick mods here only to work on them <b>together</b>: the ticked mods and their dependencies then form one stack, in load order, for validation and for the full report. Any combination is allowed, as in the launcher. Stored in the workspace settings (<code>victorianTools.activeMods</code>). <a id="refresh" href="#">Refresh</a> after adding or editing a <code>.mod</code> file outside the workspace.</p>
+<div id="mods"></div>
+<div id="order" class="order"></div>
+
+</section>
+
+<section id="patternsPane" hidden>
 
 <h2>Localisation key pattern</h2>
 <p class="hint">A regular expression deciding which <code>title</code>, <code>desc</code> and <code>name</code> values are localisation keys. A value that does not match is treated as literal display text and is never reported as a missing key, so <code>desc = "Death of Dom Pedro II"</code> stays silent while <code>desc = "EVTDESC48300"</code> is still checked against <code>localisation/</code>. Leave empty to check every value. Stored in the workspace settings (<code>victorianTools.localisation.keyPattern</code>); the default is <code>^EVT</code>.</p>
@@ -173,27 +220,16 @@ export function settingsHtml(cspSource: string): string {
 </div>
 <div id="nullTagStatus" class="status"></div>
 
-<h2>Skip-validation marker</h2>
-<p class="hint">Write this on a line and every finding on it is silenced. Make it a comment so the game ignores it: <code>prestige = 5 #VT - Skip Validation</code>. Matched anywhere in the line, case-insensitively, and it silences every rule &mdash; syntax, structure, semantics, the map CSVs and cross-file duplicates. Leave empty to turn the escape hatch off. Stored in the workspace settings (<code>victorianTools.ignoreMarker</code>).</p>
+<h2>Map Editor: province folder pattern</h2>
+<p class="hint">A regular expression narrowing which subfolders of <code>history/provinces</code> hold the mod's real province files. Matched against the subfolder alone &mdash; <code>middle earth</code>, <code>usa</code>, or empty for files sitting directly in <code>history/provinces</code> &mdash; case-insensitively, so <code>^middle</code> keeps <code>middle earth</code> and drops the rest. A total conversion that declares the whole vanilla province set as empty placeholder files needs this: without it a province id is answered by whichever folder the directory walk reaches first, which is the empty placeholder for every folder sorting before the real one. Leave empty to use every folder. Stored in the workspace settings (<code>victorianTools.mapEditor.provinceFolderPattern</code>).</p>
 <div class="field">
-  <input id="ignoreMarker" type="text" placeholder="Empty: no line can be silenced" spellcheck="false">
-  <button id="ignoreDefault" class="secondary">Default</button>
-  <button id="ignoreSave" class="secondary">Save</button>
+  <input id="provinceFolderPattern" type="text" placeholder="Empty: every folder under history/provinces" spellcheck="false">
+  <button id="provinceFolderDefault" class="secondary">Default</button>
+  <button id="provinceFolderSave" class="secondary">Save</button>
 </div>
-<div id="ignoreStatus" class="status"></div>
+<div id="provinceFolderStatus" class="status"></div>
 
-<h2>Map Editor: Country Colors tint</h2>
-<p class="hint">How much of each province's colour comes from its owner's <code>color</code> when the <b>Country Colors</b> layer is on; the rest is the province's own <code>definition.csv</code> colour, which keeps neighbours apart. <code>100</code> paints every province of a country the same; <code>0</code> shows the plain map. Stored in your user settings (<code>victorianTools.mapEditor.countryColorsTint</code>); the default is <code>82</code>.</p>
-<div class="field">
-  <input id="tint" type="range" min="0" max="100" step="1">
-  <span id="tintValue" class="value"></span>
-  <button id="tintDefault" class="secondary">Default</button>
-</div>
-
-<h2>Mods and submods</h2>
-<p class="hint">Nothing needs ticking for everyday work: every mod is read on top of the game files it does not <code>replace_path</code>, and a submod on top of the mods it depends on. Tick mods here only to work on them <b>together</b>: the ticked mods and their dependencies then form one stack, in load order, for validation and for the full report. Any combination is allowed, as in the launcher. Stored in the workspace settings (<code>victorianTools.activeMods</code>). <a id="refresh" href="#">Refresh</a> after adding or editing a <code>.mod</code> file outside the workspace.</p>
-<div id="mods"></div>
-<div id="order" class="order"></div>
+</section>
 
 <script nonce="${nonce}">
   const vscode = acquireVsCodeApi();
@@ -300,6 +336,16 @@ export function settingsHtml(cspSource: string): string {
       matching: 'Warning instead of an error for tags matching'
     });
 
+  const renderProvinceFolderPattern = patternField(
+    { input: 'provinceFolderPattern', status: 'provinceFolderStatus', save: 'provinceFolderSave', reset: 'provinceFolderDefault' },
+    'provinceFolderPattern',
+    '',
+    {
+      empty: 'Every subfolder of history/provinces is used.',
+      invalid: 'use every folder',
+      matching: 'Using only the subfolders of history/provinces matching'
+    });
+
   const renderIgnoreMarker = patternField(
     { input: 'ignoreMarker', status: 'ignoreStatus', save: 'ignoreSave', reset: 'ignoreDefault' },
     'ignoreMarker',
@@ -339,6 +385,25 @@ export function settingsHtml(cspSource: string): string {
     }
   }
 
+  /**
+   * The two tabs. Which one is open lives here and not in the state the panel
+   * sends: the page redraws on every configuration change, and the tab must not
+   * jump back while a field is being typed in.
+   */
+  const tabs = [
+    { button: document.getElementById('extensionTab'), pane: document.getElementById('extensionPane') },
+    { button: document.getElementById('patternsTab'), pane: document.getElementById('patternsPane') }
+  ];
+  for (const tab of tabs) {
+    tab.button.addEventListener('click', () => {
+      for (const other of tabs) {
+        const active = other === tab;
+        other.button.setAttribute('aria-selected', String(active));
+        other.pane.hidden = !active;
+      }
+    });
+  }
+
   document.getElementById('browse').addEventListener('click', () => vscode.postMessage({ type: 'browse' }));
   document.getElementById('save').addEventListener('click', () => vscode.postMessage({ type: 'gamePath', value: gamePath.value }));
   gamePath.addEventListener('keydown', (event) => { if (event.key === 'Enter') vscode.postMessage({ type: 'gamePath', value: gamePath.value }); });
@@ -363,6 +428,7 @@ export function settingsHtml(cspSource: string): string {
       renderLocPattern(state.locKeyPattern);
       renderFlagPattern(state.flagNamePattern);
       renderNullTagPattern(state.nullTagPattern);
+      renderProvinceFolderPattern(state.provinceFolderPattern);
       renderIgnoreMarker(state.ignoreMarker);
       renderTint(state.countryColorsTint);
       renderMods();

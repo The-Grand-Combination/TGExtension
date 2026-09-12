@@ -28,6 +28,7 @@ import {
   writeModFileBytes,
   writeModFileText,
 } from '../io/modFiles.js';
+import type { Codepage } from '../io/textCodec.js';
 import {
   ENFORCE_COLORMAPS_REQUEST,
   type EnforceColormapsParams,
@@ -48,6 +49,7 @@ import {
   MAP_EDITOR_PROVINCE_REQUEST,
   MAP_EDITOR_SAVE_REQUEST,
   MAP_EDITOR_TERRAIN_PICTURE_REQUEST,
+  PROVINCE_FOLDER_FLAGS,
   type MapCountryColorsResult,
   type MapEditorMapResult,
   type MapEditorTargetParams,
@@ -116,6 +118,23 @@ const documents = new TextDocuments(TextDocument);
 let config: ServerConfig = DEFAULT_CONFIG;
 let compiled = compile(config);
 
+/**
+ * Text I/O bound to the mod's code page. These read `config` on every call
+ * rather than closing over a value: the setting changes while the server runs,
+ * and `applyLayout` re-reads everything when it does.
+ */
+function readText(absolutePath: string): string | undefined {
+  return readModFile(absolutePath, config.encoding);
+}
+
+function readTextAsync(absolutePath: string): Promise<string | undefined> {
+  return readModFileAsync(absolutePath, config.encoding);
+}
+
+function writeText(absolutePath: string, text: string): Promise<boolean> {
+  return writeModFileText(absolutePath, text, config.encoding);
+}
+
 interface CompiledOptions {
   readonly sources: readonly string[];
   readonly options: ValidationOptions;
@@ -145,6 +164,20 @@ function validationOptions(): ValidationOptions {
   }
   return compiled.options;
 }
+
+/** `history/provinces` subfolders the Map Editor sees; compiled once per change, undefined for all. */
+let provinceFolder: { source: string; pattern: RegExp | undefined } = { source: '', pattern: undefined };
+
+function provinceFolderPattern(): RegExp | undefined {
+  if (config.provinceFolderPattern !== provinceFolder.source) {
+    provinceFolder = {
+      source: config.provinceFolderPattern,
+      pattern: compilePattern(config.provinceFolderPattern, PROVINCE_FOLDER_FLAGS),
+    };
+  }
+  return provinceFolder.pattern;
+}
+
 let workspaceFolders: string[] = [];
 /** The install, its mods, and the user's selection; rebuilt on config and `.mod` changes. */
 let layout: ModLayout = { gameRoot: undefined, mods: [], selection: [] };
@@ -282,7 +315,7 @@ function applyLayout(): void {
  */
 function loadLayout(): ModLayout {
   const gameRoot = findGameRoot();
-  const fileSystem = { listFiles, readFile: readModFile };
+  const fileSystem = { listFiles, readFile: readText };
   const installedDirectory = gameRoot === undefined ? undefined : path.join(gameRoot, 'mod');
   const installed = installedDirectory === undefined ? [] : loadModDescriptors(installedDirectory, fileSystem);
   const checkedOut: ModDescriptor[] = [];
@@ -385,7 +418,7 @@ onRequest(
 
 async function buildIndexFor(layers: ModLayers): Promise<ModIndex> {
   const started = Date.now();
-  const index = await buildModIndexAsync(layeredIndexProvider(layers, layerFileSystem, readModFile));
+  const index = await buildModIndexAsync(layeredIndexProvider(layers, layerFileSystem, readText));
   connection.console.log(`Indexed ${describeLayers(layers)} in ${String(Date.now() - started)}ms`);
   if (listLayeredFiles(layers, layerFileSystem, 'events', '.txt').length === 0) {
     connection.console.log(`No events/ files in ${describeLayers(layers)}`);
@@ -446,7 +479,7 @@ function publishFromDisk(uri: string, absolutePath: string, diagnostics: readonl
     void connection.sendDiagnostics({ uri, diagnostics: [] });
     return;
   }
-  const text = readModFile(absolutePath);
+  const text = readText(absolutePath);
   if (text === undefined) {
     return;
   }
@@ -707,7 +740,7 @@ function reportTargets(params: TargetParams): FileLocation[] {
 const modStack: ModStackHost = {
   targets: reportTargets,
   fileExists,
-  readText: readModFileAsync,
+  readText: readTextAsync,
   readBytes: readModFileBytesAsync,
 };
 
@@ -752,12 +785,14 @@ const mapEditor = new MapEditorHandlers({
   modNameOf: (root: string): string => layout.mods.find((mod) => mod.folder === root)?.name ?? path.basename(root),
   ensureIndex: (layers: ModLayers): Promise<ModIndex | undefined> => modCache.ensureIndex(layers),
   fileSystem: layerFileSystem,
-  readText: readModFileAsync,
+  readText: readTextAsync,
   readBytes: readModFileBytesAsync,
   // dist/server.js sits one folder below the extension root, next to assets/.
   assetsFolder: path.join(__dirname, '..', 'assets'),
-  writeText: writeModFileText,
+  writeText: writeText,
   rename: renameModFile,
+  codepage: (): Codepage => config.encoding,
+  historyFolderPattern: provinceFolderPattern,
 });
 
 onRequest(MAP_EDITOR_MAP_REQUEST, (params: MapEditorTargetParams): Promise<MapEditorMapResult> => mapEditor.map(params));

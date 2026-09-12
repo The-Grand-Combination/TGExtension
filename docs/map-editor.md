@@ -103,11 +103,35 @@ target's own province names file (the `localisation/*.csv` of the target holding
 keys, else a new `00_map-provinces.csv` with the standard 14-language header), which the game reads
 first.
 
+## Which province history files it reads
+
+A province id is answered by the first file under `history/provinces` whose name starts with that id,
+searched through the mod stack. That is the whole rule while each id appears once — but a total
+conversion sometimes declares the **entire vanilla province set as empty placeholder files**, to keep
+the engine from misbehaving, and keeps its real provinces in a folder of its own. Then the same id
+exists twice, and the id is answered by whichever folder the directory walk reaches first, which is
+alphabetical: a mod whose real folder is `middle earth` gets the empty placeholder from `africa`.
+
+`victorianTools.mapEditor.provinceFolderPattern` narrows the search when that happens. It is a
+regular expression matched against the **subfolder alone** — `middle earth`, `usa`, or empty for
+files sitting directly in `history/provinces` — case-insensitively, so `^middle` keeps `middle earth`
+and drops the other 25 folders. Leave it empty (the default) to use every folder; an invalid
+expression is ignored, which is also every folder.
+
+It narrows four things at once, so they stay consistent: which file a province opens, which file a
+save patches, the **Folder** list offered when a province has no history file yet, and the owners the
+**Country Colors** layer paints. A pattern matching no folder at all therefore leaves the editor
+believing no province has a history file, and every save offers to create one.
+
+Editable from the **Regex Patterns** tab of the **Victorian Tools Settings** page, which compiles
+what is typed and says what it will do before it is saved. Changing it re-reads the mod stack, so an
+open Map Editor redraws on its own.
+
 ## What a save changes
 
 Files are patched, not regenerated, so comments, blank lines and the file's own order survive
 (`services/textPatch.ts`). Line endings and indentation follow the file. Files are written in the
-game's windows-1252 encoding.
+mod's own code page — see [encoding.md](encoding.md).
 
 - **Localisation** (`services/provinceLocEdit.ts`): only the second field of the `PROV<id>` line is
   replaced; the other language columns and the `;x` terminator stay. `;` and line breaks in the new

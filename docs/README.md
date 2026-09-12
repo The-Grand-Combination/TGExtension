@@ -40,6 +40,9 @@ is treated as a genuine mod bug, not as a reason to widen a rule.
 - [mods-and-submods.md](mods-and-submods.md) — how the game stacks the game folder, a mod and its
   submods (`.mod` descriptors, `replace_path`, `dependencies`), how the extension reads files
   through that stack, and the side bar mod selection.
+- [encoding.md](encoding.md) — the single-byte code page mod files are stored in
+  (`victorianTools.encoding`), why UTF-8 is not an option, and the `files.encoding` override an
+  editor tab needs to agree with it.
 - [diagnostics-reference.md](diagnostics-reference.md) — every diagnostic code, its severity, and
   what triggers it.
 - [hover-and-highlighting.md](hover-and-highlighting.md) — hover tooltips, go-to-definition, syntax

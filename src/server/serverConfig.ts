@@ -5,7 +5,9 @@ import {
   DEFAULT_IGNORE_MARKER,
   DEFAULT_NULL_TAG_PATTERN,
 } from '../model/validationOptions.js';
+import { DEFAULT_PROVINCE_FOLDER_PATTERN } from '../model/mapEditor.js';
 import { SETTING, SETTINGS_SECTION, type SettingKey } from '../model/settingsKeys.js';
+import { DEFAULT_CODEPAGE, isCodepage, type Codepage } from '../io/textCodec.js';
 
 /** The server's view of `victorianTools.*`, mirroring the manifest defaults. */
 export interface ServerConfig {
@@ -20,12 +22,16 @@ export interface ServerConfig {
   readonly gamePath: string;
   /** `name`s of the mods being worked on; empty for none (each mod is read with its dependencies). */
   readonly activeMods: readonly string[];
+  /** The single-byte code page every mod file is read and written in. */
+  readonly encoding: Codepage;
   /** Regex source deciding which loc field values are keys; empty checks every value. */
   readonly locKeyPattern: string;
   /** Regex source narrowing the never-set flag check; empty checks every flag. */
   readonly flagNamePattern: string;
   /** Regex source of the tags meaning "no country"; empty allows no exception. */
   readonly nullTagPattern: string;
+  /** Regex source narrowing which `history/provinces` subfolders the Map Editor sees; empty sees all. */
+  readonly provinceFolderPattern: string;
   /** A line carrying this marker is not reported; empty turns the escape hatch off. */
   readonly ignoreMarker: string;
 }
@@ -37,9 +43,11 @@ export const DEFAULT_CONFIG: ServerConfig = {
   indexOnStartup: true,
   gamePath: '',
   activeMods: [],
+  encoding: DEFAULT_CODEPAGE,
   locKeyPattern: DEFAULT_LOC_KEY_PATTERN,
   flagNamePattern: DEFAULT_FLAG_NAME_PATTERN,
   nullTagPattern: DEFAULT_NULL_TAG_PATTERN,
+  provinceFolderPattern: DEFAULT_PROVINCE_FOLDER_PATTERN,
   ignoreMarker: DEFAULT_IGNORE_MARKER,
 };
 
@@ -68,9 +76,11 @@ export function readServerConfig(configuration: unknown): ServerConfig {
     indexOnStartup: readBoolean(at(root, SETTING.indexOnStartup), DEFAULT_CONFIG.indexOnStartup),
     gamePath: readString(at(root, SETTING.gamePath)),
     activeMods: readStringList(at(root, SETTING.activeMods)),
+    encoding: readCodepage(at(root, SETTING.encoding)),
     locKeyPattern: readPattern(at(root, SETTING.locKeyPattern), DEFAULT_LOC_KEY_PATTERN),
     flagNamePattern: readPattern(at(root, SETTING.flagNamePattern), DEFAULT_FLAG_NAME_PATTERN),
     nullTagPattern: readPattern(at(root, SETTING.nullTagPattern), DEFAULT_NULL_TAG_PATTERN),
+    provinceFolderPattern: readPattern(at(root, SETTING.provinceFolderPattern), DEFAULT_PROVINCE_FOLDER_PATTERN),
     ignoreMarker: readPattern(at(root, SETTING.ignoreMarker), DEFAULT_IGNORE_MARKER),
   };
 }
@@ -102,10 +112,18 @@ export function configEquals(left: ServerConfig, right: ServerConfig): boolean {
   );
 }
 
-/** True when the fields that decide which mods are read are the same. */
+/**
+ * True when the fields that decide which mods are read, and how, are the same.
+ * `encoding` belongs here rather than in the "other" bucket: the index holds
+ * text that is already decoded, so a new code page means re-reading everything.
+ * `provinceFolderPattern` belongs here for the same kind of reason: only the
+ * layout path clears the Map Editor's caches and tells an open page to redraw.
+ */
 export function layoutConfigEquals(left: ServerConfig, right: ServerConfig): boolean {
   return (
     left.gamePath === right.gamePath &&
+    left.encoding === right.encoding &&
+    left.provinceFolderPattern === right.provinceFolderPattern &&
     left.activeMods.length === right.activeMods.length &&
     left.activeMods.every((name, position) => name === right.activeMods[position])
   );
@@ -125,6 +143,10 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   // A configuration bag arrives as `unknown` over JSON-RPC; the cast only
   // permits indexed reads, and every field is narrowed before use.
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined;
+}
+
+function readCodepage(value: unknown): Codepage {
+  return isCodepage(value) ? value : DEFAULT_CODEPAGE;
 }
 
 /** An absent pattern falls back to the manifest default; an empty one is the user's "check everything". */

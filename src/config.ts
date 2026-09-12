@@ -5,7 +5,7 @@ import {
   DEFAULT_IGNORE_MARKER,
   DEFAULT_NULL_TAG_PATTERN,
 } from './model/validationOptions.js';
-import { DEFAULT_COUNTRY_COLORS_TINT } from './model/mapEditor.js';
+import { DEFAULT_COUNTRY_COLORS_TINT, DEFAULT_PROVINCE_FOLDER_PATTERN } from './model/mapEditor.js';
 import { qualifiedSettingKey, SETTING, SETTINGS_SECTION } from './model/settingsKeys.js';
 
 
@@ -92,6 +92,20 @@ export function writeIgnoreMarker(marker: string): Thenable<void> {
 }
 
 /**
+ * The regex narrowing which `history/provinces` subfolders the Map Editor reads,
+ * as stored in `victorianTools.mapEditor.provinceFolderPattern`. Empty uses every
+ * folder.
+ */
+export function readProvinceFolderPattern(): string {
+  const value = vscode.workspace.getConfiguration(SETTINGS_SECTION).get<unknown>(SETTING.provinceFolderPattern);
+  return typeof value === 'string' ? value : DEFAULT_PROVINCE_FOLDER_PATTERN;
+}
+
+export function writeProvinceFolderPattern(pattern: string): Thenable<void> {
+  return vscode.workspace.getConfiguration(SETTINGS_SECTION).update(SETTING.provinceFolderPattern, pattern, patternTarget());
+}
+
+/**
  * The Country Colors tint of the Map Editor, 0-100, as stored in
  * `victorianTools.mapEditor.countryColorsTint`. Anything else falls back to the default.
  */
@@ -116,7 +130,7 @@ export function affectsCountryColorsTint(event: vscode.ConfigurationChangeEvent)
 
 /** True when a configuration change touches anything the settings page shows. */
 export function affectsSettingsPage(event: vscode.ConfigurationChangeEvent): boolean {
-  const keys = [SETTING.activeMods, SETTING.gamePath, SETTING.locKeyPattern, SETTING.flagNamePattern, SETTING.nullTagPattern, SETTING.ignoreMarker, SETTING.countryColorsTint];
+  const keys = [SETTING.activeMods, SETTING.gamePath, SETTING.locKeyPattern, SETTING.flagNamePattern, SETTING.nullTagPattern, SETTING.ignoreMarker, SETTING.countryColorsTint, SETTING.provinceFolderPattern];
   return keys.some((key) => event.affectsConfiguration(qualifiedSettingKey(key)));
 }
 

@@ -1,4 +1,5 @@
 import * as assert from 'node:assert';
+import { DEFAULT_CODEPAGE, type Codepage } from '../../io/textCodec.js';
 import type {
   MapEditorTargetParams,
   ProvinceHistory,
@@ -24,7 +25,11 @@ interface Recorder {
  * A host that resolves one mod and answers every read with `undefined`. Files are
  * reported as present so `resolveLayeredFile` yields a path and `readText` is reached.
  */
-function recordingHost(targets: readonly FileLocation[] = [TARGET]): Recorder {
+function recordingHost(
+  targets: readonly FileLocation[] = [TARGET],
+  codepage: Codepage = DEFAULT_CODEPAGE,
+  provinces: { readonly files?: readonly string[]; readonly pattern?: RegExp } = {},
+): Recorder {
   const readTextPaths: string[] = [];
   const host: MapEditorHost = {
     targets: (): readonly FileLocation[] => targets,
@@ -34,7 +39,8 @@ function recordingHost(targets: readonly FileLocation[] = [TARGET]): Recorder {
     fileSystem: {
       fileExists: (): boolean => true,
       listFiles: (): string[] => [],
-      listFilesRecursive: (): string[] => [],
+      listFilesRecursive: (_root: string, relativeFolder: string): string[] =>
+        relativeFolder === 'history/provinces' ? [...(provinces.files ?? [])] : [],
     },
     readText: (absolutePath: string): Promise<string | undefined> => {
       readTextPaths.push(absolutePath);
@@ -44,6 +50,8 @@ function recordingHost(targets: readonly FileLocation[] = [TARGET]): Recorder {
     assetsFolder: '/extension/assets',
     writeText: (): Promise<boolean> => Promise.resolve(true),
     rename: (): Promise<boolean> => Promise.resolve(true),
+    codepage: (): Codepage => codepage,
+    historyFolderPattern: (): RegExp | undefined => provinces.pattern,
   };
   return { host, readTextPaths };
 }
@@ -119,6 +127,60 @@ suite('MapEditorHandlers — no mod to edit', () => {
     const handlers = new MapEditorHandlers(recordingHost([]).host);
     const result = await handlers.terrainPictureFor({ ...targetParams, terrain: 'desert' });
     assert.deepStrictEqual(result, { terrain: 'desert', pictureDataUri: undefined });
+  });
+});
+
+suite('MapEditorHandlers — a name the code page cannot hold', () => {
+  const cyrillic: SaveParams = {
+    ...targetParams,
+    provinceId: 1,
+    popDate: '1836.1.1',
+    section: 'localisation',
+    text: 'Москва',
+    renameHistoryFile: false,
+  };
+
+  test('a Cyrillic name is refused under windows-1252 instead of written as rubbish', async () => {
+    const { host } = recordingHost([TARGET], 'windows-1252');
+    const result = await new MapEditorHandlers(host).save(cyrillic);
+    assert.strictEqual(result.ok, false);
+    assert.ok(result.reason.includes('М'), result.reason);
+    assert.ok(result.reason.includes('windows-1252'), result.reason);
+  });
+
+  test('the same name is accepted under windows-1251', async () => {
+    const { host } = recordingHost([TARGET], 'windows-1251');
+    const result = await new MapEditorHandlers(host).save(cyrillic);
+    assert.strictEqual(result.ok, true);
+  });
+});
+
+suite('MapEditorHandlers — narrowing the province history folders', () => {
+  /** A mod that declares the vanilla set as empty placeholders and holds its own provinces elsewhere. */
+  const FILES = ['history/provinces/africa/1 - Fez.txt', 'history/provinces/middle earth/1 - Healleah.txt'];
+  const province = { ...targetParams, provinceId: 1, popDate: '1836.1.1' };
+
+  async function historyPathOf(pattern: RegExp | undefined): Promise<string | undefined> {
+    const { host, readTextPaths } = recordingHost([TARGET], DEFAULT_CODEPAGE, {
+      files: FILES,
+      ...(pattern === undefined ? {} : { pattern }),
+    });
+    await new MapEditorHandlers(host).province(province);
+    return readTextPaths.find((absolutePath) => absolutePath.includes('1 - '));
+  }
+
+  test('without a pattern the id is answered by whichever folder the walk reaches first', async () => {
+    assert.ok((await historyPathOf(undefined))?.includes('africa'));
+  });
+
+  test('with a pattern the id is answered by the folder that matches', async () => {
+    assert.ok((await historyPathOf(/^middle.*/i))?.includes('middle earth'));
+  });
+
+  test('the folder list offered for a new file is narrowed too', async () => {
+    const { host } = recordingHost([TARGET], DEFAULT_CODEPAGE, { files: FILES, pattern: /^middle.*/i });
+    const result = await new MapEditorHandlers(host).map(targetParams);
+    assert.deepStrictEqual(result.kind === 'ready' ? result.historyFolders : undefined, ['middle earth']);
   });
 });
 

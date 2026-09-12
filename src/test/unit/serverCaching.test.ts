@@ -296,11 +296,40 @@ suite('serverConfig', () => {
       indexOnStartup: false,
       gamePath: '',
       activeMods: [],
+      encoding: 'windows-1252',
       locKeyPattern: '^EVT',
       flagNamePattern: '',
       nullTagPattern: '^(QQQ|---|null)$',
+      provinceFolderPattern: '',
       ignoreMarker: '#VT - Skip Validation',
     });
+  });
+
+  test('a new province folder pattern is a layout change, so the Map Editor caches are cleared', () => {
+    const all = readServerConfig({});
+    const narrowed = readServerConfig({ mapEditor: { provinceFolderPattern: '^middle' } });
+    assert.strictEqual(all.provinceFolderPattern, '');
+    assert.strictEqual(narrowed.provinceFolderPattern, '^middle');
+    assert.strictEqual(readServerConfig({ mapEditor: { provinceFolderPattern: 7 } }).provinceFolderPattern, '');
+    assert.ok(!configEquals(all, narrowed));
+    assert.ok(!layoutConfigEquals(all, narrowed), 'only the layout path invalidates the cached owners');
+    assert.ok(layoutConfigEquals(narrowed, readServerConfig({ mapEditor: { provinceFolderPattern: '^middle' } })));
+  });
+
+  test('the code page is one of the two the manifest offers, or the default', () => {
+    assert.strictEqual(readServerConfig({}).encoding, 'windows-1252');
+    assert.strictEqual(readServerConfig({ encoding: 'windows-1251' }).encoding, 'windows-1251');
+    // A hand-edited settings.json cannot hand the decoder an encoding it does not have.
+    assert.strictEqual(readServerConfig({ encoding: 'latin1' }).encoding, 'windows-1252');
+    assert.strictEqual(readServerConfig({ encoding: 7 }).encoding, 'windows-1252');
+  });
+
+  test('a new code page is a layout change, so the index is rebuilt instead of reused', () => {
+    const latin = readServerConfig({});
+    const cyrillic = readServerConfig({ encoding: 'windows-1251' });
+    assert.ok(!configEquals(latin, cyrillic));
+    assert.ok(!layoutConfigEquals(latin, cyrillic), 'the index holds already-decoded text');
+    assert.ok(layoutConfigEquals(cyrillic, readServerConfig({ encoding: 'windows-1251' })));
   });
 
   test('the localisation key pattern falls back to the manifest default, and an empty one is kept', () => {

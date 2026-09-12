@@ -1,4 +1,5 @@
 import * as assert from 'node:assert';
+import { decodeText, DEFAULT_CODEPAGE } from '../../io/textCodec.js';
 import * as fs from 'node:fs';
 import type { ProvincePositions } from '../../model/mapEditor.js';
 import {
@@ -190,7 +191,7 @@ suite('provincePositionsEdit', () => {
     if (!fs.existsSync(TGC_POSITIONS)) {
       this.skip();
     }
-    const text = fs.readFileSync(TGC_POSITIONS, 'latin1');
+    const text = decodeText(fs.readFileSync(TGC_POSITIONS), DEFAULT_CODEPAGE);
     const document = parseDocument(text).document;
     let blocks = 0;
     for (const entry of document.entries) {

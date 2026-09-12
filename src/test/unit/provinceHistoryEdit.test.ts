@@ -2,6 +2,7 @@ import * as assert from 'node:assert';
 import type { ProvinceHistory } from '../../model/mapEditor.js';
 import {
   EMPTY_PROVINCE_HISTORY,
+  filterHistoryFolders,
   findHistoryFile,
   historyFoldersOf,
   parseProvinceHistory,
@@ -142,5 +143,26 @@ suite('provinceHistoryEdit', () => {
     assert.strictEqual(findHistoryFile(paths, 5), undefined);
     assert.strictEqual(provinceIdOfHistoryFile('213-Fredericksburg.txt'), 213);
     assert.deepStrictEqual(historyFoldersOf(paths), ['', 'asia', 'usa']);
+  });
+
+  test('a folder pattern keeps the real files of a mod that fills the vanilla set with placeholders', () => {
+    // The TTA layout: every vanilla province declared empty, the mod's own
+    // provinces in one folder, and the same ids in both.
+    const paths = [
+      'history/provinces/africa/1 - Fez.txt',
+      'history/provinces/middle earth/1 - Healleah.txt',
+      'history/provinces/2 - Loose.txt',
+    ];
+    assert.deepStrictEqual(filterHistoryFolders(paths, undefined), paths, 'no pattern keeps everything');
+    assert.strictEqual(findHistoryFile(paths, 1), paths[0], 'the walk order decides without a pattern');
+
+    const kept = filterHistoryFolders(paths, /^middle.*/i);
+    assert.deepStrictEqual(kept, [paths[1]]);
+    assert.strictEqual(findHistoryFile(kept, 1), paths[1]);
+    assert.deepStrictEqual(historyFoldersOf(kept), ['middle earth']);
+    // Folder names are matched case-insensitively, and the root is a folder too.
+    assert.deepStrictEqual(filterHistoryFolders(paths, /^MIDDLE/i), [paths[1]]);
+    assert.deepStrictEqual(filterHistoryFolders(paths, /^$/), [paths[2]]);
+    assert.deepStrictEqual(filterHistoryFolders(paths, /^nowhere$/), []);
   });
 });

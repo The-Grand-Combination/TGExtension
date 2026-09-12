@@ -37,6 +37,7 @@ import {
 } from './modLayers.js';
 import { isInsideRoot, type FileLocation } from './modLayout.js';
 import {
+  filterHistoryFolders,
   findHistoryFile,
   historyFoldersOf,
   parseProvinceHistory,
@@ -81,6 +82,7 @@ import {
   terrainTypeByIndex,
   textureCandidates,
 } from './terrainPictures.js';
+import { unrepresentableIn, type Codepage } from '../io/textCodec.js';
 import { applyPatches } from './textPatch.js';
 
 export interface MapEditorHost {
@@ -95,6 +97,10 @@ export interface MapEditorHost {
   readonly assetsFolder: string;
   readonly writeText: (absolutePath: string, text: string) => Promise<boolean>;
   readonly rename: (fromPath: string, toPath: string) => Promise<boolean>;
+  /** The mod's code page, asked at save time so the setting can change meanwhile. */
+  readonly codepage: () => Codepage;
+  /** Narrows which `history/provinces` subfolders count; undefined is all of them. */
+  readonly historyFolderPattern: () => RegExp | undefined;
 }
 
 const PROVINCES_FOLDER = 'history/provinces';
@@ -181,7 +187,7 @@ export class MapEditorHandlers {
       definitions,
       seaProvinces: [...target.index.seaProvinces].map(Number).filter((id) => Number.isInteger(id)),
       popDates,
-      historyFolders: historyFoldersOf(this.listRecursive(target.layers, PROVINCES_FOLDER)),
+      historyFolders: historyFoldersOf(this.provinceHistoryFiles(target.layers)),
       popFiles: Object.fromEntries(popDates.map((date) => [date, popFilesOf(popPaths, date)])),
     };
   }
@@ -411,7 +417,7 @@ export class MapEditorHandlers {
   }
 
   private async readHistory(target: Target, provinceId: number): Promise<HistorySection> {
-    const relativePath = findHistoryFile(this.listRecursive(target.layers, PROVINCES_FOLDER), provinceId);
+    const relativePath = findHistoryFile(this.provinceHistoryFiles(target.layers), provinceId);
     const absolutePath = relativePath === undefined ? undefined : this.resolve(target.layers, relativePath);
     const text = absolutePath === undefined ? undefined : await this.host.readText(absolutePath);
     if (absolutePath === undefined || text === undefined) {
@@ -500,7 +506,7 @@ export class MapEditorHandlers {
   /** The start-date `owner` of every province history file, read a batch of files at a time. */
   private async readProvinceOwners(layers: ModLayers): Promise<Record<string, string>> {
     const owners: Record<string, string> = {};
-    const relativePaths = this.listRecursive(layers, PROVINCES_FOLDER).filter((relativePath) =>
+    const relativePaths = this.provinceHistoryFiles(layers).filter((relativePath) =>
       relativePath.toLowerCase().endsWith('.txt'),
     );
     for (let start = 0; start < relativePaths.length; start += OWNER_BATCH) {
@@ -545,6 +551,13 @@ export class MapEditorHandlers {
     renameHistoryFile: boolean,
   ): Promise<SaveResult> {
     const key = provinceLocKey(params.provinceId);
+    // The only free text a save carries. Asking first turns what would be a
+    // silent mangling into a reason the page can show.
+    const codepage = this.host.codepage();
+    const stray = unrepresentableIn(text, codepage);
+    if (stray !== undefined) {
+      return { ok: false, reason: `'${stray}' cannot be stored in ${codepage}; the game reads this mod one byte per character.` };
+    }
     const written = await this.writeLocalisation(target, key, text);
     if (written === undefined) {
       return { ok: false, reason: 'The localisation file could not be written.' };
@@ -614,7 +627,7 @@ export class MapEditorHandlers {
     data: ProvinceHistory,
     createInFolder: string | undefined,
   ): Promise<SaveResult> {
-    const relativePath = findHistoryFile(this.listRecursive(target.layers, PROVINCES_FOLDER), params.provinceId);
+    const relativePath = findHistoryFile(this.provinceHistoryFiles(target.layers), params.provinceId);
     const source = relativePath === undefined ? undefined : this.resolve(target.layers, relativePath);
     const text = source === undefined ? undefined : await this.host.readText(source);
     let destination: string;
@@ -695,6 +708,15 @@ export class MapEditorHandlers {
 
   private listRecursive(layers: ModLayers, relativeFolder: string): string[] {
     return listLayeredFilesRecursive(layers, this.host.fileSystem, relativeFolder);
+  }
+
+  /**
+   * The province history files the editor works with: every one, unless the mod
+   * narrows them to certain subfolders. The pattern is read per call, so a change
+   * to the setting takes effect without a restart.
+   */
+  private provinceHistoryFiles(layers: ModLayers): string[] {
+    return filterHistoryFolders(this.listRecursive(layers, PROVINCES_FOLDER), this.host.historyFolderPattern());
   }
 }
 

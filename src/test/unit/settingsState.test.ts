@@ -19,8 +19,18 @@ function current(
   nullTagPattern = '^(QQQ|---|null)$',
   ignoreMarker = '#VT - Skip Validation',
   countryColorsTint = 82,
+  provinceFolderPattern = '',
 ): CurrentSettings {
-  return { gamePathSetting, selected, locKeyPattern, flagNamePattern, nullTagPattern, ignoreMarker, countryColorsTint };
+  return {
+    gamePathSetting,
+    selected,
+    locKeyPattern,
+    flagNamePattern,
+    nullTagPattern,
+    ignoreMarker,
+    provinceFolderPattern,
+    countryColorsTint,
+  };
 }
 
 suite('settingsState', () => {
@@ -83,6 +93,20 @@ suite('settingsState', () => {
       '',
       'empty is a real setting: no exception',
     );
+  });
+
+  test('every regex field sits in the Regex Patterns tab, and the rest in Extension', () => {
+    const html = settingsHtml('vscode-webview:');
+    const panes = html.split('<section id="patternsPane"');
+    assert.strictEqual(panes.length, 2, 'the page has the two tab panes');
+    const [extension, patterns] = panes as [string, string];
+    for (const id of ['locPattern', 'flagPattern', 'nullTagPattern', 'provinceFolderPattern']) {
+      assert.ok(patterns.includes(`id="${id}"`), `${id} belongs to Regex Patterns`);
+    }
+    // The marker is literal text, not a regex, so it stays with the rest.
+    for (const id of ['gamePath', 'ignoreMarker', 'tint', 'mods']) {
+      assert.ok(extension.includes(`id="${id}"`), `${id} belongs to Extension`);
+    }
   });
 
   test('the page carries a nonce-locked CSP and no external resources', () => {

@@ -9,7 +9,8 @@ import {
   DEFAULT_IGNORE_MARKER,
   DEFAULT_NULL_TAG_PATTERN,
 } from '../model/validationOptions.js';
-import { DEFAULT_COUNTRY_COLORS_TINT } from '../model/mapEditor.js';
+import { DEFAULT_CODEPAGE } from '../io/textCodec.js';
+import { DEFAULT_COUNTRY_COLORS_TINT, DEFAULT_PROVINCE_FOLDER_PATTERN } from '../model/mapEditor.js';
 import { qualifiedSettingKey, SETTING, type SettingKey } from '../model/settingsKeys.js';
 import { EXTENSION_ID } from './extensionId.js';
 
@@ -117,11 +118,13 @@ suite('Victorian Tools — integration', () => {
       [SETTING.indexOnStartup]: true,
       [SETTING.gamePath]: '',
       [SETTING.activeMods]: [],
+      [SETTING.encoding]: DEFAULT_CODEPAGE,
       [SETTING.locKeyPattern]: DEFAULT_LOC_KEY_PATTERN,
       [SETTING.flagNamePattern]: DEFAULT_FLAG_NAME_PATTERN,
       [SETTING.nullTagPattern]: DEFAULT_NULL_TAG_PATTERN,
       [SETTING.ignoreMarker]: DEFAULT_IGNORE_MARKER,
       [SETTING.countryColorsTint]: DEFAULT_COUNTRY_COLORS_TINT,
+      [SETTING.provinceFolderPattern]: DEFAULT_PROVINCE_FOLDER_PATTERN,
     };
     const properties = manifestSettings();
     const actual = Object.fromEntries(
@@ -136,6 +139,21 @@ suite('Victorian Tools — integration', () => {
     const properties = manifestSettings();
     const missing = Object.values(SETTING).filter((key) => !(qualifiedSettingKey(key) in properties));
     assert.deepStrictEqual(missing, []);
+  });
+
+  test('the editor decodes our own languages the way the extension reads them', () => {
+    // The extension reads mod files off disk itself; a file opened in a tab is
+    // decoded by VS Code. Left to its UTF-8 default the two disagree, which puts
+    // index-time squiggles on the wrong character and makes Ctrl+S write bytes
+    // the game cannot read.
+    const extension = vscode.extensions.getExtension(EXTENSION_ID);
+    const packageJson = extension?.packageJSON as {
+      contributes?: { configurationDefaults?: Record<string, Record<string, unknown>> };
+    };
+    const defaults = packageJson.contributes?.configurationDefaults ?? {};
+    for (const language of ['victoria2', 'victoria2-csv']) {
+      assert.strictEqual(defaults[`[${language}]`]?.['files.encoding'], 'windows1252', language);
+    }
   });
 
   test('registers the victoria2 language', async () => {

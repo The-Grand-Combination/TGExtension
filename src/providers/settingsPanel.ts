@@ -9,6 +9,7 @@ import {
   readIgnoreMarker,
   readLocKeyPattern,
   readNullTagPattern,
+  readProvinceFolderPattern,
   writeActiveMods,
   writeCountryColorsTint,
   writeFlagNamePattern,
@@ -16,6 +17,7 @@ import {
   writeIgnoreMarker,
   writeLocKeyPattern,
   writeNullTagPattern,
+  writeProvinceFolderPattern,
 } from '../config.js';
 import { LAYOUT_CHANGED_NOTIFICATION, MODS_REQUEST, type ModsResult } from '../model/modDescriptor.js';
 import { settingsHtml, settingsState, type SettingsState } from './settingsHtml.js';
@@ -29,15 +31,17 @@ type SettingsMessage =
   | { readonly type: 'flagNamePattern'; readonly value: string }
   | { readonly type: 'nullTagPattern'; readonly value: string }
   | { readonly type: 'ignoreMarker'; readonly value: string }
+  | { readonly type: 'provinceFolderPattern'; readonly value: string }
   | { readonly type: 'countryColorsTint'; readonly value: number }
   | { readonly type: 'refresh' };
 
 /**
- * The **Victorian Tools Settings** editor tab: the game folder (typed or
- * browsed), the mods being worked on, any combination, and the two rule
- * patterns (localisation keys, flag names and null tags). All are plain settings; the page redraws when they change and
- * when the server has re-read the install, so what it shows is what the server
- * uses.
+ * The **Victorian Tools Settings** editor tab, itself in two tabs: *Extension*
+ * (the game folder, typed or browsed; the skip marker; the Map Editor tint; the
+ * mods being worked on, in any combination) and *Regex Patterns* (localisation
+ * keys, flag names, null tags and the Map Editor's province folders). All are
+ * plain settings; the page redraws when they change and when the server has
+ * re-read the install, so what it shows is what the server uses.
  */
 export class SettingsPanel implements vscode.Disposable {
   private panel: vscode.WebviewPanel | undefined;
@@ -123,6 +127,9 @@ export class SettingsPanel implements vscode.Disposable {
       case 'ignoreMarker':
         await writeIgnoreMarker(parsed.value);
         return;
+      case 'provinceFolderPattern':
+        await writeProvinceFolderPattern(parsed.value);
+        return;
       case 'countryColorsTint':
         await writeCountryColorsTint(parsed.value);
         return;
@@ -160,6 +167,7 @@ export class SettingsPanel implements vscode.Disposable {
       flagNamePattern: readFlagNamePattern(),
       nullTagPattern: readNullTagPattern(),
       ignoreMarker: readIgnoreMarker(),
+      provinceFolderPattern: readProvinceFolderPattern(),
       countryColorsTint: readCountryColorsTint(),
     });
   }
@@ -180,6 +188,7 @@ function asMessage(message: unknown): SettingsMessage | undefined {
     case 'flagNamePattern':
     case 'nullTagPattern':
     case 'ignoreMarker':
+    case 'provinceFolderPattern':
       return typeof record['value'] === 'string' ? { type: record['type'], value: record['value'] } : undefined;
     case 'countryColorsTint':
       return asTintMessage(record['value']);

@@ -152,6 +152,14 @@
         }
       ]
     },
+    "configurationDefaults": {
+      "[victoria2]": {
+        "files.encoding": "windows1252"
+      },
+      "[victoria2-csv]": {
+        "files.encoding": "windows1252"
+      }
+    },
     "configuration": {
       "title": "Victorian Tools",
       "properties": {
@@ -219,6 +227,24 @@
           "minimum": 0,
           "maximum": 100,
           "markdownDescription": "Map Editor, **Country Colors** layer: how much of each province's colour comes from its owner's `color`, in percent. The rest is the province's own `definition.csv` colour, which keeps neighbours apart. `100` paints every province of a country the same; `0` shows the plain map. Set from **Settings** in the Victorian Tools side bar."
+        },
+        "victorianTools.mapEditor.provinceFolderPattern": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Map Editor: a regular expression narrowing which subfolders of `history/provinces` hold the mod's real province files. Matched against the subfolder alone (`middle earth`, `usa`, or empty for files directly in `history/provinces`), case-insensitively, so `^middle` keeps `middle earth` and drops the rest. Leave empty to use every folder.\n\nA total conversion that declares the whole vanilla province set as empty placeholder files needs this: without it a province id is answered by whichever folder the directory walk reaches first, which is the empty placeholder for every folder sorting before the real one."
+        },
+        "victorianTools.encoding": {
+          "type": "string",
+          "enum": [
+            "windows-1252",
+            "windows-1251"
+          ],
+          "enumDescriptions": [
+            "Western European — the English, French, German, Spanish and Italian builds of the game.",
+            "Cyrillic — the Russian build of the game."
+          ],
+          "default": "windows-1252",
+          "markdownDescription": "The single-byte code page the mod's `.txt` and `.csv` files are stored in. Victoria 2 does not read UTF-8, and the same byte is a different letter in each page (`0xCF` is `Ï` in windows-1252 and `П` in windows-1251), so a mod has exactly one. Changing this re-reads every file. This governs how the *extension* reads the mod; the files you open in an editor tab are decoded by VS Code's own `files.encoding`, which the extension defaults to `windows1252` for its two languages — override it per workspace to match if you set this to windows-1251."
         },
         "victorianTools.trace.server": {
           "type": "string",

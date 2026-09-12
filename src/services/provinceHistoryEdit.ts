@@ -78,15 +78,29 @@ export function findHistoryFile(relativePaths: readonly string[], provinceId: nu
   });
 }
 
+/** The subfolder of `history/provinces` a path sits in; `''` for a file directly in it. */
+export function historyFolderOf(relativePath: string): string {
+  const inside = relativePath.replace(/^history\/provinces\/?/i, '');
+  const slash = inside.lastIndexOf('/');
+  return slash === -1 ? '' : inside.slice(0, slash);
+}
+
 /** The subfolders of `history/provinces` that hold files; `''` for files directly in it. */
 export function historyFoldersOf(relativePaths: readonly string[]): string[] {
-  const folders = new Set<string>();
-  for (const relativePath of relativePaths) {
-    const inside = relativePath.replace(/^history\/provinces\/?/i, '');
-    const slash = inside.lastIndexOf('/');
-    folders.add(slash === -1 ? '' : inside.slice(0, slash));
+  return [...new Set(relativePaths.map(historyFolderOf))].sort();
+}
+
+/**
+ * Only the paths whose folder under `history/provinces` matches; `undefined`
+ * keeps every path. A mod that declares the whole vanilla province set as empty
+ * placeholder files needs this: without it the first file carrying an id wins,
+ * and that is whichever folder the directory walk reaches first.
+ */
+export function filterHistoryFolders(relativePaths: readonly string[], pattern: RegExp | undefined): string[] {
+  if (pattern === undefined) {
+    return [...relativePaths];
   }
-  return [...folders].sort();
+  return relativePaths.filter((relativePath) => pattern.test(historyFolderOf(relativePath)));
 }
 
 export function parseProvinceHistory(document: Document): ProvinceHistory {

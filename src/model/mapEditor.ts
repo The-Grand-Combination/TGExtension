@@ -16,6 +16,12 @@ export const MAP_EDITOR_COUNTRY_COLORS_REQUEST = requestDescriptor<MapEditorTarg
 /** `victorianTools.mapEditor.countryColorsTint`: percent of the owner's colour in the Country Colors layer. */
 export const DEFAULT_COUNTRY_COLORS_TINT = 82;
 
+/** `victorianTools.mapEditor.provinceFolderPattern`: empty, so every subfolder counts. */
+export const DEFAULT_PROVINCE_FOLDER_PATTERN = '';
+
+/** Folder names are case-insensitive on Windows, so the pattern is matched that way. */
+export const PROVINCE_FOLDER_FLAGS = 'i';
+
 export interface MapEditorTargetParams {
   readonly workspaceFolders: readonly string[];
   /** `name`s of the picked mods, in any order; the top one in load order receives the edits. */

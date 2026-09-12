@@ -8,12 +8,14 @@ export const SETTINGS_SECTION = 'victorianTools';
 
 export const SETTING = {
   activeMods: 'activeMods',
+  encoding: 'encoding',
   gamePath: 'gamePath',
   ignoreMarker: 'ignoreMarker',
   locKeyPattern: 'localisation.keyPattern',
   flagNamePattern: 'flags.namePattern',
   nullTagPattern: 'nullTags.pattern',
   countryColorsTint: 'mapEditor.countryColorsTint',
+  provinceFolderPattern: 'mapEditor.provinceFolderPattern',
   validationEnabled: 'validation.enable',
   validationDelay: 'validation.delay',
   indexRebuildDelay: 'index.rebuildDelay',
