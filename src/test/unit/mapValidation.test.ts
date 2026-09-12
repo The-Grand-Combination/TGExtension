@@ -92,6 +92,13 @@ suite('mapValidation — terrain.txt', () => {
     assert.deepStrictEqual(codes(text, 'mapTerrain', 'map/terrain.txt'), []);
   });
 
+  test('min_build_ follows the buildings the mod declares, not a fixed list', () => {
+    const declared = 'categories = { plains = { min_build_steel_factory = 1 color = { 1 2 3 } } }\n';
+    assert.deepStrictEqual(codes(declared, 'mapTerrain', 'map/terrain.txt'), []);
+    const undeclared = 'categories = { plains = { min_build_farmland = 1 color = { 1 2 3 } } }\n';
+    assert.deepStrictEqual(codes(undeclared, 'mapTerrain', 'map/terrain.txt'), ['unknown-modifier-key']);
+  });
+
   test('flags bad category fields, unknown palette types, and duplicate indices', () => {
     assert.deepStrictEqual(codes('categories = { plains = { colour = { 1 2 3 } } }\n', 'mapTerrain'), ['unknown-modifier-key']);
     assert.deepStrictEqual(codes('categories = { plains = { color = { 1 2 } } }\n', 'mapTerrain'), ['invalid-color']);
