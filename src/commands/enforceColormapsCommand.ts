@@ -13,8 +13,11 @@ const REWRITE = 'Rewrite palettes';
 
 /**
  * Ask which mods to fix, find the terrain.bmp / rivers.bmp whose palette is not
- * the standard one, confirm, and have the server rewrite the palettes in place.
- * Pixels are untouched: the game reads indices, the palette is what editors show.
+ * the standard one, confirm, and have the server rewrite them in place: the
+ * standard palette goes in, and every pixel is renumbered to the standard index
+ * of the colour it had. The game reads indices and never the palette, so an
+ * editor that re-sorted the colour table (mspaint does) has to be undone in the
+ * pixels too.
  */
 export function enforceColormapsCommand(
   getClient: () => LanguageClient | undefined,
@@ -59,8 +62,8 @@ async function confirmRewrite(plan: EnforceColormapsResult): Promise<boolean> {
     return false;
   }
   const answer = await vscode.window.showWarningMessage(
-    `Rewrite the palette of ${String(fixable.length)} file(s)? Pixels stay as they are; only the color table changes.`,
-    { modal: true, detail: fixable.map((file) => file.path).join('\n') },
+    `Rewrite ${String(fixable.length)} file(s) with the standard palette? Every pixel keeps its colour and takes that colour's standard index.`,
+    { modal: true, detail: fixable.map((file) => `${file.path}${countsOf(file)}`).join('\n') },
     REWRITE,
   );
   return answer === REWRITE;
@@ -87,5 +90,17 @@ const OUTCOME_TEXT: Readonly<Record<ColormapFileResult['outcome'], string>> = {
 };
 
 function describe(files: readonly ColormapFileResult[]): string {
-  return files.map((file) => `${path.basename(file.path)}: ${OUTCOME_TEXT[file.outcome]}`).join('; ') + '.';
+  return files.map((file) => `${path.basename(file.path)}: ${OUTCOME_TEXT[file.outcome]}${countsOf(file)}`).join('; ') + '.';
+}
+
+/** ` (N pixels renumbered, M colours approximated)` for a fixable or fixed file; empty otherwise. */
+function countsOf(file: ColormapFileResult): string {
+  if (file.remappedPixels === undefined) {
+    return '';
+  }
+  const parts = [`${file.remappedPixels.toLocaleString('en-US')} pixels renumbered`];
+  if (file.approximatedColors !== undefined && file.approximatedColors > 0) {
+    parts.push(`${String(file.approximatedColors)} colour(s) not in the standard palette, sent to the nearest`);
+  }
+  return ` (${parts.join(', ')})`;
 }

@@ -27,6 +27,10 @@ export interface ColormapFileResult {
   /** Absolute path of the bitmap in the mod's own folder. */
   readonly path: string;
   readonly outcome: ColormapOutcome;
+  /** For `fixable` / `fixed`: pixels renumbered so they keep their colour under the standard palette. */
+  readonly remappedPixels?: number;
+  /** For `fixable` / `fixed`: colours the standard palette lacks, whose pixels took the nearest entry. */
+  readonly approximatedColors?: number;
 }
 
 export interface EnforceColormapsResult {

@@ -5,7 +5,8 @@ The three bitmaps under `map/` are checked by the **map audit** (`services/mapIm
 (`victorian-tools.generateMapReport`, `commands/generateMapReportCommand.ts`, request
 `victorianTools/mapReport` in `model/mapAudit.ts`). It is a report of its own, apart from the full
 report: the findings have no text to highlight, and pixel findings would crowd the file findings out.
-The side bar action **Enforce Colormaps** rewrites the two palettes.
+The side bar action **Enforce Colormaps** puts the two standard palettes back and renumbers the
+pixels to match.
 
 ## What the engine does (NCE `map/map_data_loading.cpp`, `map/map_borders.cpp`)
 
@@ -122,9 +123,21 @@ The side bar row **Enforce Colormaps** (`victorian-tools.enforceColormaps`,
 `map/terrain.bmp` and `map/rivers.bmp` (never a file of a layer below). Each file is `standard`,
 `fixable`, `not-indexed` (not 8-bit, nothing to fix), `missing` or `unreadable`
 (`services/colormapEnforcement.ts`). With something fixable, a modal lists the files and **Rewrite
-palettes** runs the request again for real: only the 256 palette entries after the header are
-replaced (`services/bmpPalette.ts`), pixels and headers stay byte for byte, and the file is written
-in place. The result per file is shown in a message.
+palettes** runs the request again for real: the 256 palette entries after the header are replaced
+and **every pixel is renumbered to the standard index of the colour it had** under the file's own
+palette (`remapToPalette` in `services/bmpPalette.ts`); headers stay byte for byte, and the file is
+written in place. The result per file, with the number of pixels renumbered, is shown in a message.
+
+The renumbering is the point. The game reads pixel indices and never the palette, and an image
+editor that saves a 256-colour BMP (mspaint, for one) re-sorts the colour table and renumbers the
+pixels to match, so the picture looks the same while sea may now be index 135 and a merge point
+249. Replacing the table alone would leave those indices in place and turn the whole sea into river.
+A colour the standard palette does not have goes to its nearest entry by RGB distance and is counted
+in the message; where the standard palette repeats a colour (the `2, 0, 1` filler of rivers.bmp,
+indices 16-253), the first index wins, which is the one TGC paints its wide river with.
+
+The vanilla `rivers.bmp` and `terrain.bmp` carry exactly the standard palettes above with a 40-byte
+info header; TGC's committed files carry the same palettes behind a 124-byte header. Both are read.
 
 ## Calibration
 

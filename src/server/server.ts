@@ -806,11 +806,15 @@ connection.onRequest(ENFORCE_COLORMAPS_REQUEST, async (params: EnforceColormapsP
 /** Only a mod's own bitmap is rewritten, never a file of a layer below it. */
 async function enforceColormap(absolutePath: string, palette: Palette, dryRun: boolean): Promise<ColormapFileResult> {
   const plan = planColormapFix(await readModFileBytesAsync(absolutePath), palette);
-  if (plan.outcome !== 'fixable' || dryRun) {
+  if (plan.outcome !== 'fixable') {
     return { path: absolutePath, outcome: plan.outcome };
   }
+  const counts = { remappedPixels: plan.remappedPixels, approximatedColors: plan.approximatedColors };
+  if (dryRun) {
+    return { path: absolutePath, outcome: 'fixable', ...counts };
+  }
   const written = await writeModFileBytes(absolutePath, plan.fixed);
-  return { path: absolutePath, outcome: written ? 'fixed' : 'write-failed' };
+  return { path: absolutePath, outcome: written ? 'fixed' : 'write-failed', ...counts };
 }
 
 // --- Map Editor --------------------------------------------------------------------
