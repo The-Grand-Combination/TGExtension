@@ -19,6 +19,7 @@ import {
 } from '../config.js';
 import { LAYOUT_CHANGED_NOTIFICATION, MODS_REQUEST, type ModsResult } from '../model/modDescriptor.js';
 import { settingsHtml, settingsState, type SettingsState } from './settingsHtml.js';
+import { request } from './request.js';
 
 type SettingsMessage =
   | { readonly type: 'gamePath'; readonly value: string }
@@ -150,7 +151,7 @@ export class SettingsPanel implements vscode.Disposable {
   private async currentState(): Promise<SettingsState> {
     const client = this.getClient();
     const installed: ModsResult = client
-      ? await client.sendRequest<ModsResult>(MODS_REQUEST)
+      ? await request(client, MODS_REQUEST)
       : { gameRoot: undefined, mods: [] };
     return settingsState(installed, {
       gamePathSetting: readGamePath(),

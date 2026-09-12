@@ -1,0 +1,25 @@
+{
+  /* The Map Editor page runs in a browser, not in Node: it needs the DOM lib and
+     none of the Node/VS Code types. Keeping it a separate project is what stops
+     `document` and `fetch` from leaking into the extension and server code, and
+     it is what lets ESLint's project service find these files (the root project
+     excludes this folder). */
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": [],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "rootDir": "..",
+    "noEmit": true,
+    "sourceMap": false
+  },
+  "include": [
+    "."
+  ],
+  "exclude": []
+}

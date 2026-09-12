@@ -1,3 +1,4 @@
+import { requestDescriptor } from './request.js';
 /**
  * The Map Editor: a province map the user clicks on to edit one province's
  * localisation, history file, pops and map positions. Custom LSP requests carry
@@ -5,12 +6,12 @@
  * section's save.
  */
 
-export const MAP_EDITOR_MAP_REQUEST = 'victorianTools/mapEditor/map';
-export const MAP_EDITOR_PROVINCE_REQUEST = 'victorianTools/mapEditor/province';
-export const MAP_EDITOR_SAVE_REQUEST = 'victorianTools/mapEditor/save';
-export const MAP_EDITOR_TERRAIN_PICTURE_REQUEST = 'victorianTools/mapEditor/terrainPicture';
-export const MAP_EDITOR_POSITIONS_REQUEST = 'victorianTools/mapEditor/positions';
-export const MAP_EDITOR_COUNTRY_COLORS_REQUEST = 'victorianTools/mapEditor/countryColors';
+export const MAP_EDITOR_MAP_REQUEST = requestDescriptor<MapEditorTargetParams, MapEditorMapResult>('victorianTools/mapEditor/map');
+export const MAP_EDITOR_PROVINCE_REQUEST = requestDescriptor<ProvinceRequestParams, ProvinceResult>('victorianTools/mapEditor/province');
+export const MAP_EDITOR_SAVE_REQUEST = requestDescriptor<SaveParams, SaveResult>('victorianTools/mapEditor/save');
+export const MAP_EDITOR_TERRAIN_PICTURE_REQUEST = requestDescriptor<TerrainPictureParams, TerrainPictureResult>('victorianTools/mapEditor/terrainPicture');
+export const MAP_EDITOR_POSITIONS_REQUEST = requestDescriptor<MapEditorTargetParams, MapPositionsResult>('victorianTools/mapEditor/positions');
+export const MAP_EDITOR_COUNTRY_COLORS_REQUEST = requestDescriptor<MapEditorTargetParams, MapCountryColorsResult>('victorianTools/mapEditor/countryColors');
 
 /** `victorianTools.mapEditor.countryColorsTint`: percent of the owner's colour in the Country Colors layer. */
 export const DEFAULT_COUNTRY_COLORS_TINT = 82;
@@ -266,3 +267,20 @@ export interface MapCountryColors {
 }
 
 export type MapCountryColorsResult = MapCountryColors | { readonly kind: 'unavailable'; readonly reason: string };
+
+/**
+ * What the extension posts to the Map Editor page. The page validates nothing:
+ * both sides read this one declaration, so a payload that drifts fails to
+ * compile. (The other direction is validated at runtime, in mapEditorMessages.)
+ */
+export type HostMessage =
+  | { readonly type: 'map'; readonly map: MapEditorMap; readonly bmpUri: string; readonly riversUri: string | undefined }
+  | ({ readonly type: 'revealPixel' } & MapEditorReveal)
+  | { readonly type: 'details'; readonly details: ProvinceDetails }
+  | { readonly type: 'positions'; readonly markers: readonly PositionMarker[] }
+  | { readonly type: 'settings'; readonly countryColorsTint: number }
+  | { readonly type: 'countryColors'; readonly owners: Readonly<Record<string, string>>; readonly colors: Readonly<Record<string, Rgb>> }
+  | { readonly type: 'saved'; readonly result: SaveResult }
+  | { readonly type: 'savedAll'; readonly written: readonly number[]; readonly failed: readonly { readonly provinceId: number; readonly reason: string }[] }
+  | { readonly type: 'error'; readonly message: string }
+  | ({ readonly type: 'terrainPicture' } & TerrainPictureResult);

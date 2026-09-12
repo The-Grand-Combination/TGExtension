@@ -86,7 +86,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const settingsPanel = new SettingsPanel(() => client);
   settingsPanel.listenTo(client);
   const pickMemory = workspacePickMemory(context.workspaceState);
-  const mapEditorPanel = new MapEditorPanel(() => client);
+  const mapEditorPanel = new MapEditorPanel(() => client, context.extensionUri);
   const mapReportTargets = new MapReportTargets();
   context.subscriptions.push(
     // Both reports open as an untitled plain text document; the provider reads

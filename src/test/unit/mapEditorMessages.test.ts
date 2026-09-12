@@ -1,5 +1,5 @@
 import * as assert from 'node:assert';
-import { asPageMessage } from '../../providers/mapEditorMessages.js';
+import { asPageMessage } from '../../services/mapEditorMessages.js';
 
 /**
  * The page is ours, but what it posts arrives untyped and goes straight into a

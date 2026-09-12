@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { LanguageClient } from 'vscode-languageclient/node';
 import { FULL_REPORT_REQUEST, type FullReportParams, type FullReportResult } from '../model/fullReport.js';
 import { pickMods, type PickMemory } from './pickMods.js';
+import { request } from '../providers/request.js';
 
 /**
  * Ask which mods to analyze, then ask the server for a whole-mod validation
@@ -33,7 +34,7 @@ export function generateFullReportCommand(
     };
     const result = await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: 'Victorian Tools: generating full report…' },
-      () => client.sendRequest<FullReportResult>(FULL_REPORT_REQUEST, params),
+      () => request(client, FULL_REPORT_REQUEST, params),
     );
     await showReport(result);
   };

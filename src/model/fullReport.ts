@@ -1,7 +1,8 @@
+import { requestDescriptor } from './request.js';
 import type { DiagnosticSeverity } from './diagnostic.js';
 
 /** Custom LSP request: validate every file of every mod in the workspace. */
-export const FULL_REPORT_REQUEST = 'victorianTools/fullReport';
+export const FULL_REPORT_REQUEST = requestDescriptor<FullReportParams, FullReportResult>('victorianTools/fullReport');
 
 export interface FullReportParams {
   readonly workspaceFolders: readonly string[];

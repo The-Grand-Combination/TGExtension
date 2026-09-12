@@ -8,6 +8,7 @@ import {
   type EnforceColormapsResult,
 } from '../model/colormaps.js';
 import { pickMods, type PickMemory } from './pickMods.js';
+import { request } from '../providers/request.js';
 
 const REWRITE = 'Rewrite palettes';
 
@@ -42,11 +43,11 @@ export function enforceColormapsCommand(
       mods: outcome.kind === 'picked' ? outcome.picked : [],
       dryRun: true,
     };
-    const plan = await client.sendRequest<EnforceColormapsResult>(ENFORCE_COLORMAPS_REQUEST, params);
+    const plan = await request(client, ENFORCE_COLORMAPS_REQUEST, params);
     if (!(await confirmRewrite(plan))) {
       return;
     }
-    const result = await client.sendRequest<EnforceColormapsResult>(ENFORCE_COLORMAPS_REQUEST, { ...params, dryRun: false });
+    const result = await request(client, ENFORCE_COLORMAPS_REQUEST, { ...params, dryRun: false });
     reportResult(result);
   };
 }

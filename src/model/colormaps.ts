@@ -1,5 +1,6 @@
+import { requestDescriptor } from './request.js';
 /** Custom LSP request: rewrite the palettes of terrain.bmp and rivers.bmp to the standard ones. */
-export const ENFORCE_COLORMAPS_REQUEST = 'victorianTools/enforceColormaps';
+export const ENFORCE_COLORMAPS_REQUEST = requestDescriptor<EnforceColormapsParams, EnforceColormapsResult>('victorianTools/enforceColormaps');
 
 export interface EnforceColormapsParams {
   readonly workspaceFolders: readonly string[];

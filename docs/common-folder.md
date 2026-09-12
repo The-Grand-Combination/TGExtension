@@ -205,7 +205,7 @@ assignments) are validated as an employee spec (`PRODUCTION_EMPLOYEE_FIELDS`: `p
 `effect_multiplier`, `amount`); `efficiency`/`input_goods` are `good → number` maps; `bonus`/
 `input_bonus` hold `trigger` (walked at **`state` scope** — production bonuses are evaluated per
 state) and `value` (numeric); the rest is `PRODUCTION_TYPE_FIELDS` (`template`, `type`, `workforce`,
-`farm`, `mine`, `is_coastal`, `output_goods`, `value`).
+`farm`, `mine`, `is_coastal`, `limit_by_local_supply`, `output_goods`, `value`).
 
 ## `bookmarks.txt` → `validateBookmarksFile`
 

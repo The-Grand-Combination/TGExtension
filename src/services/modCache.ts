@@ -1,7 +1,7 @@
 import * as path from 'node:path';
 import type { ModIndex } from '../model/modIndex.js';
-import type { ModLayers } from '../services/modLayers.js';
-import { relativeToRoot, type FileLocation } from '../services/modLayout.js';
+import type { ModLayers } from './modLayers.js';
+import { relativeToRoot, type FileLocation } from './modLayout.js';
 
 export interface ModContext extends FileLocation {
   /** Undefined while the first index of the layers is still being built. */

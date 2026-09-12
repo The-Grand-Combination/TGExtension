@@ -12,6 +12,7 @@ import {
   type MapPositionsResult,
 } from '../model/mapEditor.js';
 import { mapEditorHtml } from '../providers/mapEditorHtml.js';
+import { EXTENSION_ID } from './extensionId.js';
 import { encodeBmp24 } from './unit/bmpFixtures.js';
 
 const TGC_MAP = 'F:/SteamLibrary/steamapps/common/Victoria 2/mod/TGC/map/provinces.bmp';
@@ -34,9 +35,12 @@ async function loadPage(
   reveal?: MapEditorReveal,
 ): Promise<PageRun> {
   const folder = path.dirname(bmpPath);
+  // The page's script now ships as dist/mapEditorPage.js, so the extension's
+  // own folder has to be a resource root too or the <script src> is refused.
+  const extensionUri = extensionRoot();
   const panel = vscode.window.createWebviewPanel('victorianTools.mapEditorTest', 'Map Editor test', vscode.ViewColumn.One, {
     enableScripts: true,
-    localResourceRoots: [vscode.Uri.file(folder)],
+    localResourceRoots: [vscode.Uri.file(folder), extensionUri],
   });
   const logs: string[] = [];
   const selected: number[] = [];
@@ -79,7 +83,8 @@ async function loadPage(
       }
     });
   });
-  panel.webview.html = mapEditorHtml(panel.webview.cspSource);
+  const scriptUri = panel.webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'dist', 'mapEditorPage.js'));
+  panel.webview.html = mapEditorHtml(panel.webview.cspSource, scriptUri.toString());
   await done;
   panel.dispose();
   return { logs, selected };
@@ -150,7 +155,10 @@ suite('Map Editor panel', () => {
       outputChannel: { appendLine: (line: string): void => { logs.push(line); } },
     };
     // The panel only calls sendRequest and outputChannel on the client.
-    const panel = new MapEditorPanel(() => fakeClient as unknown as import('vscode-languageclient/node').LanguageClient);
+    const panel = new MapEditorPanel(
+      () => fakeClient as unknown as import('vscode-languageclient/node').LanguageClient,
+      extensionRoot(),
+    );
     await panel.open({ workspaceFolders: [], mods: [] });
     const deadline = Date.now() + 40000;
     while (Date.now() < deadline && !logs.some((line) => line.includes('map ready') || line.includes('Could not') || line.includes('Page error'))) {
@@ -169,4 +177,13 @@ function answerFor(method: string, map: MapEditorMap): MapEditorMap | MapPositio
     return { kind: 'ready', owners: {}, colors: {} };
   }
   return map;
+}
+
+/** The installed extension's folder, which is where dist/mapEditorPage.js lives. */
+function extensionRoot(): vscode.Uri {
+  const extension = vscode.extensions.getExtension(EXTENSION_ID);
+  if (!extension) {
+    throw new Error(`extension ${EXTENSION_ID} is not installed in the test host`);
+  }
+  return extension.extensionUri;
 }

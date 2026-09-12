@@ -9,6 +9,8 @@ export interface BmpImage {
   readonly width: number;
   readonly height: number;
   readonly bitsPerPixel: 8 | 24 | 32;
+  /** True when row 0 of the file is the top row. Paradox map bitmaps are stored the other way up. */
+  readonly topDown: boolean;
   /** Byte offset of the palette (BGRA entries) inside `bytes`; 8-bit images only. */
   readonly paletteOffset: number;
   readonly paletteEntries: number;
@@ -115,7 +117,7 @@ function makeImage(
     const at = rowStart(y) + x * bytesPerPixel;
     return ((bytes[at + 2] ?? 0) << 16) | ((bytes[at + 1] ?? 0) << 8) | (bytes[at] ?? 0);
   };
-  return { width, height, bitsPerPixel, paletteOffset, paletteEntries, bytes, rowOffset: rowStart, indexAt, rgbAt };
+  return { width, height, bitsPerPixel, topDown, paletteOffset, paletteEntries, bytes, rowOffset: rowStart, indexAt, rgbAt };
 }
 
 /** The pixels of an 8-bit image as one top-down array of palette indices. */

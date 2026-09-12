@@ -1,3 +1,4 @@
+import { requestDescriptor } from './request.js';
 /**
  * One `*.mod` descriptor, as the launcher reads it. Paths inside are
  * relative to the game root and use forward slashes.
@@ -19,7 +20,7 @@ export interface ModDescriptor {
 }
 
 /** Custom LSP request: the mods the server knows (installed and checked out around the workspace). */
-export const MODS_REQUEST = 'victorianTools/mods';
+export const MODS_REQUEST = requestDescriptor<undefined, ModsResult>('victorianTools/mods');
 /** Server → client: the install or the selection was re-read; ask `MODS_REQUEST` again. */
 export const LAYOUT_CHANGED_NOTIFICATION = 'victorianTools/layoutChanged';
 

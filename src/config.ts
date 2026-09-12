@@ -6,19 +6,12 @@ import {
   DEFAULT_NULL_TAG_PATTERN,
 } from './model/validationOptions.js';
 import { DEFAULT_COUNTRY_COLORS_TINT } from './model/mapEditor.js';
+import { qualifiedSettingKey, SETTING, SETTINGS_SECTION } from './model/settingsKeys.js';
 
-const SECTION = 'victorianTools';
-const ACTIVE_MODS = 'activeMods';
-const GAME_PATH = 'gamePath';
-const LOC_KEY_PATTERN = 'localisation.keyPattern';
-const FLAG_NAME_PATTERN = 'flags.namePattern';
-const NULL_TAG_PATTERN = 'nullTags.pattern';
-const IGNORE_MARKER = 'ignoreMarker';
-const COUNTRY_COLORS_TINT = 'mapEditor.countryColorsTint';
 
 /** `name`s of the mods being worked on, as stored in `victorianTools.activeMods`. */
 export function readActiveMods(): string[] {
-  const value = vscode.workspace.getConfiguration(SECTION).get<unknown>(ACTIVE_MODS);
+  const value = vscode.workspace.getConfiguration(SETTINGS_SECTION).get<unknown>(SETTING.activeMods);
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }
 
@@ -28,20 +21,20 @@ export function writeActiveMods(names: readonly string[]): Thenable<void> {
     (vscode.workspace.workspaceFolders ?? []).length > 0
       ? vscode.ConfigurationTarget.Workspace
       : vscode.ConfigurationTarget.Global;
-  return vscode.workspace.getConfiguration(SECTION).update(ACTIVE_MODS, [...names], target);
+  return vscode.workspace.getConfiguration(SETTINGS_SECTION).update(SETTING.activeMods, [...names], target);
 }
 
 /** `victorianTools.gamePath` as typed; empty when the install is to be detected. */
 export function readGamePath(): string {
-  const value = vscode.workspace.getConfiguration(SECTION).get<unknown>(GAME_PATH);
+  const value = vscode.workspace.getConfiguration(SETTINGS_SECTION).get<unknown>(SETTING.gamePath);
   return typeof value === 'string' ? value.trim() : '';
 }
 
 /** The install folder is a property of the machine, so it goes to the user settings, never into a shared workspace. */
 export function writeGamePath(gamePath: string): Thenable<void> {
   return vscode.workspace
-    .getConfiguration(SECTION)
-    .update(GAME_PATH, gamePath.trim() === '' ? undefined : gamePath.trim(), vscode.ConfigurationTarget.Global);
+    .getConfiguration(SETTINGS_SECTION)
+    .update(SETTING.gamePath, gamePath.trim() === '' ? undefined : gamePath.trim(), vscode.ConfigurationTarget.Global);
 }
 
 /**
@@ -50,12 +43,12 @@ export function writeGamePath(gamePath: string): Thenable<void> {
  * every value), so it is never normalized away.
  */
 export function readLocKeyPattern(): string {
-  const value = vscode.workspace.getConfiguration(SECTION).get<unknown>(LOC_KEY_PATTERN);
+  const value = vscode.workspace.getConfiguration(SETTINGS_SECTION).get<unknown>(SETTING.locKeyPattern);
   return typeof value === 'string' ? value : DEFAULT_LOC_KEY_PATTERN;
 }
 
 export function writeLocKeyPattern(pattern: string): Thenable<void> {
-  return vscode.workspace.getConfiguration(SECTION).update(LOC_KEY_PATTERN, pattern, patternTarget());
+  return vscode.workspace.getConfiguration(SETTINGS_SECTION).update(SETTING.locKeyPattern, pattern, patternTarget());
 }
 
 /**
@@ -63,12 +56,12 @@ export function writeLocKeyPattern(pattern: string): Thenable<void> {
  * `victorianTools.flags.namePattern`. Empty checks every flag.
  */
 export function readFlagNamePattern(): string {
-  const value = vscode.workspace.getConfiguration(SECTION).get<unknown>(FLAG_NAME_PATTERN);
+  const value = vscode.workspace.getConfiguration(SETTINGS_SECTION).get<unknown>(SETTING.flagNamePattern);
   return typeof value === 'string' ? value : DEFAULT_FLAG_NAME_PATTERN;
 }
 
 export function writeFlagNamePattern(pattern: string): Thenable<void> {
-  return vscode.workspace.getConfiguration(SECTION).update(FLAG_NAME_PATTERN, pattern, patternTarget());
+  return vscode.workspace.getConfiguration(SETTINGS_SECTION).update(SETTING.flagNamePattern, pattern, patternTarget());
 }
 
 /**
@@ -76,12 +69,12 @@ export function writeFlagNamePattern(pattern: string): Thenable<void> {
  * `victorianTools.nullTags.pattern`. Empty allows no exception.
  */
 export function readNullTagPattern(): string {
-  const value = vscode.workspace.getConfiguration(SECTION).get<unknown>(NULL_TAG_PATTERN);
+  const value = vscode.workspace.getConfiguration(SETTINGS_SECTION).get<unknown>(SETTING.nullTagPattern);
   return typeof value === 'string' ? value : DEFAULT_NULL_TAG_PATTERN;
 }
 
 export function writeNullTagPattern(pattern: string): Thenable<void> {
-  return vscode.workspace.getConfiguration(SECTION).update(NULL_TAG_PATTERN, pattern, patternTarget());
+  return vscode.workspace.getConfiguration(SETTINGS_SECTION).update(SETTING.nullTagPattern, pattern, patternTarget());
 }
 
 /**
@@ -90,12 +83,12 @@ export function writeNullTagPattern(pattern: string): Thenable<void> {
  * if the user typed it.
  */
 export function readIgnoreMarker(): string {
-  const value = vscode.workspace.getConfiguration(SECTION).get<unknown>(IGNORE_MARKER);
+  const value = vscode.workspace.getConfiguration(SETTINGS_SECTION).get<unknown>(SETTING.ignoreMarker);
   return typeof value === 'string' ? value : DEFAULT_IGNORE_MARKER;
 }
 
 export function writeIgnoreMarker(marker: string): Thenable<void> {
-  return vscode.workspace.getConfiguration(SECTION).update(IGNORE_MARKER, marker, patternTarget());
+  return vscode.workspace.getConfiguration(SETTINGS_SECTION).update(SETTING.ignoreMarker, marker, patternTarget());
 }
 
 /**
@@ -103,7 +96,7 @@ export function writeIgnoreMarker(marker: string): Thenable<void> {
  * `victorianTools.mapEditor.countryColorsTint`. Anything else falls back to the default.
  */
 export function readCountryColorsTint(): number {
-  const value = vscode.workspace.getConfiguration(SECTION).get<unknown>(COUNTRY_COLORS_TINT);
+  const value = vscode.workspace.getConfiguration(SETTINGS_SECTION).get<unknown>(SETTING.countryColorsTint);
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.min(100, Math.max(0, Math.round(value)))
     : DEFAULT_COUNTRY_COLORS_TINT;
@@ -113,18 +106,18 @@ export function readCountryColorsTint(): number {
 export function writeCountryColorsTint(percent: number): Thenable<void> {
   const clamped = Math.min(100, Math.max(0, Math.round(percent)));
   return vscode.workspace
-    .getConfiguration(SECTION)
-    .update(COUNTRY_COLORS_TINT, clamped === DEFAULT_COUNTRY_COLORS_TINT ? undefined : clamped, vscode.ConfigurationTarget.Global);
+    .getConfiguration(SETTINGS_SECTION)
+    .update(SETTING.countryColorsTint, clamped === DEFAULT_COUNTRY_COLORS_TINT ? undefined : clamped, vscode.ConfigurationTarget.Global);
 }
 
 export function affectsCountryColorsTint(event: vscode.ConfigurationChangeEvent): boolean {
-  return event.affectsConfiguration(`${SECTION}.${COUNTRY_COLORS_TINT}`);
+  return event.affectsConfiguration(qualifiedSettingKey(SETTING.countryColorsTint));
 }
 
 /** True when a configuration change touches anything the settings page shows. */
 export function affectsSettingsPage(event: vscode.ConfigurationChangeEvent): boolean {
-  const keys = [ACTIVE_MODS, GAME_PATH, LOC_KEY_PATTERN, FLAG_NAME_PATTERN, NULL_TAG_PATTERN, IGNORE_MARKER, COUNTRY_COLORS_TINT];
-  return keys.some((key) => event.affectsConfiguration(`${SECTION}.${key}`));
+  const keys = [SETTING.activeMods, SETTING.gamePath, SETTING.locKeyPattern, SETTING.flagNamePattern, SETTING.nullTagPattern, SETTING.ignoreMarker, SETTING.countryColorsTint];
+  return keys.some((key) => event.affectsConfiguration(qualifiedSettingKey(key)));
 }
 
 /** A naming convention belongs to the mod, so it goes to the workspace when there is one. */

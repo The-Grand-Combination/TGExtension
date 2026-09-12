@@ -26,28 +26,44 @@ const esbuildProblemMatcherPlugin = {
 };
 
 async function main() {
-  const ctx = await esbuild.context({
-    entryPoints: [
-      { in: 'src/extension.ts', out: 'extension' },
-      { in: 'src/server/server.ts', out: 'server' },
-    ],
+  const shared = {
     bundle: true,
-    format: 'cjs',
     minify: production,
     sourcemap: !production,
     sourcesContent: false,
-    platform: 'node',
-    outdir: 'dist',
-    external: ['vscode'],
     logLevel: 'silent',
     plugins: [esbuildProblemMatcherPlugin],
-  });
+  };
+
+  const contexts = await Promise.all([
+    esbuild.context({
+      ...shared,
+      entryPoints: [
+        { in: 'src/extension.ts', out: 'extension' },
+        { in: 'src/server/server.ts', out: 'server' },
+      ],
+      format: 'cjs',
+      platform: 'node',
+      outdir: 'dist',
+      external: ['vscode'],
+    }),
+    // The Map Editor page: a browser script, so none of the node settings apply
+    // and nothing is external — the webview loads this one file.
+    esbuild.context({
+      ...shared,
+      entryPoints: [{ in: 'src/webview/mapEditorPage.ts', out: 'mapEditorPage' }],
+      format: 'iife',
+      platform: 'browser',
+      target: 'es2022',
+      outdir: 'dist',
+    }),
+  ]);
 
   if (watch) {
-    await ctx.watch();
+    await Promise.all(contexts.map((context) => context.watch()));
   } else {
-    await ctx.rebuild();
-    await ctx.dispose();
+    await Promise.all(contexts.map((context) => context.rebuild()));
+    await Promise.all(contexts.map((context) => context.dispose()));
   }
 }
 

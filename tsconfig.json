@@ -51,6 +51,7 @@
     "node_modules",
     "dist",
     "out",
-    ".vscode-test"
+    ".vscode-test",
+    "src/webview"
   ]
 }

@@ -3,6 +3,7 @@ import type { LanguageClient } from 'vscode-languageclient/node';
 import { MAP_REPORT_REQUEST, type MapReportParams, type MapReportResult } from '../model/mapAudit.js';
 import type { MapReportTargets } from '../services/mapReportTargets.js';
 import { pickMods, type PickMemory } from './pickMods.js';
+import { request } from '../providers/request.js';
 
 /**
  * Ask which mods to check, then ask the server to audit their map bitmaps
@@ -35,7 +36,7 @@ export function generateMapReportCommand(
     };
     const result = await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: 'Victorian Tools: checking the map bitmaps…' },
-      () => client.sendRequest<MapReportResult>(MAP_REPORT_REQUEST, params),
+      () => request(client, MAP_REPORT_REQUEST, params),
     );
     await showReport(result, params, targets);
   };

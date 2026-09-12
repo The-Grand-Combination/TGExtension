@@ -1,7 +1,8 @@
+import { requestDescriptor } from './request.js';
 import type { DiagnosticSeverity } from './diagnostic.js';
 
 /** Custom LSP request: audit the map bitmaps of the requested mods. */
-export const MAP_REPORT_REQUEST = 'victorianTools/mapReport';
+export const MAP_REPORT_REQUEST = requestDescriptor<MapReportParams, MapReportResult>('victorianTools/mapReport');
 
 export interface MapReportParams {
   readonly workspaceFolders: readonly string[];

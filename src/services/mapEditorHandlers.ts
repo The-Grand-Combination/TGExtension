@@ -25,17 +25,17 @@ import {
   type TerrainSection,
 } from '../model/mapEditor.js';
 import type { ModIndex } from '../model/modIndex.js';
-import { decodeBmp, indicesOf, type BmpImage } from '../services/bmpDecoder.js';
-import { countryColorOf, countryFilesOf, provinceOwnerOf } from '../services/countryColors.js';
-import { vocabularyOf } from '../services/mapEditorVocabulary.js';
+import { decodeBmp, indicesOf, type BmpImage } from './bmpDecoder.js';
+import { countryColorOf, countryFilesOf, provinceOwnerOf } from './countryColors.js';
+import { vocabularyOf } from './mapEditorVocabulary.js';
 import {
   listLayeredFiles,
   listLayeredFilesRecursive,
   resolveLayeredFile,
   type LayerFileSystem,
   type ModLayers,
-} from '../services/modLayers.js';
-import { isInsideRoot, type FileLocation } from '../services/modLayout.js';
+} from './modLayers.js';
+import { isInsideRoot, type FileLocation } from './modLayout.js';
 import {
   findHistoryFile,
   historyFoldersOf,
@@ -43,7 +43,7 @@ import {
   provinceIdOfHistoryFile,
   planHistoryEdit,
   renderProvinceHistory,
-} from '../services/provinceHistoryEdit.js';
+} from './provinceHistoryEdit.js';
 import {
   appendProvinceLoc,
   countProvinceKeys,
@@ -55,7 +55,7 @@ import {
   provinceLocKey,
   readProvinceLoc,
   type LocFileCandidate,
-} from '../services/provinceLocEdit.js';
+} from './provinceLocEdit.js';
 import {
   findPopsBlock,
   parsePops,
@@ -64,24 +64,24 @@ import {
   popFilesOf,
   provinceIdsInPopsFile,
   renderPopsFile,
-} from '../services/provincePopsEdit.js';
+} from './provincePopsEdit.js';
 import {
   findPositionsBlock,
   parseProvincePositions,
   planPositionsEdit,
   positionMarkersOf,
   renderPositionsFile,
-} from '../services/provincePositionsEdit.js';
-import { parseProvinceDefinitions, parseProvinceRows } from '../services/provinceTable.js';
-import { parseDocument } from '../services/syntaxValidation.js';
+} from './provincePositionsEdit.js';
+import { parseProvinceDefinitions, parseProvinceRows } from './provinceTable.js';
+import { parseDocument } from './syntaxValidation.js';
 import {
   dominantTerrainByProvince,
   terrainPictureDataUri,
   terrainSpriteTextures,
   terrainTypeByIndex,
   textureCandidates,
-} from '../services/terrainPictures.js';
-import { applyPatches } from '../services/textPatch.js';
+} from './terrainPictures.js';
+import { applyPatches } from './textPatch.js';
 
 export interface MapEditorHost {
   /** The picked mods in load order, as the reports resolve them. */

@@ -68,11 +68,17 @@ export const POP_HISTORY_FIELDS: FieldTable = {
   rebel_type: ['rebelType'],
 };
 
+/**
+ * history/diplomacy relation kinds. `reparations` carries the same four fields as the
+ * rest but ships with no vanilla file of its own, so grepping the base game will not
+ * turn it up.
+ */
 export const DIPLOMACY_RELATION_KEYS: ReadonlySet<string> = new Set([
   'alliance',
   'vassal',
   'union',
   'substate',
+  'reparations',
 ]);
 
 export const DIPLOMACY_RELATION_FIELDS: FieldTable = {

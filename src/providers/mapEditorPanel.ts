@@ -8,20 +8,16 @@ import {
   MAP_EDITOR_PROVINCE_REQUEST,
   MAP_EDITOR_SAVE_REQUEST,
   MAP_EDITOR_TERRAIN_PICTURE_REQUEST,
-  type MapCountryColorsResult,
+  type HostMessage,
   type MapEditorMap,
-  type MapEditorMapResult,
   type MapEditorReveal,
   type MapEditorTargetParams,
-  type MapPositionsResult,
-  type ProvinceResult,
   type SaveParams,
-  type SaveResult,
-  type TerrainPictureResult,
 } from '../model/mapEditor.js';
 import { affectsCountryColorsTint, readCountryColorsTint } from '../config.js';
-import { asPageMessage, type PageMessage, type PendingPositions } from './mapEditorMessages.js';
+import { asPageMessage, type PageMessage, type PendingPositions } from '../services/mapEditorMessages.js';
 import { mapEditorHtml, mapEditorNoticeHtml } from './mapEditorHtml.js';
+import { request } from './request.js';
 
 /**
  * The **Map Editor** tab: `provinces.bmp` drawn on a canvas, and a side panel
@@ -38,7 +34,11 @@ export class MapEditorPanel implements vscode.Disposable {
   private popDate = '';
   private readonly subscriptions: vscode.Disposable[] = [];
 
-  constructor(private readonly getClient: () => LanguageClient | undefined) {
+  constructor(
+    private readonly getClient: () => LanguageClient | undefined,
+    /** The extension's own folder: the page's script is served from `dist/` inside it. */
+    private readonly extensionUri: vscode.Uri,
+  ) {
     this.subscriptions.push(
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (affectsCountryColorsTint(event) && this.panel) {
@@ -95,7 +95,7 @@ export class MapEditorPanel implements vscode.Disposable {
     // The page starts over, so whatever it was holding starts over with it.
     this.pending = [];
     panel.webview.html = mapEditorNoticeHtml('Reading the map…');
-    const result = await client.sendRequest<MapEditorMapResult>(MAP_EDITOR_MAP_REQUEST, this.params);
+    const result = await request(client, MAP_EDITOR_MAP_REQUEST, this.params);
     if (result.kind === 'unavailable') {
       panel.webview.html = mapEditorNoticeHtml(result.reason);
       return;
@@ -104,9 +104,12 @@ export class MapEditorPanel implements vscode.Disposable {
     panel.title = `Map Editor: ${result.targetName}`;
     panel.webview.options = {
       enableScripts: true,
-      localResourceRoots: resourceRootsOf(result),
+      localResourceRoots: [...resourceRootsOf(result), this.extensionUri],
     };
-    panel.webview.html = mapEditorHtml(panel.webview.cspSource);
+    const scriptUri = panel.webview.asWebviewUri(
+      vscode.Uri.joinPath(this.extensionUri, 'dist', 'mapEditorPage.js'),
+    );
+    panel.webview.html = mapEditorHtml(panel.webview.cspSource, scriptUri.toString());
   }
 
   private async handle(message: PageMessage | undefined): Promise<void> {
@@ -154,11 +157,11 @@ export class MapEditorPanel implements vscode.Disposable {
     if (!this.params) {
       return;
     }
-    const result = await client.sendRequest<TerrainPictureResult>(MAP_EDITOR_TERRAIN_PICTURE_REQUEST, {
+    const result = await request(client, MAP_EDITOR_TERRAIN_PICTURE_REQUEST, {
       ...this.params,
       terrain,
     });
-    void panel.webview.postMessage({ type: 'terrainPicture', ...result });
+    post(panel, { type: 'terrainPicture', ...result });
   }
 
   /** The map's position markers follow the map itself, so the bitmap is drawn while the 130k-line file is parsed. */
@@ -166,9 +169,9 @@ export class MapEditorPanel implements vscode.Disposable {
     if (!this.params || !this.map) {
       return;
     }
-    const result = await client.sendRequest<MapPositionsResult>(MAP_EDITOR_POSITIONS_REQUEST, this.params);
+    const result = await request(client, MAP_EDITOR_POSITIONS_REQUEST, this.params);
     if (result.kind === 'ready') {
-      void panel.webview.postMessage({ type: 'positions', markers: result.markers });
+      post(panel, { type: 'positions', markers: result.markers });
     } else {
       client.outputChannel.appendLine(`Map editor: ${result.reason}`);
     }
@@ -179,9 +182,9 @@ export class MapEditorPanel implements vscode.Disposable {
     if (!this.params || !this.map) {
       return;
     }
-    const result = await client.sendRequest<MapCountryColorsResult>(MAP_EDITOR_COUNTRY_COLORS_REQUEST, this.params);
+    const result = await request(client, MAP_EDITOR_COUNTRY_COLORS_REQUEST, this.params);
     if (result.kind === 'ready') {
-      void panel.webview.postMessage({ type: 'countryColors', owners: result.owners, colors: result.colors });
+      post(panel, { type: 'countryColors', owners: result.owners, colors: result.colors });
     } else {
       client.outputChannel.appendLine(`Map editor: ${result.reason}`);
     }
@@ -189,7 +192,7 @@ export class MapEditorPanel implements vscode.Disposable {
 
   /** The viewing preferences the page applies: the Country Colors tint, sent before the map and whenever it changes. */
   private sendSettings(panel: vscode.WebviewPanel): void {
-    void panel.webview.postMessage({ type: 'settings', countryColorsTint: readCountryColorsTint() });
+    post(panel, { type: 'settings', countryColorsTint: readCountryColorsTint() });
   }
 
   private sendMap(panel: vscode.WebviewPanel): void {
@@ -201,9 +204,9 @@ export class MapEditorPanel implements vscode.Disposable {
       this.map.riversBmpPath === undefined
         ? undefined
         : panel.webview.asWebviewUri(vscode.Uri.file(this.map.riversBmpPath)).toString();
-    void panel.webview.postMessage({ type: 'map', map: this.map, bmpUri, riversUri });
+    post(panel, { type: 'map', map: this.map, bmpUri, riversUri });
     if (this.reveal) {
-      void panel.webview.postMessage({ type: 'revealPixel', ...this.reveal });
+      post(panel, { type: 'revealPixel', ...this.reveal });
       this.reveal = undefined;
     }
   }
@@ -217,22 +220,22 @@ export class MapEditorPanel implements vscode.Disposable {
     if (!this.params) {
       return;
     }
-    const result = await client.sendRequest<ProvinceResult>(MAP_EDITOR_PROVINCE_REQUEST, {
+    const result = await request(client, MAP_EDITOR_PROVINCE_REQUEST, {
       ...this.params,
       provinceId,
       popDate,
     });
     if (result.kind === 'details') {
-      void panel.webview.postMessage({ type: 'details', details: result.details });
+      post(panel, { type: 'details', details: result.details });
     } else {
-      void panel.webview.postMessage({ type: 'error', message: result.reason });
+      post(panel, { type: 'error', message: result.reason });
     }
   }
 
   /** Write every province the page is still holding, in one go. */
   private async saveAll(panel: vscode.WebviewPanel, client: LanguageClient): Promise<void> {
     const result = await this.writePending(client);
-    void panel.webview.postMessage({ type: 'savedAll', written: result.written, failed: result.failed });
+    post(panel, { type: 'savedAll', written: result.written, failed: result.failed });
     const first = result.failed[0];
     if (first) {
       void vscode.window.showErrorMessage(`Victorian Tools: province ${String(first.provinceId)} was not saved: ${first.reason}`);
@@ -284,7 +287,7 @@ export class MapEditorPanel implements vscode.Disposable {
         section: 'positions',
         data: edit.data,
       };
-      const result = await client.sendRequest<SaveResult>(MAP_EDITOR_SAVE_REQUEST, params);
+      const result = await request(client, MAP_EDITOR_SAVE_REQUEST, params);
       if (result.ok) {
         written.push(edit.provinceId);
       } else {
@@ -299,14 +302,19 @@ export class MapEditorPanel implements vscode.Disposable {
     if (!this.params) {
       return;
     }
-    const result = await client.sendRequest<SaveResult>(MAP_EDITOR_SAVE_REQUEST, { ...params, ...this.params });
-    void panel.webview.postMessage({ type: 'saved', result });
+    const result = await request(client, MAP_EDITOR_SAVE_REQUEST, { ...params, ...this.params });
+    post(panel, { type: 'saved', result });
     if (!result.ok) {
       void vscode.window.showErrorMessage(`Victorian Tools: ${result.reason}`);
     } else if (params.section === 'history' && result.written.length > 0) {
       await this.sendCountryColors(panel, client);
     }
   }
+}
+
+/** Every message to the page goes through the shared union, so a drifting payload fails to compile. */
+function post(panel: vscode.WebviewPanel, message: HostMessage): void {
+  void panel.webview.postMessage(message);
 }
 
 /** The map folders the page may fetch bitmaps from: rivers.bmp can come from a lower layer than provinces.bmp. */

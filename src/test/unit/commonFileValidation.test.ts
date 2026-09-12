@@ -141,6 +141,10 @@ suite('common/ file validators — common data files', () => {
   test('production types: bare employee blocks and state-scope bonus triggers', () => {
     const text = 'factory_template = { efficiency = { grain = 0.25 } owner = { poptype = farmers effect = input } employees = { { poptype = farmers amount = 0.8 } } bonus = { trigger = { is_slave = yes } value = 0.1 } workforce = 10000 }';
     assert.deepStrictEqual(codes(text, 'productionTypes', 'common/production_types.txt'), []);
+    assert.deepStrictEqual(
+      codes('rgo_grain = { farm = yes limit_by_local_supply = yes output_goods = grain }', 'productionTypes', 'common/production_types.txt'),
+      [],
+    );
     assert.ok(codes('x = { employees = { { poptipe = farmers } } }', 'productionTypes', 'common/production_types.txt').includes('unknown-field'));
   });
 

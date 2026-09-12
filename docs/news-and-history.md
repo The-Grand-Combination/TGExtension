@@ -58,8 +58,8 @@ Top level: each key must be a numeric string that resolves to a known province i
 
 ## `history/diplomacy/*.txt` → `validateDiplomacyHistory`
 
-Top-level keys must be one of the four `DIPLOMACY_RELATION_KEYS` (`alliance`, `vassal`, `union`,
-`substate`); each holds `DIPLOMACY_RELATION_FIELDS` (`first`, `second` — both country references;
+Top-level keys must be one of the five `DIPLOMACY_RELATION_KEYS` (`alliance`, `vassal`, `union`,
+`substate`, `reparations` — the last has no vanilla file of its own); each holds `DIPLOMACY_RELATION_FIELDS` (`first`, `second` — both country references;
 `start_date`, `end_date` — both dates). This is the check that catches a relation block with fields
 in the wrong shape (e.g. a typo'd field name inside an `alliance` block).
 

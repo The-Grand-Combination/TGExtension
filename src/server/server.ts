@@ -5,6 +5,7 @@ import {
   TextDocuments,
   TextDocumentSyncKind,
   type Connection,
+  type HandlerResult,
   type InitializeParams,
   type InitializeResult,
   type Location,
@@ -29,17 +30,16 @@ import {
 } from '../io/modFiles.js';
 import {
   ENFORCE_COLORMAPS_REQUEST,
-  type ColormapFileResult,
   type EnforceColormapsParams,
   type EnforceColormapsResult,
 } from '../model/colormaps.js';
 import type { Diagnostic } from '../model/diagnostic.js';
+import type { RequestDescriptor } from '../model/request.js';
 import { classifyFile } from '../model/fileType.js';
 import {
   FULL_REPORT_REQUEST,
   type FullReportParams,
   type FullReportResult,
-  type ModReport,
 } from '../model/fullReport.js';
 import {
   MAP_EDITOR_COUNTRY_COLORS_REQUEST,
@@ -62,7 +62,6 @@ import {
 import { LAYOUT_CHANGED_NOTIFICATION, MODS_REQUEST, type ModDescriptor, type ModsResult } from '../model/modDescriptor.js';
 import {
   MAP_REPORT_REQUEST,
-  type MapReport,
   type MapReportParams,
   type MapReportResult,
 } from '../model/mapAudit.js';
@@ -70,11 +69,11 @@ import type { ModIndex } from '../model/modIndex.js';
 import { duplicateDiagnosticsByFile, duplicateDiagnosticsFor } from '../services/duplicateDiagnostics.js';
 import { validateFileText } from '../services/fileValidation.js';
 import { compilePattern, NULL_TAG_FLAGS, type ValidationOptions } from '../model/validationOptions.js';
-import type { Palette } from '../data/mapPalettes.js';
-import { COLORMAP_FILES, planColormapFix } from '../services/colormapEnforcement.js';
-import { buildModReport, type ReportFileProvider } from '../services/fullReport.js';
+import { enforceColormaps, type ColormapEnforcementHost } from '../services/colormapEnforcementHandlers.js';
+import { buildFullReport, type FullReportHost } from '../services/fullReportHandlers.js';
+import { buildMapReports, type MapReportHost } from '../services/mapReportHandlers.js';
+import type { ModStackHost, TargetParams } from '../services/modStackHost.js';
 import { locKeyHoverMarkdown, resolveLocKeyAt } from '../services/locDefinition.js';
-import { auditMapImages, type MapImageSource } from '../services/mapImageAudit.js';
 import { buildModIndexAsync } from '../services/modIndex.js';
 import {
   layeredIndexProvider,
@@ -98,11 +97,10 @@ import {
   type ModLayout,
 } from '../services/modLayout.js';
 import { pictureHoverAt, pictureHoverMarkdown, type PictureHover } from '../services/pictureHover.js';
-import { renderMapReportText, renderReportText } from '../services/reportText.js';
 import { resolveKeyAt, symbolHoverMarkdown } from '../services/symbolHover.js';
-import { BoundedCache } from './boundedCache.js';
-import { MapEditorHandlers } from './mapEditorHandlers.js';
-import { ModCache, type ModContext } from './modCache.js';
+import { BoundedCache } from '../services/boundedCache.js';
+import { MapEditorHandlers } from '../services/mapEditorHandlers.js';
+import { ModCache, type ModContext } from '../services/modCache.js';
 import {
   configEquals,
   DEFAULT_CONFIG,
@@ -367,7 +365,18 @@ function locateFsPath(fsPath: string): FileLocation | undefined {
   return root === undefined ? undefined : locateLoneMod(layout, root, LAYER_OPTIONS);
 }
 
-connection.onRequest(
+/**
+ * Register a handler for one request descriptor. The descriptor decides both
+ * the parameter and the result type, so the two sides cannot drift apart.
+ */
+function onRequest<TParams, TResult>(
+  descriptor: RequestDescriptor<TParams, TResult>,
+  handler: (params: TParams) => HandlerResult<TResult, unknown>,
+): void {
+  connection.onRequest(descriptor, handler);
+}
+
+onRequest(
   MODS_REQUEST,
   (): ModsResult => ({ gameRoot: layout.gameRoot, mods: layout.mods }),
 );
@@ -663,24 +672,7 @@ function hoverResult(
   };
 }
 
-// --- Full report -------------------------------------------------------------------
-
-connection.onRequest(FULL_REPORT_REQUEST, async (params: FullReportParams): Promise<FullReportResult> => {
-  const started = Date.now();
-  const reports: ModReport[] = [];
-  for (const target of reportTargets(params)) {
-    const index = await modCache.ensureIndex(target.layers);
-    if (index) {
-      reports.push(await buildModReport(target.root, reportProviderFor(target.root), index, validationOptions()));
-    }
-  }
-  const generatedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
-  connection.console.log(`Full report over ${String(reports.length)} mod(s) in ${String(Date.now() - started)}ms`);
-  return { generatedAt, reports, text: renderReportText(reports, generatedAt) };
-});
-
-/** The mods a request is about; shared by the full report, the map report and Enforce Colormaps. */
-type TargetParams = Pick<FullReportParams, 'workspaceFolders' | 'mods'>;
+// --- Reports and Enforce Colormaps -------------------------------------------------
 
 /**
  * The mods to report on: the ones the request names, each over the game and
@@ -711,110 +703,52 @@ function reportTargets(params: TargetParams): FileLocation[] {
   });
 }
 
-/** A mod's own files: the report covers what the modder maintains, read with the stack's index. */
-function reportProviderFor(root: string): ReportFileProvider {
-  return {
-    readFile: (relativePath: string): Promise<string | undefined> => readModFileAsync(path.join(root, relativePath)),
-    listFilesRecursive: (relativeFolder: string): string[] => listFilesRecursive(root, relativeFolder),
-    fileUri: (relativePath: string): string => URI.file(path.join(root, relativePath)).toString(),
-  };
-}
+/** `targets` stays a call, not a value: the picked mods change while the server runs. */
+const modStack: ModStackHost = {
+  targets: reportTargets,
+  fileExists,
+  readText: readModFileAsync,
+  readBytes: readModFileBytesAsync,
+};
 
-// --- Map report --------------------------------------------------------------------
+const fullReportHost: FullReportHost = {
+  ...modStack,
+  ensureIndex: (layers: ModLayers): Promise<ModIndex | undefined> => modCache.ensureIndex(layers),
+  listFilesRecursive,
+  fileUri: (absolutePath: string): string => URI.file(absolutePath).toString(),
+  validationOptions,
+};
 
-connection.onRequest(MAP_REPORT_REQUEST, async (params: MapReportParams): Promise<MapReportResult> => {
+const mapReportHost: MapReportHost = {
+  ...modStack,
+  ensureIndex: (layers: ModLayers): Promise<ModIndex | undefined> => modCache.ensureIndex(layers),
+  fileSystem: layerFileSystem,
+};
+
+const colormapHost: ColormapEnforcementHost = { ...modStack, writeBytes: writeModFileBytes };
+
+onRequest(FULL_REPORT_REQUEST, async (params: FullReportParams): Promise<FullReportResult> => {
   const started = Date.now();
-  const reports: MapReport[] = [];
-  for (const target of reportTargets(params)) {
-    reports.push(await buildMapReport(target));
-  }
-  const generatedAt = new Date().toISOString().replace('T', ' ').slice(0, 19);
-  connection.console.log(`Map report over ${String(reports.length)} mod(s) in ${String(Date.now() - started)}ms`);
-  return { generatedAt, reports, text: renderMapReportText(reports, generatedAt) };
+  const result = await buildFullReport(fullReportHost, params);
+  connection.console.log(`Full report over ${String(result.reports.length)} mod(s) in ${String(Date.now() - started)}ms`);
+  return result;
 });
 
-async function buildMapReport(target: FileLocation): Promise<MapReport> {
-  const source = mapSourceFor(target);
-  const index = source ? await modCache.ensureIndex(target.layers) : undefined;
-  if (!source || !index) {
-    return { root: target.root, audited: false, errorCount: 0, warningCount: 0, findings: [] };
-  }
-  const findings = await auditMapImages(source, index);
-  return {
-    root: target.root,
-    audited: true,
-    errorCount: findings.filter((finding) => finding.severity === 'error').length,
-    warningCount: findings.filter((finding) => finding.severity === 'warning').length,
-    findings,
-  };
-}
-
-/** The map files whose presence in a mod's own folder makes it a map report target. */
-const MAP_OWNER_FILES: readonly string[] = [
-  'map/provinces.bmp',
-  'map/terrain.bmp',
-  'map/rivers.bmp',
-  'map/definition.csv',
-  'map/default.map',
-  'map/terrain.txt',
-];
-
-/**
- * The map as the game would load it for this mod, read through the stack;
- * undefined for a mod that ships no map file of its own, so a submod does not
- * repeat its base mod's map findings.
- */
-function mapSourceFor(target: FileLocation): MapImageSource | undefined {
-  if (!MAP_OWNER_FILES.some((relativePath) => fileExists(path.join(target.root, relativePath)))) {
-    return undefined;
-  }
-  const resolve = (relativePath: string): string | undefined =>
-    resolveLayeredFile(target.layers, layerFileSystem, relativePath);
-  return {
-    readText: async (relativePath): Promise<string | undefined> => {
-      const absolutePath = resolve(relativePath);
-      return absolutePath === undefined ? undefined : readModFileAsync(absolutePath);
-    },
-    readBytes: async (relativePath): Promise<Uint8Array | undefined> => {
-      const absolutePath = resolve(relativePath);
-      return absolutePath === undefined ? undefined : readModFileBytesAsync(absolutePath);
-    },
-  };
-}
-
-// --- Enforce Colormaps -------------------------------------------------------------
-
-connection.onRequest(ENFORCE_COLORMAPS_REQUEST, async (params: EnforceColormapsParams): Promise<EnforceColormapsResult> => {
-  const files: ColormapFileResult[] = [];
-  for (const target of reportTargets(params)) {
-    for (const file of COLORMAP_FILES) {
-      const absolutePath = path.join(target.root, file.relativePath);
-      if (!fileExists(absolutePath)) {
-        continue;
-      }
-      files.push(await enforceColormap(absolutePath, file.palette, params.dryRun));
-    }
-  }
-  connection.console.log(`Enforce colormaps (${params.dryRun ? 'dry run' : 'write'}): ${files.map((file) => `${file.path} ${file.outcome}`).join('; ')}`);
-  return { files };
+onRequest(MAP_REPORT_REQUEST, async (params: MapReportParams): Promise<MapReportResult> => {
+  const started = Date.now();
+  const result = await buildMapReports(mapReportHost, params);
+  connection.console.log(`Map report over ${String(result.reports.length)} mod(s) in ${String(Date.now() - started)}ms`);
+  return result;
 });
 
-/** Only a mod's own bitmap is rewritten, never a file of a layer below it. */
-async function enforceColormap(absolutePath: string, palette: Palette, dryRun: boolean): Promise<ColormapFileResult> {
-  const plan = planColormapFix(await readModFileBytesAsync(absolutePath), palette);
-  if (plan.outcome !== 'fixable') {
-    return { path: absolutePath, outcome: plan.outcome };
-  }
-  const counts = { remappedPixels: plan.remappedPixels, approximatedColors: plan.approximatedColors };
-  if (dryRun) {
-    return { path: absolutePath, outcome: 'fixable', ...counts };
-  }
-  const written = await writeModFileBytes(absolutePath, plan.fixed);
-  return { path: absolutePath, outcome: written ? 'fixed' : 'write-failed', ...counts };
-}
+onRequest(ENFORCE_COLORMAPS_REQUEST, async (params: EnforceColormapsParams): Promise<EnforceColormapsResult> => {
+  const result = await enforceColormaps(colormapHost, params);
+  connection.console.log(`Enforce colormaps (${params.dryRun ? 'dry run' : 'write'}): ${result.files.map((file) => `${file.path} ${file.outcome}`).join('; ')}`);
+  return result;
+});
 
 const mapEditor = new MapEditorHandlers({
-  targets: (params: MapEditorTargetParams): FileLocation[] => reportTargets(params),
+  targets: modStack.targets,
   modNameOf: (root: string): string => layout.mods.find((mod) => mod.folder === root)?.name ?? path.basename(root),
   ensureIndex: (layers: ModLayers): Promise<ModIndex | undefined> => modCache.ensureIndex(layers),
   fileSystem: layerFileSystem,
@@ -826,12 +760,12 @@ const mapEditor = new MapEditorHandlers({
   rename: renameModFile,
 });
 
-connection.onRequest(MAP_EDITOR_MAP_REQUEST, (params: MapEditorTargetParams): Promise<MapEditorMapResult> => mapEditor.map(params));
-connection.onRequest(MAP_EDITOR_PROVINCE_REQUEST, (params: ProvinceRequestParams): Promise<ProvinceResult> => mapEditor.province(params));
-connection.onRequest(MAP_EDITOR_POSITIONS_REQUEST, (params: MapEditorTargetParams): Promise<MapPositionsResult> => mapEditor.positions(params));
-connection.onRequest(MAP_EDITOR_COUNTRY_COLORS_REQUEST, (params: MapEditorTargetParams): Promise<MapCountryColorsResult> => mapEditor.countryColors(params));
-connection.onRequest(MAP_EDITOR_TERRAIN_PICTURE_REQUEST, (params: TerrainPictureParams): Promise<TerrainPictureResult> => mapEditor.terrainPictureFor(params));
-connection.onRequest(MAP_EDITOR_SAVE_REQUEST, async (params: SaveParams): Promise<SaveResult> => {
+onRequest(MAP_EDITOR_MAP_REQUEST, (params: MapEditorTargetParams): Promise<MapEditorMapResult> => mapEditor.map(params));
+onRequest(MAP_EDITOR_PROVINCE_REQUEST, (params: ProvinceRequestParams): Promise<ProvinceResult> => mapEditor.province(params));
+onRequest(MAP_EDITOR_POSITIONS_REQUEST, (params: MapEditorTargetParams): Promise<MapPositionsResult> => mapEditor.positions(params));
+onRequest(MAP_EDITOR_COUNTRY_COLORS_REQUEST, (params: MapEditorTargetParams): Promise<MapCountryColorsResult> => mapEditor.countryColors(params));
+onRequest(MAP_EDITOR_TERRAIN_PICTURE_REQUEST, (params: TerrainPictureParams): Promise<TerrainPictureResult> => mapEditor.terrainPictureFor(params));
+onRequest(MAP_EDITOR_SAVE_REQUEST, async (params: SaveParams): Promise<SaveResult> => {
   const result = await mapEditor.save(params);
   connection.console.log(
     result.ok

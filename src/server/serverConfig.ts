@@ -5,6 +5,7 @@ import {
   DEFAULT_IGNORE_MARKER,
   DEFAULT_NULL_TAG_PATTERN,
 } from '../model/validationOptions.js';
+import { SETTING, SETTINGS_SECTION, type SettingKey } from '../model/settingsKeys.js';
 
 /** The server's view of `victorianTools.*`, mirroring the manifest defaults. */
 export interface ServerConfig {
@@ -52,40 +53,39 @@ const REBUILD_DELAY_RANGE = { min: 50, max: 10000 } as const;
  */
 export function readServerConfig(configuration: unknown): ServerConfig {
   const root = asRecord(configuration);
-  const validation = asRecord(root?.['validation']);
-  const index = asRecord(root?.['index']);
   return {
-    validationEnabled: readBoolean(validation?.['enable'], DEFAULT_CONFIG.validationEnabled),
+    validationEnabled: readBoolean(at(root, SETTING.validationEnabled), DEFAULT_CONFIG.validationEnabled),
     validationDelayMs: readMilliseconds(
-      validation?.['delay'],
+      at(root, SETTING.validationDelay),
       DEFAULT_CONFIG.validationDelayMs,
       VALIDATION_DELAY_RANGE,
     ),
     indexRebuildDelayMs: readMilliseconds(
-      index?.['rebuildDelay'],
+      at(root, SETTING.indexRebuildDelay),
       DEFAULT_CONFIG.indexRebuildDelayMs,
       REBUILD_DELAY_RANGE,
     ),
-    indexOnStartup: readBoolean(index?.['onStartup'], DEFAULT_CONFIG.indexOnStartup),
-    gamePath: readString(root?.['gamePath']),
-    activeMods: readStringList(root?.['activeMods']),
-    ...readRuleConfig(root),
+    indexOnStartup: readBoolean(at(root, SETTING.indexOnStartup), DEFAULT_CONFIG.indexOnStartup),
+    gamePath: readString(at(root, SETTING.gamePath)),
+    activeMods: readStringList(at(root, SETTING.activeMods)),
+    locKeyPattern: readPattern(at(root, SETTING.locKeyPattern), DEFAULT_LOC_KEY_PATTERN),
+    flagNamePattern: readPattern(at(root, SETTING.flagNamePattern), DEFAULT_FLAG_NAME_PATTERN),
+    nullTagPattern: readPattern(at(root, SETTING.nullTagPattern), DEFAULT_NULL_TAG_PATTERN),
+    ignoreMarker: readPattern(at(root, SETTING.ignoreMarker), DEFAULT_IGNORE_MARKER),
   };
 }
 
-/** The four rule-tuning strings; each is taken as typed, or falls back to its manifest default. */
-function readRuleConfig(
-  root: Record<string, unknown> | undefined,
-): Pick<ServerConfig, 'locKeyPattern' | 'flagNamePattern' | 'nullTagPattern' | 'ignoreMarker'> {
-  const localisation = asRecord(root?.['localisation']);
-  const flags = asRecord(root?.['flags']);
-  const nullTags = asRecord(root?.['nullTags']);
-  return {
-    locKeyPattern: readPattern(localisation?.['keyPattern'], DEFAULT_LOC_KEY_PATTERN),
-    flagNamePattern: readPattern(flags?.['namePattern'], DEFAULT_FLAG_NAME_PATTERN),
-    nullTagPattern: readPattern(nullTags?.['pattern'], DEFAULT_NULL_TAG_PATTERN),
-    ignoreMarker: readPattern(root?.['ignoreMarker'], DEFAULT_IGNORE_MARKER),
-  };
+/** Walk a dotted setting key through the nested bag the client sends. */
+function at(root: Record<string, unknown> | undefined, key: SettingKey): unknown {
+  let value: unknown = root;
+  for (const segment of key.split('.')) {
+    const record = asRecord(value);
+    if (!record) {
+      return undefined;
+    }
+    value = record[segment];
+  }
+  return value;
 }
 
 export function configEquals(left: ServerConfig, right: ServerConfig): boolean {
@@ -111,10 +111,10 @@ export function layoutConfigEquals(left: ServerConfig, right: ServerConfig): boo
   );
 }
 
-/** Pull `victorianTools` from the client, falling back to defaults on any failure. */
+/** Pull the section from the client, falling back to defaults on any failure. */
 export async function fetchServerConfig(connection: Connection): Promise<ServerConfig> {
   try {
-    const configuration: unknown = await connection.workspace.getConfiguration('victorianTools');
+    const configuration: unknown = await connection.workspace.getConfiguration(SETTINGS_SECTION);
     return readServerConfig(configuration);
   } catch {
     return DEFAULT_CONFIG;

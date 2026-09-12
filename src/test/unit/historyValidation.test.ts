@@ -60,6 +60,8 @@ suite('historyValidation — history files', () => {
   test('diplomacy history: relation kinds and fields', () => {
     const text = 'alliance = { first = ENG second = FRA start_date = 1836.1.1 end_date = 1936.1.1 }';
     assert.deepStrictEqual(codes(text, 'historyDiplomacy', 'history/diplomacy/Alliances.txt'), []);
+    const reparations = 'reparations = { first = ENG second = FRA start_date = 1830.1.1 end_date = 1834.1.1 }';
+    assert.deepStrictEqual(codes(reparations, 'historyDiplomacy', 'history/diplomacy/Reparations.txt'), []);
     assert.ok(
       codes('guarantee = { first = ENG second = FRA }', 'historyDiplomacy', 'history/diplomacy/x.txt').includes('unknown-diplomacy-key'),
     );

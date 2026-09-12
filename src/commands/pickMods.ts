@@ -4,6 +4,7 @@ import { readActiveMods } from '../config.js';
 import { MODS_REQUEST, type ModDescriptor, type ModsResult } from '../model/modDescriptor.js';
 import { isInsideRoot } from '../services/modLayout.js';
 import { modSelectionItems, type ModSelectionItem } from '../services/modSelectionItems.js';
+import { request } from '../providers/request.js';
 
 type ModPick = vscode.QuickPickItem & { readonly name?: string };
 
@@ -46,7 +47,7 @@ export async function pickMods(
     void vscode.window.showErrorMessage('Victorian Tools: the language server is not running.');
     return { kind: 'unavailable' };
   }
-  const known = await client.sendRequest<ModsResult>(MODS_REQUEST);
+  const known = await request(client, MODS_REQUEST);
   const mods = eligibleMods(known, options.launchableOnly);
   if (mods === undefined) {
     return { kind: 'unavailable' };

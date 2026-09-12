@@ -10,8 +10,9 @@ import {
   DEFAULT_NULL_TAG_PATTERN,
 } from '../model/validationOptions.js';
 import { DEFAULT_COUNTRY_COLORS_TINT } from '../model/mapEditor.js';
+import { qualifiedSettingKey, SETTING, type SettingKey } from '../model/settingsKeys.js';
+import { EXTENSION_ID } from './extensionId.js';
 
-const EXTENSION_ID = 'TGCModdingTeam.victorian-tools';
 
 function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -109,26 +110,32 @@ suite('Victorian Tools — integration', () => {
   test('the manifest defaults match the server defaults', () => {
     // The server falls back to these values when the client cannot be reached,
     // so a drift between the two would silently change behavior (CLAUDE.md §8).
-    const extension = vscode.extensions.getExtension(EXTENSION_ID);
-    const packageJson = extension?.packageJSON as {
-      contributes?: { configuration?: { properties?: Record<string, { default?: unknown }> } };
+    const expected: Record<SettingKey, unknown> = {
+      [SETTING.validationEnabled]: true,
+      [SETTING.validationDelay]: 300,
+      [SETTING.indexRebuildDelay]: 500,
+      [SETTING.indexOnStartup]: true,
+      [SETTING.gamePath]: '',
+      [SETTING.activeMods]: [],
+      [SETTING.locKeyPattern]: DEFAULT_LOC_KEY_PATTERN,
+      [SETTING.flagNamePattern]: DEFAULT_FLAG_NAME_PATTERN,
+      [SETTING.nullTagPattern]: DEFAULT_NULL_TAG_PATTERN,
+      [SETTING.ignoreMarker]: DEFAULT_IGNORE_MARKER,
+      [SETTING.countryColorsTint]: DEFAULT_COUNTRY_COLORS_TINT,
     };
-    const properties = packageJson.contributes?.configuration?.properties ?? {};
-    const expected: Record<string, unknown> = {
-      'victorianTools.validation.enable': true,
-      'victorianTools.validation.delay': 300,
-      'victorianTools.index.rebuildDelay': 500,
-      'victorianTools.index.onStartup': true,
-      'victorianTools.gamePath': '',
-      'victorianTools.activeMods': [],
-      'victorianTools.localisation.keyPattern': DEFAULT_LOC_KEY_PATTERN,
-      'victorianTools.flags.namePattern': DEFAULT_FLAG_NAME_PATTERN,
-      'victorianTools.nullTags.pattern': DEFAULT_NULL_TAG_PATTERN,
-      'victorianTools.ignoreMarker': DEFAULT_IGNORE_MARKER,
-      'victorianTools.mapEditor.countryColorsTint': DEFAULT_COUNTRY_COLORS_TINT,
-    };
-    const actual = Object.fromEntries(Object.keys(expected).map((key) => [key, properties[key]?.default]));
+    const properties = manifestSettings();
+    const actual = Object.fromEntries(
+      Object.keys(expected).map((key) => [key, properties[qualifiedSettingKey(key as SettingKey)]?.default]),
+    );
     assert.deepStrictEqual(actual, expected);
+  });
+
+  test('every shared setting key is declared in the manifest', () => {
+    // SETTING is the one source the client and the server both read; a key that
+    // is not in contributes.configuration would silently read as undefined.
+    const properties = manifestSettings();
+    const missing = Object.values(SETTING).filter((key) => !(qualifiedSettingKey(key) in properties));
+    assert.deepStrictEqual(missing, []);
   });
 
   test('registers the victoria2 language', async () => {
@@ -310,3 +317,11 @@ suite('Victorian Tools — integration', () => {
     );
   });
 });
+
+function manifestSettings(): Record<string, { default?: unknown }> {
+  const extension = vscode.extensions.getExtension(EXTENSION_ID);
+  const packageJson = extension?.packageJSON as {
+    contributes?: { configuration?: { properties?: Record<string, { default?: unknown }> } };
+  };
+  return packageJson.contributes?.configuration?.properties ?? {};
+}

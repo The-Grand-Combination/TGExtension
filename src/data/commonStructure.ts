@@ -175,6 +175,7 @@ export const PRODUCTION_TYPE_FIELDS: FieldTable = {
   farm: ['yesno'],
   mine: ['yesno'],
   is_coastal: ['yesno'],
+  limit_by_local_supply: ['yesno'],
   output_goods: ['good'],
   value: ['number'],
 };
