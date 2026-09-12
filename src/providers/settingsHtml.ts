@@ -221,7 +221,7 @@ export function settingsHtml(cspSource: string): string {
 <div id="nullTagStatus" class="status"></div>
 
 <h2>Map Editor: province folder pattern</h2>
-<p class="hint">A regular expression narrowing which subfolders of <code>history/provinces</code> hold the mod's real province files. Matched against the subfolder alone &mdash; <code>middle earth</code>, <code>usa</code>, or empty for files sitting directly in <code>history/provinces</code> &mdash; case-insensitively, so <code>^middle</code> keeps <code>middle earth</code> and drops the rest. A total conversion that declares the whole vanilla province set as empty placeholder files needs this: without it a province id is answered by whichever folder the directory walk reaches first, which is the empty placeholder for every folder sorting before the real one. Leave empty to use every folder. Stored in the workspace settings (<code>victorianTools.mapEditor.provinceFolderPattern</code>).</p>
+<p class="hint">A regular expression narrowing which subfolders of <code>history/provinces</code> hold the mod's real province files. Matched against the subfolder alone &mdash; <code>middle earth</code>, <code>usa</code>, or empty for files sitting directly in <code>history/provinces</code> &mdash; case-insensitively, so <code>^middle</code> keeps <code>middle earth</code> and drops the rest. Made for total conversions mods. (<code>victorianTools.mapEditor.provinceFolderPattern</code>).</p>
 <div class="field">
   <input id="provinceFolderPattern" type="text" placeholder="Empty: every folder under history/provinces" spellcheck="false">
   <button id="provinceFolderDefault" class="secondary">Default</button>
