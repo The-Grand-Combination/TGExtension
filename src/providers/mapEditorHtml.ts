@@ -194,7 +194,7 @@ const PAGE_STYLE = String.raw`
   .pos-row .pos-label { flex: 0 0 78px; opacity: 0.85; margin-left: 4px; }
   .pos-row input { flex: 1; min-width: 0; width: auto; }
   .pos-head { padding-left: 96px; }
-  label.check { display: flex; gap: 6px; align-items: center; opacity: 0.9; margin-top: 2px; }
+  label.check { display: flex; gap: 6px; align-items: center; opacity: 0.9; margin-top: 2px; position: relative; top: 2px; }
   .tabs { display: flex; gap: 2px; margin: 10px 0 4px; border-bottom: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, #444)); }
   .tabs button { background: transparent; color: var(--vscode-foreground); opacity: 0.7; border-radius: 0; padding: 6px 14px; border-bottom: 2px solid transparent; }
   .tabs button:hover { background: var(--vscode-list-hoverBackground); }
