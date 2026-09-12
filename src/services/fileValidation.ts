@@ -62,27 +62,57 @@ function dropIgnoredLines(text: string, diagnostics: Diagnostic[], marker: strin
   if (ignored.length === 0) {
     return diagnostics;
   }
-  return diagnostics.filter(
-    (item) => !ignored.some((span) => item.range.start >= span.start && item.range.start < span.end),
-  );
+  return diagnostics.filter((item) => !isIgnored(ignored, item.range.start));
 }
 
-/** Offset spans of the lines containing the marker, matched case-insensitively. */
-function ignoredLineSpans(text: string, marker: string): { start: number; end: number }[] {
-  const spans: { start: number; end: number }[] = [];
-  const lowerText = text.toLowerCase();
-  const lowerMarker = marker.toLowerCase();
-  let lineStart = 0;
-  while (lineStart <= text.length) {
-    const newline = text.indexOf('\n', lineStart);
-    const lineEnd = newline === -1 ? text.length : newline;
-    if (lowerText.lastIndexOf(lowerMarker, lineEnd) >= lineStart) {
-      spans.push({ start: lineStart, end: lineEnd + 1 });
-    }
+interface Span {
+  readonly start: number;
+  readonly end: number;
+}
+
+/**
+ * Offset spans of the lines containing the marker, matched case-insensitively.
+ * The marker is found in one forward pass and each hit is widened to its line.
+ * Walking line by line and searching each one would re-read the text from the
+ * start every time, which is quadratic: a large mod ships script files of ten
+ * megabytes, and that alone cost minutes.
+ */
+function ignoredLineSpans(text: string, marker: string): Span[] {
+  const spans: Span[] = [];
+  const pattern = new RegExp(escapeRegExp(marker), 'gi');
+  let match = pattern.exec(text);
+  while (match !== null) {
+    const newline = text.indexOf('\n', match.index);
+    const end = newline === -1 ? text.length : newline + 1;
+    spans.push({ start: text.lastIndexOf('\n', match.index) + 1, end });
     if (newline === -1) {
       break;
     }
-    lineStart = newline + 1;
+    // One span per line: a second marker on the same line adds nothing.
+    pattern.lastIndex = end;
+    match = pattern.exec(text);
   }
   return spans;
+}
+
+/** Whether an offset falls on an ignored line; the spans are sorted, so a binary search settles it. */
+function isIgnored(spans: readonly Span[], offset: number): boolean {
+  let low = 0;
+  let high = spans.length - 1;
+  while (low <= high) {
+    const middle = (low + high) >> 1;
+    const span = spans[middle];
+    if (span === undefined || offset < span.start) {
+      high = middle - 1;
+    } else if (offset >= span.end) {
+      low = middle + 1;
+    } else {
+      return true;
+    }
+  }
+  return false;
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

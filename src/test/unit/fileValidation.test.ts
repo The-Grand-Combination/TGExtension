@@ -83,4 +83,39 @@ suite('fileValidation — the skip-validation marker', () => {
       'unknown-trigger',
     ]);
   });
+
+  test('a marker holding regex metacharacters is still matched literally', () => {
+    // The scan compiles the marker, so '(' and '.' must not become syntax.
+    assert.deepStrictEqual(codes(marked('tags = ENG # skip(v2.0)'), { ignoreMarker: '# skip(v2.0)' }), []);
+    assert.deepStrictEqual(codes(marked('tags = ENG # skipXv2Y0Z'), { ignoreMarker: '# skip(v2.0)' }), [
+      'unknown-trigger',
+    ]);
+  });
+
+  test('CRLF files and a marker on the last line work', () => {
+    const crlf = marked('tags = ENG #VT - Skip Validation').replace(/\n/g, '\r\n');
+    assert.deepStrictEqual(codes(crlf), []);
+    // No trailing newline after the marked line.
+    const lastLine = 'country_event = {\n  id = 1\n  title = "EVTNAME100"\n  desc = "d"\n  is_triggered_only = yes\n  trigger = { tags = ENG }\n  option = { name = "o" }\n}\n#VT - Skip Validation';
+    assert.deepStrictEqual(codes(lastLine), ['unknown-trigger'], 'a marker on its own last line silences only itself');
+  });
+
+  test('two markers on one line silence it once', () => {
+    assert.deepStrictEqual(codes(marked('tags = ENG #VT - Skip Validation #VT - Skip Validation')), []);
+  });
+
+  /**
+   * The marker scan used to search the whole text again for every line, which
+   * is quadratic; a ten-megabyte script file cost minutes on its own. The bound
+   * is loose on purpose: it only has to fail if that ever comes back.
+   */
+  test('a multi-megabyte file with findings is scanned in linear time', () => {
+    const body = '    tags = ENG\n'.repeat(120000); // ~1.8 MB, 120k findings' worth of lines
+    const text = `country_event = {\n  id = 1\n  title = "EVTNAME100"\n  desc = "d"\n  is_triggered_only = yes\n  trigger = {\n${body}  }\n  option = { name = "o" }\n}\n`;
+    const started = Date.now();
+    const found = validateFileText(text, 'event', index, 'events/A.txt', DEFAULT_VALIDATION_OPTIONS);
+    const elapsed = Date.now() - started;
+    assert.ok(found.length > 0, 'the file does report findings, so the marker scan runs');
+    assert.ok(elapsed < 10000, `validating ${String(text.length)} chars took ${String(elapsed)}ms`);
+  });
 });

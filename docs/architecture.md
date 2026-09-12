@@ -150,7 +150,14 @@ editor uses (`validateFileText` in `services/fileValidation.ts`, shared with `va
 also appends the index-time duplicates for that file). Files are read in parallel batches of 64
 (`fs.promises`), and the event loop gets a turn between batches, so hovers and diagnostics keep
 answering while a mod is scanned: on TGC the whole report takes about 0.65 s and never blocks the
-server for more than ~60 ms. Offsets become 1-based line/column positions, and `renderReportText`
+server for more than ~60 ms, and on GFM, which validates 60 MB of script against 6566 files and
+produces 42 000 findings, about 1.8 s after a 1.0 s index build.
+
+The per-file work has to stay linear in the file size. Large mods ship single script files of ten
+megabytes (GFM's `events/_DL7_Variables.txt` is 10.8 MB over 240 000 lines), so anything that
+re-reads the text once per line costs minutes on its own: the skip-validation marker used to be
+found with a backward search per line, which made that one file take over four minutes, and it is
+now a single forward pass with a binary search per finding (`dropIgnoredLines`). Offsets become 1-based line/column positions, and `renderReportText`
 (`services/reportText.ts`) produces a plain-text document: a header with the generation time, then
 per mod root its totals and, per file with findings, one line per finding
 (`line:column  severity  code: message`). **Errors lead**: the files that contain one come first
