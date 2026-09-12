@@ -76,6 +76,10 @@ Two fields come from `common/technology.txt`'s `folders` section:
   `population_tech_research_bonus` anywhere a modifier value is accepted. `isModifierKey` in
   `validationWalker.ts` checks this set on top of the static `MODIFIER_KEYS` table.
 
+`minBuildKeys` works the same way one level over, from `common/buildings.txt`: each building grants
+`min_build_<name>`, so a mod that adds a building named `farmland` can write `min_build_farmland`
+in a terrain category. `factory` is a synthetic member of the building set and is excluded.
+
 ## Reform classes and options
 
 `common/issues.txt` is indexed at three levels: `reformClass` (category → class name, e.g.

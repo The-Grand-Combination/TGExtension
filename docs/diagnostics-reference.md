@@ -98,7 +98,7 @@ codes below, the map CSVs and the cross-file duplicates alike. Being a comment, 
 | `unknown-rule` | An `issues.txt` option's `rules` block has a key outside the fixed 33 game-rule toggles. |
 | `unknown-country` | A `country_colors.txt` top-level key isn't a known TAG. |
 | `reserved-country-tag` | A `common/countries.txt` tag is one the engine reads as a keyword elsewhere (`RESERVED_COUNTRY_TAGS` in `data/commonStructure.ts`), so a country cannot claim it. |
-| `unknown-modifier-key` | A modifier-body field isn't `icon`, one of the 187 known modifier keys, or a `<folder>_research_bonus` key granted by a tech folder of `common/technology.txt`. |
+| `unknown-modifier-key` | A modifier-body field isn't `icon`, one of the 187 known modifier keys, a `<folder>_research_bonus` key granted by a tech folder of `common/technology.txt`, or a `min_build_<building>` key granted by `common/buildings.txt`. |
 | `broken-modifier-key` | warning | A modifier key the engine documents, localises and parses but never applies (`BROKEN_MODIFIER_KEYS` in `data/modifierKeys.ts`): `rich_income_modifier`, `middle_income_modifier`, `poor_income_modifier`. Valid script that does nothing, so it is a warning and the value is still checked. |
 | `missing-tech-folder` | `common/technology.txt` does not declare `army_tech` or `navy_tech`; the engine hardcodes both and will not load without them. |
 | `unknown-culture-field` | An unrecognized field in a `cultures.txt` group or culture body. |
@@ -134,7 +134,7 @@ codes below, the map CSVs and the cross-file duplicates alike. Being a comment, 
 | `unknown-decision` | A `decision` reference in country history doesn't match any indexed decision. |
 | `unknown-province-history-key` | An unrecognized key in a `history/provinces/` entry. |
 | `unknown-poptype` | A `history/pops/` province entry's key isn't a known pop type. |
-| `unknown-diplomacy-key` | A `history/diplomacy/` top-level key isn't `alliance`/`vassal`/`union`/`substate`. |
+| `unknown-diplomacy-key` | A `history/diplomacy/` top-level key isn't `alliance`/`vassal`/`union`/`substate`/`reparations`. |
 | `unknown-oob-key` | An unrecognized top-level key in a `history/units/` (order of battle) file. |
 | `unknown-war-key` | A `history/wars/` top-level key is neither a date block nor `name`. |
 

@@ -171,6 +171,13 @@ Per building: `goods_cost` (a `good → number` map, keys checked against the go
 `strategic_factory`, `sail`, `steam`, `one_per_state`, `advanced_factory`, `capital`), and any
 recognized modifier key (numeric). Anything else → `unknown-building-field`.
 
+Every building also grants the modifier key `min_build_<name>`, which terrain categories and other
+modifier bodies use to set a floor on the level buildable there. The index derives the set
+(`ModIndex.minBuildKeys`), so declaring a building named `farmland` makes `min_build_farmland`
+valid; the five vanilla ones (`bank`, `fort`, `naval_base`, `railroad`, `university`) are also in
+the static table as a baseline. `factory` is a synthetic entry of the building index and grants no
+key.
+
 The engine keeps **one modifier per building**: a second assignment replaces the first, so every
 modifier but the last is dead code and each earlier one is `multiple-building-modifiers`. The
 building fields that share a modifier name (`infrastructure`, `fort_level`, `naval_capacity`,
@@ -265,7 +272,8 @@ mod index.
 
 `checkModifierBody` and every "modifier value" field above accept a fixed set of **187 modifier
 keys**, extracted from the NCE engine's `modifier_base` table
-([src/data/modifierKeys.ts](../src/data/modifierKeys.ts)):
+([src/data/modifierKeys.ts](../src/data/modifierKeys.ts)), plus two families the mod's own content
+generates: `<folder>_research_bonus` per tech folder and `min_build_<building>` per building.
 
 `rich_income_modifier`, `middle_income_modifier` and `poor_income_modifier` are in the table (the
 engine parses and localises them) but never applied, so using one is `broken-modifier-key`
