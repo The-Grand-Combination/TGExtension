@@ -1,4 +1,4 @@
-import { researchBonusKey } from '../data/modifierKeys.js';
+import { minBuildKey, researchBonusKey } from '../data/modifierKeys.js';
 import { asBlock, assignmentsOf, blockKeysOf, firstByKey, scalarValueOf } from '../model/astQuery.js';
 import type { Assignment, Block, Document, Entry } from '../model/ast.js';
 import type {
@@ -517,7 +517,18 @@ class IndexBuild {
       stateOfProvince: this.stateOfProvince,
       techFolders: this.techFolders,
       researchBonusKeys: new Set(this.techFolders.map(researchBonusKey)),
+      minBuildKeys: this.minBuildKeys(),
     };
+  }
+
+  /**
+   * `min_build_<building>` for every building the mod declares. `factory` is a
+   * synthetic entry of the building set (see `indexCommon`), not a block in
+   * common/buildings.txt, so it grants no key.
+   */
+  private minBuildKeys(): ReadonlySet<string> {
+    const buildings = this.identifiers.get('building') ?? new Set<string>();
+    return new Set([...buildings].filter((name) => name !== 'factory').map(minBuildKey));
   }
 
   private put(category: IdentifierCategory, occurrences: readonly IdentifierOccurrence[], options: PutOptions = {}): void {

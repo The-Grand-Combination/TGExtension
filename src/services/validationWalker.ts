@@ -662,16 +662,21 @@ export function checkReformOption(walk: Walk, assignment: Assignment, classNameL
 }
 
 /**
- * A modifier value key: the static NCE set plus the `<folder>_research_bonus`
- * key every tech folder of the mod grants.
+ * A modifier value key: the static NCE set plus the keys the mod's own content
+ * grants — `<folder>_research_bonus` per tech folder, `min_build_<building>`
+ * per building.
  */
 export function isModifierKey(walk: Walk, keyLower: string): boolean {
-  return MODIFIER_KEYS.has(keyLower) || walk.index.researchBonusKeys.has(keyLower);
+  return (
+    MODIFIER_KEYS.has(keyLower) ||
+    walk.index.researchBonusKeys.has(keyLower) ||
+    walk.index.minBuildKeys.has(keyLower)
+  );
 }
 
 /** Every modifier key the mod accepts, for `didYouMean` candidate lists. */
 export function modifierKeyNames(walk: Walk): readonly string[] {
-  return [...MODIFIER_KEYS, ...walk.index.researchBonusKeys];
+  return [...MODIFIER_KEYS, ...walk.index.researchBonusKeys, ...walk.index.minBuildKeys];
 }
 
 /** `<modifier> = number` (NCE modifier_base); false when the key is not a modifier. */

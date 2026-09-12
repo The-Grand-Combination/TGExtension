@@ -5,6 +5,8 @@
  *
  * The `<folder>_research_bonus` keys of vanilla's tech folders are listed here
  * as a baseline; a mod's own folders add theirs through `researchBonusKey`.
+ * `min_build_<building>` works the same way: the five vanilla province buildings
+ * are listed, and a mod's own buildings add theirs through `minBuildKey`.
  */
 export const MODIFIER_KEYS: ReadonlySet<string> = new Set([
   "admin_efficiency",
@@ -210,4 +212,9 @@ export const BROKEN_MODIFIER_KEYS: Readonly<Record<string, string>> = {
 /** Every tech folder in common/technology.txt grants this modifier key. */
 export function researchBonusKey(techFolder: string): string {
   return `${techFolder.toLowerCase()}_research_bonus`;
+}
+
+/** `min_build_fort` — a terrain/modifier key the engine derives from a building name. */
+export function minBuildKey(building: string): string {
+  return `min_build_${building.toLowerCase()}`;
 }

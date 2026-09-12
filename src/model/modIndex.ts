@@ -57,6 +57,8 @@ export interface ModIndex {
   readonly techFolders: readonly string[];
   /** `<folder>_research_bonus` modifier keys the mod's tech folders grant. */
   readonly researchBonusKeys: ReadonlySet<string>;
+  /** `min_build_<building>` modifier keys the mod's own buildings grant. */
+  readonly minBuildKeys: ReadonlySet<string>;
   /** `max_provinces` from map/default.map; province ids must stay below it. */
   readonly maxProvinces: number | undefined;
   /** Province ids listed under `sea_starts` in map/default.map. */
