@@ -193,12 +193,15 @@ closes. A finding with no pixel gets no link.
 
 The side bar action **Map Editor** (`victorian-tools.openMapEditor`,
 `commands/openMapEditorCommand.ts`) uses the same mod dialog and target resolution, then opens a
-webview tab (`providers/mapEditorPanel.ts` + `mapEditorHtml.ts`). Three requests
+webview tab (`providers/mapEditorPanel.ts` + `mapEditorHtml.ts`). Five requests
 ([model/mapEditor.ts](../src/model/mapEditor.ts), handled by
-[server/mapEditorHandlers.ts](../src/server/mapEditorHandlers.ts)) carry the map description, one
-province's localisation/history/pops, and one section's save; the page fetches and decodes
-`provinces.bmp` itself. Saves are text patches computed by `vscode`-free services
-(`provinceLocEdit.ts`, `provinceHistoryEdit.ts`, `provincePopsEdit.ts` over `textPatch.ts`) and
+[server/mapEditorHandlers.ts](../src/server/mapEditorHandlers.ts)) carry the map description, the
+`map/positions.txt` points drawn over it, the start-date owners and country colours behind the
+Country Colors layer, one province's localisation/history/pops/positions, and one section's save;
+the page fetches and decodes `provinces.bmp` (and, for the Show Rivers layer, `rivers.bmp`) itself
+and tints it by owner in the browser. Saves are text patches
+computed by `vscode`-free services (`provinceLocEdit.ts`, `provinceHistoryEdit.ts`,
+`provincePopsEdit.ts`, `provincePositionsEdit.ts` over `textPatch.ts`) and
 written only into the top mod of the stack. Behaviour and rules in [map-editor.md](map-editor.md).
 
 ## Mod root discovery and file classification
@@ -284,4 +287,5 @@ defaults and `DEFAULT_CONFIG` agree.
 | `victorianTools.flags.namePattern` | `` (empty) | Regex narrowing the never-set flag check; a flag whose name does not match is never reported. Empty checks every flag. Editable from the **Victorian Tools Settings** tab. |
 | `victorianTools.ignoreMarker` | `#VT - Skip Validation` | A marker that silences every finding on the line it appears on. Write it as a comment so the game ignores it. Matched literally, anywhere in the line, case-insensitively. Empty turns it off. Editable from the **Victorian Tools Settings** tab. |
 | `victorianTools.nullTags.pattern` | `^(QQQ\|---\|null)$` | Regex matching the tags meaning "no country". A country value that matches warns instead of erroring; matched case-insensitively. Empty allows no exception. Editable from the **Victorian Tools Settings** tab. |
+| `victorianTools.mapEditor.countryColorsTint` | `82` | Percent of the owner's colour in the Map Editor's **Country Colors** layer; the rest is the province's own colour. Client-side only. Editable from the **Victorian Tools Settings** tab (a slider). |
 | `victorianTools.trace.server` | `off` | `vscode-languageclient` trace verbosity (client-side).

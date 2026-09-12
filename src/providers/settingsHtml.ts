@@ -32,6 +32,8 @@ export interface SettingsState {
   readonly nullTagPattern: string;
   /** `victorianTools.ignoreMarker`; empty means no line can be silenced. */
   readonly ignoreMarker: string;
+  /** `victorianTools.mapEditor.countryColorsTint`, 0-100. */
+  readonly countryColorsTint: number;
   readonly warning?: string;
 }
 
@@ -43,6 +45,7 @@ export interface CurrentSettings {
   readonly flagNamePattern: string;
   readonly nullTagPattern: string;
   readonly ignoreMarker: string;
+  readonly countryColorsTint: number;
 }
 
 /** The state the page draws for the installed mods, the game folder, the selection and the loc pattern. */
@@ -60,6 +63,7 @@ export function settingsState(installed: ModsResult, current: CurrentSettings): 
     flagNamePattern: current.flagNamePattern,
     nullTagPattern: current.nullTagPattern,
     ignoreMarker: current.ignoreMarker,
+    countryColorsTint: current.countryColorsTint,
     ...(missing.length === 0 ? {} : { warning: `Dependency not installed: ${missing.join(', ')}` }),
   };
 }
@@ -127,6 +131,8 @@ export function settingsHtml(cspSource: string): string {
   .order { margin-top: 10px; line-height: 1.5; word-break: break-word; }
   .order b { font-weight: 600; opacity: 0.8; }
   code { font-family: var(--vscode-editor-font-family); font-size: 0.95em; }
+  input[type=range] { flex: 1; }
+  .value { min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
 </style>
 </head>
 <body>
@@ -176,6 +182,14 @@ export function settingsHtml(cspSource: string): string {
   <button id="ignoreSave" class="secondary">Save</button>
 </div>
 <div id="ignoreStatus" class="status"></div>
+
+<h2>Map Editor: Country Colors tint</h2>
+<p class="hint">How much of each province's colour comes from its owner's <code>color</code> when the <b>Country Colors</b> layer is on; the rest is the province's own <code>definition.csv</code> colour, which keeps neighbours apart. <code>100</code> paints every province of a country the same; <code>0</code> shows the plain map. Stored in your user settings (<code>victorianTools.mapEditor.countryColorsTint</code>); the default is <code>82</code>.</p>
+<div class="field">
+  <input id="tint" type="range" min="0" max="100" step="1">
+  <span id="tintValue" class="value"></span>
+  <button id="tintDefault" class="secondary">Default</button>
+</div>
 
 <h2>Mods and submods</h2>
 <p class="hint">Nothing needs ticking for everyday work: every mod is read on top of the game files it does not <code>replace_path</code>, and a submod on top of the mods it depends on. Tick mods here only to work on them <b>together</b>: the ticked mods and their dependencies then form one stack, in load order, for validation and for the full report. Any combination is allowed, as in the launcher. Stored in the workspace settings (<code>victorianTools.activeMods</code>). <a id="refresh" href="#">Refresh</a> after adding or editing a <code>.mod</code> file outside the workspace.</p>
@@ -331,6 +345,17 @@ export function settingsHtml(cspSource: string): string {
   gamePath.addEventListener('keydown', (event) => { if (event.key === 'Enter') vscode.postMessage({ type: 'gamePath', value: gamePath.value }); });
   document.getElementById('refresh').addEventListener('click', (event) => { event.preventDefault(); vscode.postMessage({ type: 'refresh' }); });
 
+  const tint = document.getElementById('tint');
+  const tintValue = document.getElementById('tintValue');
+  const showTint = () => { tintValue.textContent = tint.value + '%'; };
+  tint.addEventListener('input', showTint);
+  tint.addEventListener('change', () => vscode.postMessage({ type: 'countryColorsTint', value: Number(tint.value) }));
+  document.getElementById('tintDefault').addEventListener('click', () => { tint.value = '82'; showTint(); vscode.postMessage({ type: 'countryColorsTint', value: 82 }); });
+  function renderTint(value) {
+    if (document.activeElement !== tint) tint.value = String(value);
+    showTint();
+  }
+
 
 
   window.addEventListener('message', (event) => {
@@ -342,6 +367,7 @@ export function settingsHtml(cspSource: string): string {
       renderFlagPattern(state.flagNamePattern);
       renderNullTagPattern(state.nullTagPattern);
       renderIgnoreMarker(state.ignoreMarker);
+      renderTint(state.countryColorsTint);
       renderMods();
     }
   });

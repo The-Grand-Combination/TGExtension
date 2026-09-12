@@ -18,8 +18,9 @@ function current(
   flagNamePattern = '',
   nullTagPattern = '^(QQQ|---|null)$',
   ignoreMarker = '#VT - Skip Validation',
+  countryColorsTint = 82,
 ): CurrentSettings {
-  return { gamePathSetting, selected, locKeyPattern, flagNamePattern, nullTagPattern, ignoreMarker };
+  return { gamePathSetting, selected, locKeyPattern, flagNamePattern, nullTagPattern, ignoreMarker, countryColorsTint };
 }
 
 suite('settingsState', () => {

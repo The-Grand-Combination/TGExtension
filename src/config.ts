@@ -5,6 +5,7 @@ import {
   DEFAULT_IGNORE_MARKER,
   DEFAULT_NULL_TAG_PATTERN,
 } from './model/validationOptions.js';
+import { DEFAULT_COUNTRY_COLORS_TINT } from './model/mapEditor.js';
 
 const SECTION = 'victorianTools';
 const ACTIVE_MODS = 'activeMods';
@@ -13,6 +14,7 @@ const LOC_KEY_PATTERN = 'localisation.keyPattern';
 const FLAG_NAME_PATTERN = 'flags.namePattern';
 const NULL_TAG_PATTERN = 'nullTags.pattern';
 const IGNORE_MARKER = 'ignoreMarker';
+const COUNTRY_COLORS_TINT = 'mapEditor.countryColorsTint';
 
 /** `name`s of the mods being worked on, as stored in `victorianTools.activeMods`. */
 export function readActiveMods(): string[] {
@@ -96,9 +98,33 @@ export function writeIgnoreMarker(marker: string): Thenable<void> {
   return vscode.workspace.getConfiguration(SECTION).update(IGNORE_MARKER, marker, patternTarget());
 }
 
+/**
+ * The Country Colors tint of the Map Editor, 0-100, as stored in
+ * `victorianTools.mapEditor.countryColorsTint`. Anything else falls back to the default.
+ */
+export function readCountryColorsTint(): number {
+  const value = vscode.workspace.getConfiguration(SECTION).get<unknown>(COUNTRY_COLORS_TINT);
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(100, Math.max(0, Math.round(value)))
+    : DEFAULT_COUNTRY_COLORS_TINT;
+}
+
+/** A viewing preference, so it goes to the user settings. */
+export function writeCountryColorsTint(percent: number): Thenable<void> {
+  const clamped = Math.min(100, Math.max(0, Math.round(percent)));
+  return vscode.workspace
+    .getConfiguration(SECTION)
+    .update(COUNTRY_COLORS_TINT, clamped === DEFAULT_COUNTRY_COLORS_TINT ? undefined : clamped, vscode.ConfigurationTarget.Global);
+}
+
+/** True when a configuration change touches the Map Editor's Country Colors tint. */
+export function affectsCountryColorsTint(event: vscode.ConfigurationChangeEvent): boolean {
+  return event.affectsConfiguration(`${SECTION}.${COUNTRY_COLORS_TINT}`);
+}
+
 /** True when a configuration change touches anything the settings page shows. */
 export function affectsSettingsPage(event: vscode.ConfigurationChangeEvent): boolean {
-  const keys = [ACTIVE_MODS, GAME_PATH, LOC_KEY_PATTERN, FLAG_NAME_PATTERN, NULL_TAG_PATTERN, IGNORE_MARKER];
+  const keys = [ACTIVE_MODS, GAME_PATH, LOC_KEY_PATTERN, FLAG_NAME_PATTERN, NULL_TAG_PATTERN, IGNORE_MARKER, COUNTRY_COLORS_TINT];
   return keys.some((key) => event.affectsConfiguration(`${SECTION}.${key}`));
 }
 

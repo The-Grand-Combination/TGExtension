@@ -9,6 +9,7 @@ import {
   DEFAULT_IGNORE_MARKER,
   DEFAULT_NULL_TAG_PATTERN,
 } from '../model/validationOptions.js';
+import { DEFAULT_COUNTRY_COLORS_TINT } from '../model/mapEditor.js';
 
 const EXTENSION_ID = 'TGCModdingTeam.victorian-tools';
 
@@ -113,16 +114,21 @@ suite('Victorian Tools — integration', () => {
       contributes?: { configuration?: { properties?: Record<string, { default?: unknown }> } };
     };
     const properties = packageJson.contributes?.configuration?.properties ?? {};
-    assert.strictEqual(properties['victorianTools.validation.enable']?.default, true);
-    assert.strictEqual(properties['victorianTools.validation.delay']?.default, 300);
-    assert.strictEqual(properties['victorianTools.index.rebuildDelay']?.default, 500);
-    assert.strictEqual(properties['victorianTools.index.onStartup']?.default, true);
-    assert.strictEqual(properties['victorianTools.gamePath']?.default, '');
-    assert.deepStrictEqual(properties['victorianTools.activeMods']?.default, []);
-    assert.strictEqual(properties['victorianTools.localisation.keyPattern']?.default, DEFAULT_LOC_KEY_PATTERN);
-    assert.strictEqual(properties['victorianTools.flags.namePattern']?.default, DEFAULT_FLAG_NAME_PATTERN);
-    assert.strictEqual(properties['victorianTools.nullTags.pattern']?.default, DEFAULT_NULL_TAG_PATTERN);
-    assert.strictEqual(properties['victorianTools.ignoreMarker']?.default, DEFAULT_IGNORE_MARKER);
+    const expected: Record<string, unknown> = {
+      'victorianTools.validation.enable': true,
+      'victorianTools.validation.delay': 300,
+      'victorianTools.index.rebuildDelay': 500,
+      'victorianTools.index.onStartup': true,
+      'victorianTools.gamePath': '',
+      'victorianTools.activeMods': [],
+      'victorianTools.localisation.keyPattern': DEFAULT_LOC_KEY_PATTERN,
+      'victorianTools.flags.namePattern': DEFAULT_FLAG_NAME_PATTERN,
+      'victorianTools.nullTags.pattern': DEFAULT_NULL_TAG_PATTERN,
+      'victorianTools.ignoreMarker': DEFAULT_IGNORE_MARKER,
+      'victorianTools.mapEditor.countryColorsTint': DEFAULT_COUNTRY_COLORS_TINT,
+    };
+    const actual = Object.fromEntries(Object.keys(expected).map((key) => [key, properties[key]?.default]));
+    assert.deepStrictEqual(actual, expected);
   });
 
   test('registers the victoria2 language', async () => {

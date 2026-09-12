@@ -60,7 +60,10 @@ accepts it, the extension does too.
 Open the province map from the Victorian Tools side bar and click a province
 to edit it in place: its name (`PROV<id>` localisation), its history file
 (owner, cores, life rating, buildings, party loyalty, dated blocks and more,
-as a form) and its pops for a start date (one row per pop). Files are read
+as a form), its pops for a start date (one row per pop) and its
+`map/positions.txt` points (unit, city, factory, fort, railroad, naval base),
+drawn over the map when zoomed in and moved by dragging. A layer box on the map can also
+tint every province by the colour of its owner. Files are read
 through the mod stack and written only into the mod being edited, as minimal
 patches that keep comments and ordering intact.
 

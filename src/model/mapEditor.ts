@@ -1,13 +1,19 @@
 /**
  * The Map Editor: a province map the user clicks on to edit one province's
- * localisation, history file and pops. Three custom LSP requests carry the
- * map, one province's details, and one section's save.
+ * localisation, history file, pops and map positions. Custom LSP requests carry
+ * the map, the map's position markers, one province's details, and one
+ * section's save.
  */
 
 export const MAP_EDITOR_MAP_REQUEST = 'victorianTools/mapEditor/map';
 export const MAP_EDITOR_PROVINCE_REQUEST = 'victorianTools/mapEditor/province';
 export const MAP_EDITOR_SAVE_REQUEST = 'victorianTools/mapEditor/save';
 export const MAP_EDITOR_TERRAIN_PICTURE_REQUEST = 'victorianTools/mapEditor/terrainPicture';
+export const MAP_EDITOR_POSITIONS_REQUEST = 'victorianTools/mapEditor/positions';
+export const MAP_EDITOR_COUNTRY_COLORS_REQUEST = 'victorianTools/mapEditor/countryColors';
+
+/** `victorianTools.mapEditor.countryColorsTint`: percent of the owner's colour in the Country Colors layer. */
+export const DEFAULT_COUNTRY_COLORS_TINT = 82;
 
 export interface MapEditorTargetParams {
   /** File-system paths of the open workspace folders. */
@@ -31,6 +37,8 @@ export interface MapEditorMap {
   readonly targetRoot: string;
   /** `map/provinces.bmp` as the game would load it for the target. */
   readonly provincesBmpPath: string;
+  /** `map/rivers.bmp` as the game would load it, for the Show Rivers layer; undefined when the stack has none. */
+  readonly riversBmpPath: string | undefined;
   readonly definitions: readonly ProvinceDefinition[];
   readonly seaProvinces: readonly number[];
   /** Start dates found under `history/pops`, earliest first. */
@@ -141,6 +149,44 @@ export interface PopsSection {
   readonly pops: readonly PopEntry[] | undefined;
 }
 
+/**
+ * The `map/positions.txt` points the editor moves: the three top-level
+ * `<kind> = { x y }` blocks and the three inside `building_position`. The
+ * order is the order of the panel's rows and of the map legend.
+ */
+export type PositionKind = 'unit' | 'city' | 'factory' | 'fort' | 'railroad' | 'naval_base';
+export const POSITION_KINDS: readonly PositionKind[] = ['unit', 'city', 'factory', 'fort', 'railroad', 'naval_base'];
+/** The kinds that sit inside `building_position = { ... }` rather than at the top of the province block. */
+export const BUILDING_POSITION_KINDS: readonly PositionKind[] = ['fort', 'railroad', 'naval_base'];
+
+/** Coordinates as written in the file; `y` counts from the bottom of the map. */
+export interface PositionPoint {
+  readonly x: string;
+  readonly y: string;
+}
+
+/** A province's editable positions; an undefined kind has no block. */
+export type ProvincePositions = Readonly<Record<PositionKind, PositionPoint | undefined>>;
+
+export interface PositionsSection {
+  readonly file: FileRef | undefined;
+  readonly inTarget: boolean;
+  /** Undefined when `positions.txt` has no block for the province. */
+  readonly data: ProvincePositions | undefined;
+}
+
+/** One point of the whole map, for the page to draw. */
+export interface PositionMarker {
+  readonly id: number;
+  readonly kind: PositionKind;
+  readonly x: number;
+  readonly y: number;
+}
+
+export type MapPositionsResult =
+  | { readonly kind: 'ready'; readonly markers: readonly PositionMarker[] }
+  | { readonly kind: 'unavailable'; readonly reason: string };
+
 /** An identifier with the name the localisation gives it (the identifier itself when it has none). */
 export interface NamedIdentifier {
   readonly id: string;
@@ -178,6 +224,7 @@ export interface ProvinceDetails {
   readonly localisation: LocSection;
   readonly history: HistorySection;
   readonly pops: PopsSection;
+  readonly positions: PositionsSection;
   readonly terrain: TerrainSection;
   readonly vocabulary: Vocabulary;
 }
@@ -198,10 +245,27 @@ export type ProvinceResult =
 export type SaveSection =
   | { readonly section: 'localisation'; readonly text: string; readonly renameHistoryFile: boolean }
   | { readonly section: 'history'; readonly data: ProvinceHistory; readonly createInFolder: string | undefined }
-  | { readonly section: 'pops'; readonly pops: readonly PopEntry[]; readonly createInFile: string | undefined };
+  | { readonly section: 'pops'; readonly pops: readonly PopEntry[]; readonly createInFile: string | undefined }
+  | { readonly section: 'positions'; readonly data: ProvincePositions };
 
 export type SaveParams = ProvinceRequestParams & SaveSection;
 
 export type SaveResult =
   | { readonly ok: true; readonly written: readonly string[]; readonly details: ProvinceDetails }
   | { readonly ok: false; readonly reason: string };
+
+/** A colour as `common/countries/<file>.txt` writes it: three 0-255 components. */
+export type Rgb = readonly [number, number, number];
+
+/**
+ * What the page needs to tint provinces by owner: the start-date `owner` of
+ * every province with a history file (ids as strings, JSON keys) and the
+ * `color` of every tag that owns something.
+ */
+export interface MapCountryColors {
+  readonly kind: 'ready';
+  readonly owners: Readonly<Record<string, string>>;
+  readonly colors: Readonly<Record<string, Rgb>>;
+}
+
+export type MapCountryColorsResult = MapCountryColors | { readonly kind: 'unavailable'; readonly reason: string };

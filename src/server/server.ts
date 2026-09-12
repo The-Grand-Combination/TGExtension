@@ -42,12 +42,16 @@ import {
   type ModReport,
 } from '../model/fullReport.js';
 import {
+  MAP_EDITOR_COUNTRY_COLORS_REQUEST,
   MAP_EDITOR_MAP_REQUEST,
+  MAP_EDITOR_POSITIONS_REQUEST,
   MAP_EDITOR_PROVINCE_REQUEST,
   MAP_EDITOR_SAVE_REQUEST,
   MAP_EDITOR_TERRAIN_PICTURE_REQUEST,
+  type MapCountryColorsResult,
   type MapEditorMapResult,
   type MapEditorTargetParams,
+  type MapPositionsResult,
   type ProvinceRequestParams,
   type ProvinceResult,
   type SaveParams,
@@ -818,12 +822,16 @@ const mapEditor = new MapEditorHandlers({
   fileSystem: layerFileSystem,
   readText: readModFileAsync,
   readBytes: readModFileBytesAsync,
+  // dist/server.js sits one folder below the extension root, next to assets/.
+  assetsFolder: path.join(__dirname, '..', 'assets'),
   writeText: writeModFileText,
   rename: renameModFile,
 });
 
 connection.onRequest(MAP_EDITOR_MAP_REQUEST, (params: MapEditorTargetParams): Promise<MapEditorMapResult> => mapEditor.map(params));
 connection.onRequest(MAP_EDITOR_PROVINCE_REQUEST, (params: ProvinceRequestParams): Promise<ProvinceResult> => mapEditor.province(params));
+connection.onRequest(MAP_EDITOR_POSITIONS_REQUEST, (params: MapEditorTargetParams): Promise<MapPositionsResult> => mapEditor.positions(params));
+connection.onRequest(MAP_EDITOR_COUNTRY_COLORS_REQUEST, (params: MapEditorTargetParams): Promise<MapCountryColorsResult> => mapEditor.countryColors(params));
 connection.onRequest(MAP_EDITOR_TERRAIN_PICTURE_REQUEST, (params: TerrainPictureParams): Promise<TerrainPictureResult> => mapEditor.terrainPictureFor(params));
 connection.onRequest(MAP_EDITOR_SAVE_REQUEST, async (params: SaveParams): Promise<SaveResult> => {
   const result = await mapEditor.save(params);

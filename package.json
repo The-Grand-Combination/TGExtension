@@ -212,6 +212,13 @@
           "default": [],
           "markdownDescription": "`name`s (from their `.mod` files) of the mods and submods being worked on, any combination. Their files are validated against the whole stack, in load order (dependencies first): game files, then each selected mod. Empty: every mod is read with its dependencies only. Set from **Settings** in the Victorian Tools side bar."
         },
+        "victorianTools.mapEditor.countryColorsTint": {
+          "type": "number",
+          "default": 82,
+          "minimum": 0,
+          "maximum": 100,
+          "markdownDescription": "Map Editor, **Country Colors** layer: how much of each province's colour comes from its owner's `color`, in percent. The rest is the province's own `definition.csv` colour, which keeps neighbours apart. `100` paints every province of a country the same; `0` shows the plain map. Set from **Settings** in the Victorian Tools side bar."
+        },
         "victorianTools.trace.server": {
           "type": "string",
           "enum": [

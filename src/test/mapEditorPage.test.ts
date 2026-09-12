@@ -3,7 +3,14 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
-import type { MapEditorMap, MapEditorReveal } from '../model/mapEditor.js';
+import {
+  MAP_EDITOR_COUNTRY_COLORS_REQUEST,
+  MAP_EDITOR_POSITIONS_REQUEST,
+  type MapCountryColorsResult,
+  type MapEditorMap,
+  type MapEditorReveal,
+  type MapPositionsResult,
+} from '../model/mapEditor.js';
 import { mapEditorHtml } from '../providers/mapEditorHtml.js';
 import { encodeBmp24 } from './unit/bmpFixtures.js';
 
@@ -38,6 +45,7 @@ async function loadPage(
     targetName: 'Test',
     targetRoot: folder,
     provincesBmpPath: bmpPath,
+    riversBmpPath: undefined,
     definitions,
     seaProvinces: [],
     popDates: ['1836.1.1'],
@@ -129,6 +137,7 @@ suite('Map Editor panel', () => {
       targetName: 'Test',
       targetRoot: folder,
       provincesBmpPath: bmpPath,
+      riversBmpPath: undefined,
       definitions: [{ id: 1, color: 1, name: 'One' }],
       seaProvinces: [],
       popDates: ['1836.1.1'],
@@ -136,7 +145,8 @@ suite('Map Editor panel', () => {
       popFiles: { '1836.1.1': [] },
     };
     const fakeClient = {
-      sendRequest: (): Promise<MapEditorMap> => Promise.resolve(map),
+      sendRequest: (method: string): Promise<MapEditorMap | MapPositionsResult | MapCountryColorsResult> =>
+        Promise.resolve(answerFor(method, map)),
       outputChannel: { appendLine: (line: string): void => { logs.push(line); } },
     };
     // The panel only calls sendRequest and outputChannel on the client.
@@ -150,3 +160,13 @@ suite('Map Editor panel', () => {
     assert.ok(logs.some((line) => line.includes('map ready; overlay none')), `panel did not finish or the overlay stayed: ${logs.join(' | ')}`);
   });
 });
+
+function answerFor(method: string, map: MapEditorMap): MapEditorMap | MapPositionsResult | MapCountryColorsResult {
+  if (method === MAP_EDITOR_POSITIONS_REQUEST) {
+    return { kind: 'ready', markers: [] };
+  }
+  if (method === MAP_EDITOR_COUNTRY_COLORS_REQUEST) {
+    return { kind: 'ready', owners: {}, colors: {} };
+  }
+  return map;
+}

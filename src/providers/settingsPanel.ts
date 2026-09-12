@@ -3,12 +3,14 @@ import type { LanguageClient } from 'vscode-languageclient/node';
 import {
   affectsSettingsPage,
   readActiveMods,
+  readCountryColorsTint,
   readFlagNamePattern,
   readGamePath,
   readIgnoreMarker,
   readLocKeyPattern,
   readNullTagPattern,
   writeActiveMods,
+  writeCountryColorsTint,
   writeFlagNamePattern,
   writeGamePath,
   writeIgnoreMarker,
@@ -27,6 +29,7 @@ type SettingsMessage =
   | { readonly type: 'flagNamePattern'; readonly value: string }
   | { readonly type: 'nullTagPattern'; readonly value: string }
   | { readonly type: 'ignoreMarker'; readonly value: string }
+  | { readonly type: 'countryColorsTint'; readonly value: number }
   | { readonly type: 'refresh' };
 
 /**
@@ -121,6 +124,9 @@ export class SettingsPanel implements vscode.Disposable {
       case 'ignoreMarker':
         await writeIgnoreMarker(parsed.value);
         return;
+      case 'countryColorsTint':
+        await writeCountryColorsTint(parsed.value);
+        return;
       case 'refresh':
         await this.refresh();
         return;
@@ -155,6 +161,7 @@ export class SettingsPanel implements vscode.Disposable {
       flagNamePattern: readFlagNamePattern(),
       nullTagPattern: readNullTagPattern(),
       ignoreMarker: readIgnoreMarker(),
+      countryColorsTint: readCountryColorsTint(),
     });
   }
 }
@@ -170,12 +177,13 @@ function asMessage(message: unknown): SettingsMessage | undefined {
     case 'browse':
       return { type: record['type'] };
     case 'gamePath':
-      return typeof record['value'] === 'string' ? { type: 'gamePath', value: record['value'] } : undefined;
     case 'locKeyPattern':
     case 'flagNamePattern':
     case 'nullTagPattern':
     case 'ignoreMarker':
       return typeof record['value'] === 'string' ? { type: record['type'], value: record['value'] } : undefined;
+    case 'countryColorsTint':
+      return asTintMessage(record['value']);
     case 'select':
       return Array.isArray(record['mods'])
         ? { type: 'select', mods: record['mods'].filter((item): item is string => typeof item === 'string') }
@@ -183,4 +191,8 @@ function asMessage(message: unknown): SettingsMessage | undefined {
     default:
       return undefined;
   }
+}
+
+function asTintMessage(value: unknown): SettingsMessage | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? { type: 'countryColorsTint', value } : undefined;
 }

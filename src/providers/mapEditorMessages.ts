@@ -1,4 +1,19 @@
-import type { PopEntry, ProvinceHistory, SaveParams, SaveSection } from '../model/mapEditor.js';
+import {
+  POSITION_KINDS,
+  type PopEntry,
+  type PositionKind,
+  type PositionPoint,
+  type ProvinceHistory,
+  type ProvincePositions,
+  type SaveParams,
+  type SaveSection,
+} from '../model/mapEditor.js';
+
+/** One province's map positions, edited in the page and not yet written. */
+export interface PendingPositions {
+  readonly provinceId: number;
+  readonly data: ProvincePositions;
+}
 
 /** What the Map Editor page posts back. */
 export type PageMessage =
@@ -8,7 +23,9 @@ export type PageMessage =
   | { readonly type: 'terrainPicture'; readonly terrain: string }
   | { readonly type: 'select'; readonly provinceId: number; readonly popDate: string }
   | { readonly type: 'openFile'; readonly absolutePath: string; readonly line: number }
-  | { readonly type: 'save'; readonly params: SaveParams };
+  | { readonly type: 'save'; readonly params: SaveParams }
+  | { readonly type: 'pending'; readonly edits: readonly PendingPositions[] }
+  | { readonly type: 'saveAll' };
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -21,7 +38,20 @@ export function asPageMessage(message: unknown): PageMessage | undefined {
   switch (record['type']) {
     case 'ready':
     case 'reload':
+    case 'saveAll':
       return { type: record['type'] };
+    case 'save':
+      return asSave(record);
+    case 'pending':
+      return { type: 'pending', edits: asArray(record['edits'], asPending) };
+    default:
+      return asFieldMessage(record);
+  }
+}
+
+/** The messages that carry nothing but a couple of plain fields. */
+function asFieldMessage(record: UnknownRecord): PageMessage | undefined {
+  switch (record['type']) {
     case 'log':
       return typeof record['message'] === 'string' ? { type: 'log', message: record['message'] } : undefined;
     case 'terrainPicture':
@@ -34,11 +64,17 @@ export function asPageMessage(message: unknown): PageMessage | undefined {
       return typeof record['absolutePath'] === 'string' && typeof record['line'] === 'number'
         ? { type: 'openFile', absolutePath: record['absolutePath'], line: record['line'] }
         : undefined;
-    case 'save':
-      return asSave(record);
     default:
       return undefined;
   }
+}
+
+function asPending(value: unknown): PendingPositions | undefined {
+  const record = asRecord(value);
+  const data = record ? asPositions(record['data']) : undefined;
+  return record && data && typeof record['provinceId'] === 'number'
+    ? { provinceId: record['provinceId'], data }
+    : undefined;
 }
 
 function asSave(record: UnknownRecord): PageMessage | undefined {
@@ -66,9 +102,28 @@ function asSection(record: UnknownRecord): SaveSection | undefined {
       const pops = asPops(record['pops']);
       return pops ? { section: 'pops', pops, createInFile: optionalString(record['createInFile']) } : undefined;
     }
+    case 'positions': {
+      const data = asPositions(record['data']);
+      return data ? { section: 'positions', data } : undefined;
+    }
     default:
       return undefined;
   }
+}
+
+/** Every kind is present; one without both coordinates as strings counts as cleared. */
+function asPositions(value: unknown): ProvincePositions | undefined {
+  const record = asRecord(value);
+  if (!record) {
+    return undefined;
+  }
+  const positions: Partial<Record<PositionKind, PositionPoint | undefined>> = {};
+  for (const kind of POSITION_KINDS) {
+    const point = asStringFields(record[kind], ['x', 'y']);
+    positions[kind] = point && point.x !== '' && point.y !== '' ? point : undefined;
+  }
+  // Every kind was assigned just above.
+  return positions as ProvincePositions;
 }
 
 function asHistory(value: unknown, allowDated: boolean): ProvinceHistory | undefined {
