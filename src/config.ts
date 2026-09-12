@@ -117,7 +117,6 @@ export function writeCountryColorsTint(percent: number): Thenable<void> {
     .update(COUNTRY_COLORS_TINT, clamped === DEFAULT_COUNTRY_COLORS_TINT ? undefined : clamped, vscode.ConfigurationTarget.Global);
 }
 
-/** True when a configuration change touches the Map Editor's Country Colors tint. */
 export function affectsCountryColorsTint(event: vscode.ConfigurationChangeEvent): boolean {
   return event.affectsConfiguration(`${SECTION}.${COUNTRY_COLORS_TINT}`);
 }

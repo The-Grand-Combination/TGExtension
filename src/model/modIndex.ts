@@ -1,13 +1,11 @@
 import type { Range } from './range.js';
 import type { IdentifierCategory } from './symbols.js';
 
-/** Where an event id or decision name is defined. */
 export interface EventOccurrence {
   readonly filePath: string;
   readonly range: Range;
 }
 
-/** One definition site of an identifier. */
 export interface IdentifierOccurrence {
   readonly name: string;
   readonly filePath: string;
@@ -21,7 +19,6 @@ export interface DuplicateIdentifier {
   readonly occurrences: readonly IdentifierOccurrence[];
 }
 
-/** Where a localisation key is defined and its English text. */
 export interface LocKeyDefinition {
   readonly filePath: string;
   readonly line: number;
@@ -52,11 +49,9 @@ export interface ModIndex {
   readonly decisionOccurrences: ReadonlyMap<string, readonly EventOccurrence[]>;
   /** Localisation key (lowercase) → its first definition site. */
   readonly locKeyDefinitions: ReadonlyMap<string, LocKeyDefinition>;
-  /** Identifiers defined more than once in the mod's data files. */
   readonly duplicates: readonly DuplicateIdentifier[];
   /** Country flags set anywhere in the mod (events, decisions, CBs, history). */
   readonly countryFlagsSet: ReadonlySet<string>;
-  /** Global flags set anywhere in the mod. */
   readonly globalFlagsSet: ReadonlySet<string>;
   /** Tech folder names from common/technology.txt, in declaration order. */
   readonly techFolders: readonly string[];

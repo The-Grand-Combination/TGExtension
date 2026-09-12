@@ -16,7 +16,6 @@ export const MAP_EDITOR_COUNTRY_COLORS_REQUEST = 'victorianTools/mapEditor/count
 export const DEFAULT_COUNTRY_COLORS_TINT = 82;
 
 export interface MapEditorTargetParams {
-  /** File-system paths of the open workspace folders. */
   readonly workspaceFolders: readonly string[];
   /** `name`s of the picked mods, in any order; the top one in load order receives the edits. */
   readonly mods: readonly string[];
@@ -175,7 +174,6 @@ export interface PositionsSection {
   readonly data: ProvincePositions | undefined;
 }
 
-/** One point of the whole map, for the page to draw. */
 export interface PositionMarker {
   readonly id: number;
   readonly kind: PositionKind;
@@ -206,7 +204,6 @@ export interface Vocabulary {
   readonly rebelTypes: readonly string[];
 }
 
-/** The terrain the province view would show for the province. */
 export interface TerrainSection {
   /** `terrain = x` from the history file, else the category most terrain.bmp pixels of the province carry. */
   readonly name: string | undefined;

@@ -4,7 +4,6 @@ import type { DiagnosticSeverity } from './diagnostic.js';
 export const FULL_REPORT_REQUEST = 'victorianTools/fullReport';
 
 export interface FullReportParams {
-  /** File-system paths of the open workspace folders. */
   readonly workspaceFolders: readonly string[];
   /** `name`s of the mods to report on, each over the game files and its dependencies; empty for the default. */
   readonly mods: readonly string[];
@@ -38,6 +37,5 @@ export interface ModReport {
 export interface FullReportResult {
   readonly generatedAt: string;
   readonly reports: readonly ModReport[];
-  /** The report rendered as plain text. */
   readonly text: string;
 }

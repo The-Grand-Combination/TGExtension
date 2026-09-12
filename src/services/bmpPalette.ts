@@ -38,7 +38,6 @@ export function withPalette(image: BmpImage, palette: Palette): Uint8Array {
 export interface PaletteRemap {
   /** The file with the standard palette and every pixel renumbered to keep its colour. */
   readonly bytes: Uint8Array;
-  /** Pixels whose index changed. */
   readonly remappedPixels: number;
   /** Colours of the old palette that the standard one lacks; their pixels took the nearest standard colour. */
   readonly approximatedColors: number;

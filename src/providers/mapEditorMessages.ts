@@ -15,7 +15,6 @@ export interface PendingPositions {
   readonly data: ProvincePositions;
 }
 
-/** What the Map Editor page posts back. */
 export type PageMessage =
   | { readonly type: 'ready' }
   | { readonly type: 'reload' }
@@ -49,7 +48,6 @@ export function asPageMessage(message: unknown): PageMessage | undefined {
   }
 }
 
-/** The messages that carry nothing but a couple of plain fields. */
 function asFieldMessage(record: UnknownRecord): PageMessage | undefined {
   switch (record['type']) {
     case 'log':

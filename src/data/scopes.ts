@@ -8,7 +8,6 @@ import type { ScopeChangerDef } from '../model/symbols.js';
  * types, THIS/FROM) are resolved by the validator, not listed here.
  */
 export const SCOPE_CHANGERS: Readonly<Record<string, ScopeChangerDef>> = {
-  // Iterators over provinces / cores
   all_core: {
     from: ['country', 'province'],
     produces: { country: 'province', province: 'country' },
@@ -31,7 +30,6 @@ export const SCOPE_CHANGERS: Readonly<Record<string, ScopeChangerDef>> = {
   random_empty_neighbor_province: { from: ['province'], produces: 'province', contexts: 'effect', doc: 'One random uncolonised neighbor.' },
   sea_zone: { from: ['province'], produces: 'province', contexts: 'both', doc: 'Each adjacent sea tile.' },
 
-  // Iterators over countries
   any_country: { from: ['any'], produces: 'country', contexts: 'effect', doc: 'Every country (effects only; self excluded in decisions).' },
   random_country: { from: ['any'], produces: 'country', contexts: 'effect', doc: 'One random matching country.' },
   any_greater_power: { from: ['any'], produces: 'country', contexts: 'both', doc: 'Any/every Great Power.' },
@@ -41,7 +39,6 @@ export const SCOPE_CHANGERS: Readonly<Record<string, ScopeChangerDef>> = {
   any_substate: { from: ['country'], produces: 'country', contexts: 'trigger', doc: 'Any/every substate of ours.' },
   war_countries: { from: ['country', 'pop'], produces: 'country', contexts: 'trigger', doc: 'Every country at war with the scoped one.' },
 
-  // Iterators over states / pops
   any_state: { from: ['country'], produces: 'state', contexts: 'both', doc: 'Any/every owned state.' },
   random_state: { from: ['country'], produces: 'state', contexts: 'effect', doc: 'One random owned state.' },
   any_pop: { from: ['country', 'province', 'state'], produces: 'pop', contexts: 'both', doc: 'Any/every pop in scope.' },
@@ -50,7 +47,6 @@ export const SCOPE_CHANGERS: Readonly<Record<string, ScopeChangerDef>> = {
   middle_strata: { from: ['country', 'province', 'state'], produces: 'pop', contexts: 'effect', doc: 'Every middle-strata pop in scope.' },
   rich_strata: { from: ['country', 'province', 'state'], produces: 'pop', contexts: 'effect', doc: 'Every rich-strata pop in scope.' },
 
-  // Single-target redirections
   owner: { from: ['province', 'state', 'country'], produces: 'country', contexts: 'both', doc: 'The owning country.' },
   controller: { from: ['province'], produces: 'country', contexts: 'both', doc: 'The controlling country (occupier in war).' },
   location: { from: ['pop', 'province'], produces: 'province', contexts: 'both', doc: "The pop's province." },
@@ -62,7 +58,6 @@ export const SCOPE_CHANGERS: Readonly<Record<string, ScopeChangerDef>> = {
   cultural_union: { from: ['country', 'pop'], produces: 'country', contexts: 'both', doc: 'The cultural union country.' },
   independence: { from: ['any'], produces: 'country', contexts: 'both', doc: 'The nation the scoped rebels fight to establish.' },
 
-  // Crisis (HoD)
   flashpoint_tag_scope: { from: ['state'], produces: 'country', contexts: 'both', doc: 'The nation the flashpoint would liberate.' },
   crisis_state_scope: { from: ['any'], produces: 'state', contexts: 'both', doc: 'The state the crisis is about.' },
   crisis_attacker_scope: { from: ['any'], produces: 'state', contexts: 'trigger', doc: 'The crisis attacker side.' },

@@ -4,13 +4,11 @@ import type { DiagnosticSeverity } from './diagnostic.js';
 export const MAP_REPORT_REQUEST = 'victorianTools/mapReport';
 
 export interface MapReportParams {
-  /** File-system paths of the open workspace folders. */
   readonly workspaceFolders: readonly string[];
   /** `name`s of the mods to report on, each over the game files and its dependencies; empty for the default. */
   readonly mods: readonly string[];
 }
 
-/** The map audit of one mod. */
 export interface MapReport {
   readonly root: string;
   /** False when the mod ships no map file of its own, so nothing was audited. */
@@ -23,7 +21,6 @@ export interface MapReport {
 export interface MapReportResult {
   readonly generatedAt: string;
   readonly reports: readonly MapReport[];
-  /** The report rendered as plain text. */
   readonly text: string;
 }
 

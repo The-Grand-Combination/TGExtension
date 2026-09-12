@@ -20,8 +20,6 @@ export function decodePicture(bytes: Uint8Array, fileName: string): DecodedImage
   return undefined;
 }
 
-// --- DDS ----------------------------------------------------------------------
-
 const DDS_MAGIC = 0x20534444;
 const DDPF_FOURCC = 0x4;
 
@@ -264,8 +262,6 @@ function dxt5AlphaPalette(alpha0: number, alpha1: number): number[] {
   }
   return palette;
 }
-
-// --- TGA ----------------------------------------------------------------------
 
 interface TgaHeader {
   readonly imageType: number;

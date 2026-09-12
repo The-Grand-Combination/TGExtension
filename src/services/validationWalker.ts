@@ -42,8 +42,6 @@ const STRATA_VALUES: ReadonlySet<string> = new Set(['poor', 'middle', 'rich']);
 /** yyyy.m.d game dates (also used for dated history blocks). */
 export const DATE_PATTERN = /^\d{1,4}\.\d{1,2}\.\d{1,2}$/;
 
-// --- Trigger walking ---------------------------------------------------------
-
 export function walkTriggerEntries(walk: Walk, entries: readonly Entry[], scope: ScopeType): void {
   for (const entry of entries) {
     if (entry.kind === 'assignment') {
@@ -135,8 +133,6 @@ function handleDynamicTriggerKey(walk: Walk, assignment: Assignment, keyLower: s
   }
   return enterDynamicScope(walk, assignment, keyLower, walkTriggerEntries);
 }
-
-// --- Effect walking ----------------------------------------------------------
 
 export function walkEffectEntries(walk: Walk, entries: readonly Entry[], scope: ScopeType): void {
   for (const entry of entries) {
@@ -281,8 +277,6 @@ function walkRandomList(walk: Walk, body: Block, scope: ScopeType): void {
   }
 }
 
-// --- Weight (MTTH-style) blocks -----------------------------------------------
-
 export function walkWeightBlock(walk: Walk, body: Block, scope: ScopeType): void {
   for (const entry of body.entries) {
     if (entry.kind !== 'assignment') {
@@ -314,8 +308,6 @@ function walkModifierBlock(walk: Walk, body: Block, scope: ScopeType): void {
   );
   walkTriggerEntries(walk, conditions, scope);
 }
-
-// --- Scope changing ----------------------------------------------------------
 
 type EntriesWalker = (walk: Walk, entries: readonly Entry[], scope: ScopeType) => void;
 
@@ -388,8 +380,6 @@ function enterDynamicScope(
   walker(walk, assignment.value.entries, produces);
   return true;
 }
-
-// --- Symbol checking ---------------------------------------------------------
 
 function checkSymbol(
   walk: Walk,

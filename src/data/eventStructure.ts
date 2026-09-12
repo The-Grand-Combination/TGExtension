@@ -4,7 +4,6 @@
  * treats them specially or skips them.
  */
 
-/** Scalar/metadata fields of a `country_event` / `province_event` body. */
 export const EVENT_BODY_FIELDS: ReadonlySet<string> = new Set([
   'id',
   'title',
@@ -23,11 +22,9 @@ export const EVENT_BODY_FIELDS: ReadonlySet<string> = new Set([
   'issue_group',
 ]);
 
-/** Fields of an event body holding trigger or effect blocks. */
 export const EVENT_TRIGGER_FIELDS: ReadonlySet<string> = new Set(['trigger']);
 export const EVENT_EFFECT_FIELDS: ReadonlySet<string> = new Set(['immediate']);
 
-/** Scalar/metadata fields of a decision body. */
 export const DECISION_BODY_FIELDS: ReadonlySet<string> = new Set([
   'picture',
   'alert',
@@ -53,7 +50,6 @@ export const WEIGHT_BLOCK_DURATION_FIELDS: ReadonlySet<string> = new Set([
 /** Logical operators — pass through the current scope in trigger context. */
 export const LOGICAL_OPERATORS: ReadonlySet<string> = new Set(['and', 'or', 'not']);
 
-/** Event and decision fields whose value is a localisation key. */
 export const EVENT_LOC_FIELDS: ReadonlySet<string> = new Set([
   'title',
   'desc',

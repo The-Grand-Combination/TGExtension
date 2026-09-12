@@ -10,7 +10,6 @@ export interface ModRow {
   readonly picked: boolean;
 }
 
-/** A heading between families of mods. */
 export interface SeparatorRow {
   readonly kind: 'separator';
   readonly label: string;

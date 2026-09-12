@@ -2,11 +2,9 @@
 export const ENFORCE_COLORMAPS_REQUEST = 'victorianTools/enforceColormaps';
 
 export interface EnforceColormapsParams {
-  /** File-system paths of the open workspace folders. */
   readonly workspaceFolders: readonly string[];
   /** `name`s of the mods to fix; empty for the default targets. */
   readonly mods: readonly string[];
-  /** Report what would change without writing anything. */
   readonly dryRun: boolean;
 }
 

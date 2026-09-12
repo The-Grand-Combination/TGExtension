@@ -14,7 +14,6 @@ export interface CsvRow {
 }
 
 export interface CsvOptions {
-  /** Drop the first line (a column header). */
   readonly skipHeader?: boolean;
   /** Stop splitting after this many fields; the rest of the line is ignored. */
   readonly maxFields?: number;

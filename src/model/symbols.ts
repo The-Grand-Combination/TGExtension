@@ -1,7 +1,5 @@
-/** The kind of game object a scope refers to. */
 export type ScopeType = 'country' | 'province' | 'state' | 'pop';
 
-/** Where a symbol appears: a condition context or an effect context. */
 export type UsageContext = 'trigger' | 'effect';
 
 /** Identifier categories resolvable against the mod index. */
@@ -37,7 +35,6 @@ export type IdentifierCategory =
   | 'eventPicture'
   | 'decisionPicture';
 
-/** Human-readable labels for identifier categories, used in diagnostics. */
 export const CATEGORY_LABELS: Readonly<Record<IdentifierCategory, string>> = {
   country: 'country tag',
   culture: 'culture',
@@ -130,7 +127,6 @@ export type ArgSpec = ScalarArgSpec | BlockArgSpec | EitherArgSpec;
 /** Scopes a symbol is valid in; 'any' short-circuits the scope check. */
 export type ScopeRequirement = readonly (ScopeType | 'any')[];
 
-/** A validated trigger (condition) or effect. */
 export interface SymbolDef {
   readonly scopes: ScopeRequirement;
   readonly arg: ArgSpec;

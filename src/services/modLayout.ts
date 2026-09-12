@@ -32,7 +32,6 @@ export const EMPTY_LAYOUT: ModLayout = { gameRoot: undefined, mods: [], selectio
 /** The folders that mark a game root: the install has `mod/` next to `common/` and `map/`. */
 const GAME_ROOT_FOLDERS: readonly string[] = ['mod', 'common', 'map'];
 
-/** Walk up from a path until a Victoria 2 install folder is found. */
 export function detectGameRoot(startPath: string, isDirectory: (directory: string) => boolean): string | undefined {
   return walkUp(startPath, (current) => GAME_ROOT_FOLDERS.every((folder) => isDirectory(path.join(current, folder))));
 }

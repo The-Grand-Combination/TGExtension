@@ -97,7 +97,6 @@ const PAGE_STYLE = String.raw`
   #tooltip { position: absolute; pointer-events: none; padding: 2px 6px; background: var(--vscode-editorHoverWidget-background, #252526); color: var(--vscode-editorHoverWidget-foreground, #ccc); border: 1px solid var(--vscode-editorHoverWidget-border, #454545); border-radius: 3px; font-size: 0.9em; white-space: nowrap; }
   #loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #ccc; font-size: 1.1em; background: rgba(0, 0, 0, 0.55); }
   #loading[hidden], #tooltip[hidden] { display: none; }
-  /* Map layers: a translucent box over the map's bottom-left corner. */
   #layers { position: absolute; left: 10px; bottom: 10px; display: flex; flex-direction: column; gap: 4px; padding: 6px 10px; background: rgba(30, 30, 30, 0.6); color: #eee; border-radius: 4px; font-size: 0.9em; user-select: none; }
   #layers label { display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
   #layers input { margin: 0; }
@@ -210,7 +209,6 @@ const PAGE_SCRIPT = String.raw`
   'use strict';
   var vscode = acquireVsCodeApi();
 
-  // --- State --------------------------------------------------------------------
   var map = null;            // MapEditorMap from the extension
   var idByColor = new Map(); // packed rgb -> province id
   var definitionById = new Map();
@@ -286,7 +284,6 @@ const PAGE_SCRIPT = String.raw`
     statusBox.className = 'status ' + (kind || '');
   }
 
-  // --- DOM helpers --------------------------------------------------------------
   function h(tag, attrs) {
     var node = document.createElement(tag);
     if (attrs) {
@@ -432,7 +429,6 @@ const PAGE_SCRIPT = String.raw`
     return wrapper;
   }
 
-  // --- Map loading --------------------------------------------------------------
   /** The BMP header fields the decoders need; the name only labels errors. */
   function bmpHeader(buffer, name) {
     var header = new DataView(buffer);
@@ -585,7 +581,6 @@ const PAGE_SCRIPT = String.raw`
     });
   }
 
-  // --- Map layers ---------------------------------------------------------------
   layerPositions.addEventListener('change', function () { showPositions = layerPositions.checked; render(); });
   layerRivers.addEventListener('change', function () {
     showRivers = layerRivers.checked;
@@ -673,7 +668,6 @@ const PAGE_SCRIPT = String.raw`
     }).catch(function (error) { showLoading('Could not tint the map: ' + (error && error.message ? error.message : error)); });
   }
 
-  // --- View and rendering -------------------------------------------------------
   function resizeCanvas() {
     var ratio = window.devicePixelRatio || 1;
     var width = Math.max(1, Math.floor(mapArea.clientWidth * ratio));
@@ -889,7 +883,6 @@ const PAGE_SCRIPT = String.raw`
     render();
   }
 
-  // --- Interaction --------------------------------------------------------------
   var drag = null;
   mapArea.addEventListener('mousedown', function (event) {
     if (event.button !== 0) { return; }
@@ -947,7 +940,6 @@ const PAGE_SCRIPT = String.raw`
     tooltip.style.top = (event.clientY - rect.top + 12) + 'px';
   }
 
-  // --- Selection ----------------------------------------------------------------
   function highlightOf(id) {
     var definition = definitionById.get(id);
     if (!definition || !image) { return null; }
@@ -1061,7 +1053,6 @@ const PAGE_SCRIPT = String.raw`
   document.getElementById('fitButton').addEventListener('click', function () { fitView(); render(); });
   document.getElementById('reloadButton').addEventListener('click', function () { vscode.postMessage({ type: 'reload' }); });
 
-  // --- Side panel ---------------------------------------------------------------
   function renderSide(id) {
     side.replaceChildren();
     var definition = definitionById.get(id);
@@ -1188,7 +1179,6 @@ const PAGE_SCRIPT = String.raw`
     vscode.postMessage(payload);
   }
 
-  // Localisation
   function localisationSection() {
     var loc = details.localisation;
     var input = textInput(loc.text);
@@ -1417,7 +1407,6 @@ const PAGE_SCRIPT = String.raw`
       bar.node);
   }
 
-  // Pops
   function popsSection() {
     var pops = details.pops;
     var parts = [sectionHeader('Pops', pops, 'No pops in history/pops/' + popDate + '; pick a file below'), layerNote(pops)];
@@ -1454,7 +1443,6 @@ const PAGE_SCRIPT = String.raw`
     return h('div', { class: 'section' }, parts);
   }
 
-  // --- Messages from the extension ----------------------------------------------
   window.addEventListener('message', function (event) {
     var message = event.data || {};
     try { handleMessage(message); } catch (error) { showLoading('Page error: ' + (error && error.message ? error.message : error)); }

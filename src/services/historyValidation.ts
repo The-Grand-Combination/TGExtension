@@ -57,8 +57,6 @@ export function validateHistoryFile(walk: Walk, document: Document, fileType: Fi
   }
 }
 
-// --- history/countries ---------------------------------------------------------
-
 function validateCountryHistoryEntries(walk: Walk, entries: readonly Entry[]): void {
   for (const entry of entries) {
     if (entry.kind === 'assignment') {
@@ -146,8 +144,6 @@ function checkDecisionReference(walk: Walk, entry: Assignment): void {
   }
 }
 
-// --- history/provinces -----------------------------------------------------------
-
 function validateProvinceHistoryEntries(walk: Walk, entries: readonly Entry[]): void {
   for (const entry of entries) {
     if (entry.kind === 'assignment') {
@@ -217,8 +213,6 @@ function handleProvinceHistoryField(walk: Walk, entry: Assignment): void {
   );
 }
 
-// --- history/pops ----------------------------------------------------------------
-
 function validatePopsHistory(walk: Walk, document: Document): void {
   for (const entry of document.entries) {
     if (entry.kind !== 'assignment') {
@@ -260,8 +254,6 @@ function validateProvincePops(walk: Walk, block: Block): void {
   }
 }
 
-// --- history/diplomacy -----------------------------------------------------------
-
 function validateDiplomacyHistory(walk: Walk, document: Document): void {
   for (const entry of document.entries) {
     if (entry.kind !== 'assignment') {
@@ -290,8 +282,6 @@ function validateDiplomacyHistory(walk: Walk, document: Document): void {
     });
   }
 }
-
-// --- history/units (orders of battle) ---------------------------------------------
 
 function validateOobEntries(walk: Walk, entries: readonly Entry[], topLevel: boolean): void {
   for (const entry of entries) {
@@ -346,8 +336,6 @@ function validateOobForce(walk: Walk, block: Block): void {
   }
 }
 
-// --- history/wars ------------------------------------------------------------------
-
 function validateWarHistory(walk: Walk, document: Document): void {
   for (const entry of document.entries) {
     if (entry.kind !== 'assignment') {
@@ -382,8 +370,6 @@ function validateWarBlock(walk: Walk, block: Block): void {
     }
   }
 }
-
-// --- shared -------------------------------------------------------------------------
 
 function checkFieldBlock(walk: Walk, entry: Assignment, table: FieldTable): void {
   walkBlockValue(walk, entry, (block) => {

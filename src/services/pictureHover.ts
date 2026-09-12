@@ -50,7 +50,6 @@ export interface PictureHover {
   readonly tokenRange: Range;
 }
 
-/** Decisions draw from gfx/pictures/decisions; every other script from gfx/pictures/events. */
 const PICTURE_EXTENSIONS: readonly string[] = ['.dds', '.tga'];
 
 /**

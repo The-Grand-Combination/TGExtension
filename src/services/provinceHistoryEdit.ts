@@ -186,8 +186,6 @@ function isListKey(key: string): key is ListKey {
   return Object.hasOwn(LIST_KEYS, key);
 }
 
-// --- Rendering ------------------------------------------------------------------
-
 /** A whole new history file. */
 export function renderProvinceHistory(history: ProvinceHistory, eol = '\r\n', unit = '\t'): string {
   const lines = [

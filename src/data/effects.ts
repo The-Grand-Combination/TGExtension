@@ -119,7 +119,6 @@ export const EFFECTS: Readonly<Record<string, SymbolDef>> = {
     doc: "Spawn a unit ('current' = in this province).",
   },
 
-  // Country — economy and score
   treasury: { scopes: ['country', 'province'], arg: NUMBER, doc: 'Change treasury cash by n.' },
   add_tax_relative_income: { scopes: ['country'], arg: NUMBER, doc: 'Add cash equal to n × max-tax income.' },
   prestige: { scopes: ['country'], arg: NUMBER, doc: 'Change prestige by n.' },
@@ -192,7 +191,6 @@ export const EFFECTS: Readonly<Record<string, SymbolDef>> = {
   },
   kill_leader: { scopes: ['country'], arg: scalar('string', 'number'), doc: 'Kill a leader by name.' },
 
-  // Country — politics
   government: { scopes: ['country'], arg: scalar('government'), doc: 'Change the government type.' },
   ruling_party_ideology: { scopes: ['country'], arg: scalar('ideology'), doc: 'Put the first party of this ideology in power.' },
   political_reform: { scopes: ['country', 'province'], arg: scalar('reformOption'), doc: 'Enact this political reform option.' },
@@ -208,7 +206,6 @@ export const EFFECTS: Readonly<Record<string, SymbolDef>> = {
     doc: 'Shift upper house composition toward an ideology.',
   },
 
-  // Diplomacy
   relation: {
     scopes: ['country', 'province'],
     // who/tag/with and value/relation are engine-accepted aliases.
@@ -326,7 +323,6 @@ export const EFFECTS: Readonly<Record<string, SymbolDef>> = {
     doc: 'Add to an existing variable.',
   },
 
-  // From the NCE parser rules (previously missing here)
   trigger_revolt: {
     scopes: ['country', 'province', 'state'],
     arg: {

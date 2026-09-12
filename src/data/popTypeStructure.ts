@@ -31,7 +31,6 @@ export const POPTYPE_SCALAR_FIELDS: FieldTable = {
   can_work_factory: ['yesno'],
 };
 
-/** Pop type fields holding `good → amount` maps. */
 export const POPTYPE_GOODS_FIELDS: ReadonlySet<string> = new Set([
   'life_needs',
   'everyday_needs',
@@ -44,7 +43,6 @@ export const POPTYPE_WEIGHT_FIELDS: Readonly<Record<string, ScopeType>> = {
   migration_target: 'province',
 };
 
-/** Pop type income blocks (type/weight pairs). */
 export const POPTYPE_INCOME_FIELDS: ReadonlySet<string> = new Set([
   'life_needs_income',
   'everyday_needs_income',

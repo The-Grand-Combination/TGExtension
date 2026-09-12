@@ -34,7 +34,6 @@ export function indentUnitOf(text: string): string {
   return spaces === null || /^\t+\S/m.test(text) ? '\t' : (spaces[1] ?? '  ');
 }
 
-/** Offset of the first character of the line containing `offset`. */
 export function lineStartAt(text: string, offset: number): number {
   return text.lastIndexOf('\n', offset - 1) + 1;
 }

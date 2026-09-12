@@ -41,7 +41,6 @@ export class ModCache {
 
   constructor(private readonly options: ModCacheOptions) {}
 
-  /** Layers whose index is currently built. */
   knownLayers(): ModLayers[] {
     return [...this.indexByKey.keys()].flatMap((key) => {
       const layers = this.layersByKey.get(key);
@@ -49,7 +48,6 @@ export class ModCache {
     });
   }
 
-  /** The location of the files in a directory, if the directory belongs to a mod. */
   locationForDirectory(directory: string): FileLocation | undefined {
     const key = path.resolve(directory);
     const cached = this.locationByDirectory.get(key);

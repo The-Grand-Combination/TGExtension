@@ -83,7 +83,6 @@ import {
 } from '../services/terrainPictures.js';
 import { applyPatches } from '../services/textPatch.js';
 
-/** What the Map Editor needs from the server: the mod stack, its index, and file access. */
 export interface MapEditorHost {
   /** The picked mods in load order, as the reports resolve them. */
   readonly targets: (params: MapEditorTargetParams) => readonly FileLocation[];
@@ -108,7 +107,6 @@ const POSITIONS_FILE = 'map/positions.txt';
 const OCEAN_TERRAIN = 'ocean';
 const OCEAN_TEXTURE = 'gfx/interface/terrain/terrain_ocean.tga';
 const BUNDLED_OCEAN_PICTURE = 'terrain_ocean.dds';
-/** Width the terrain picture is scaled to before it is sent to the page. */
 const TERRAIN_PICTURE_MAX_WIDTH = 440;
 
 /** What a stack knows about terrain pictures; built once per stack, on the first map request. */
@@ -126,7 +124,6 @@ interface PositionsFile {
   readonly document: Document;
 }
 
-/** A resolved target: the mod that receives edits, the stack it is read with, and the stack's index. */
 interface Target {
   readonly root: string;
   readonly layers: ModLayers;
@@ -252,8 +249,6 @@ export class MapEditorHandlers {
     return { terrain: params.terrain, pictureDataUri: await this.terrainPicture(target.layers, info, params.terrain) };
   }
 
-  // --- Reading ------------------------------------------------------------------
-
   private async resolveTarget(params: MapEditorTargetParams): Promise<Target | string> {
     const targets = this.host.targets(params);
     const top = targets[targets.length - 1];
@@ -286,8 +281,6 @@ export class MapEditorHandlers {
       vocabulary: vocabularyOf(target.index),
     };
   }
-
-  // --- Terrain ------------------------------------------------------------------
 
   /** The history's `terrain`, else the dominant terrain.bmp category, with that terrain's own picture. */
   private async readTerrain(

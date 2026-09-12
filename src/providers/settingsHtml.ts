@@ -37,7 +37,6 @@ export interface SettingsState {
   readonly warning?: string;
 }
 
-/** The settings the page shows, read from the workspace configuration. */
 export interface CurrentSettings {
   readonly gamePathSetting: string;
   readonly selected: readonly string[];
@@ -355,8 +354,6 @@ export function settingsHtml(cspSource: string): string {
     if (document.activeElement !== tint) tint.value = String(value);
     showTint();
   }
-
-
 
   window.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'state') {

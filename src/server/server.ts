@@ -174,8 +174,6 @@ const validationTimers = new Map<string, NodeJS.Timeout>();
 let pendingWatchedChanges: string[] = [];
 let rebuildTimer: NodeJS.Timeout | undefined;
 
-// --- Lifecycle ---------------------------------------------------------------------
-
 let supportsWorkspaceFolders = false;
 
 connection.onInitialize((params: InitializeParams): InitializeResult => {
@@ -247,8 +245,6 @@ function warmIndexes(): void {
     }
   }
 }
-
-// --- Configuration and mod layout ---------------------------------------------------
 
 connection.onDidChangeConfiguration(() => {
   void refreshConfiguration().then((change) => {
@@ -816,8 +812,6 @@ async function enforceColormap(absolutePath: string, palette: Palette, dryRun: b
   const written = await writeModFileBytes(absolutePath, plan.fixed);
   return { path: absolutePath, outcome: written ? 'fixed' : 'write-failed', ...counts };
 }
-
-// --- Map Editor --------------------------------------------------------------------
 
 const mapEditor = new MapEditorHandlers({
   targets: (params: MapEditorTargetParams): FileLocation[] => reportTargets(params),

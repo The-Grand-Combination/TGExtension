@@ -28,7 +28,6 @@ export const TECH_SCALAR_FIELDS: FieldTable = {
  */
 export const REQUIRED_TECH_FOLDERS: readonly string[] = ['army_tech', 'navy_tech'];
 
-/** Technology/invention fields holding `good → number` maps. */
 export const TECH_GOODS_MAP_FIELDS: ReadonlySet<string> = new Set([
   'rgo_goods_output',
   'rgo_goods_throughput',

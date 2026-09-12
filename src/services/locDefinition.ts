@@ -31,7 +31,6 @@ export function resolveLocKeyAt(
   return definition ? { definition, tokenRange: token.range } : undefined;
 }
 
-/** Markdown hover content for a resolved localisation key. */
 export function locKeyHoverMarkdown(resolved: ResolvedLocKey): string {
   const { definition } = resolved;
   const text = definition.text === '' ? '_(empty text)_' : definition.text;

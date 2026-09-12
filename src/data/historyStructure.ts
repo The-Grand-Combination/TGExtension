@@ -68,7 +68,6 @@ export const POP_HISTORY_FIELDS: FieldTable = {
   rebel_type: ['rebelType'],
 };
 
-/** Diplomacy history relation kinds and their block fields. */
 export const DIPLOMACY_RELATION_KEYS: ReadonlySet<string> = new Set([
   'alliance',
   'vassal',

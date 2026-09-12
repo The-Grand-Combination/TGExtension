@@ -20,7 +20,6 @@ import {
 import { LAYOUT_CHANGED_NOTIFICATION, MODS_REQUEST, type ModsResult } from '../model/modDescriptor.js';
 import { settingsHtml, settingsState, type SettingsState } from './settingsHtml.js';
 
-/** What the page sends back. */
 type SettingsMessage =
   | { readonly type: 'gamePath'; readonly value: string }
   | { readonly type: 'browse' }
@@ -69,7 +68,6 @@ export class SettingsPanel implements vscode.Disposable {
     }
   }
 
-  /** Show the tab, creating it on first use. */
   open(): void {
     if (this.panel) {
       this.panel.reveal();

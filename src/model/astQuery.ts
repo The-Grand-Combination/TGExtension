@@ -24,7 +24,6 @@ export function scalarValueOf(entries: readonly Entry[], key: string): string | 
   return assignment?.value.kind === 'scalar' ? assignment.value.value : undefined;
 }
 
-/** Keys of block-valued assignments, in order. */
 export function blockKeysOf(container: Document | Block): Assignment[] {
   return assignmentsOf(container.entries).filter((assignment) => assignment.value.kind === 'block');
 }
