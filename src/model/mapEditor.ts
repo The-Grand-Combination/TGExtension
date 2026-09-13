@@ -215,8 +215,10 @@ export interface Vocabulary {
   readonly religions: readonly NamedIdentifier[];
   readonly popTypes: readonly NamedIdentifier[];
   readonly ideologies: readonly NamedIdentifier[];
-  readonly buildings: readonly string[];
-  readonly rebelTypes: readonly string[];
+  /** What a province builds: every building that is not a factory. */
+  readonly buildings: readonly NamedIdentifier[];
+  /** What a state builds: the `type = factory` ones. */
+  readonly factories: readonly NamedIdentifier[];
 }
 
 export interface TerrainSection {

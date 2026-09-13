@@ -55,7 +55,7 @@ ${PAGE_STYLE}
           <button id="reloadButton" class="secondary" title="Re-read the map and the mod files">Reload</button>
         </div>
         <div class="find">
-          <input id="goto" type="text" spellcheck="false" placeholder="id or name" title="Center the map on a province: its id, or a name from definition.csv">
+          <input id="goto" type="text" spellcheck="false" placeholder="ID or Name" title="Center the map on a province: its id, or a name from definition.csv">
           <button id="gotoButton" class="secondary">Go</button>
         </div>
       </div>
@@ -106,7 +106,10 @@ const PAGE_STYLE = String.raw`
   #layers input { margin: 0; }
   #layers .actions { display: flex; gap: 6px; margin-top: 4px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.15); }
   #layers .actions button { flex: 1; padding: 2px 8px; }
-  #side { width: 420px; flex: none; overflow-y: auto; border-left: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, #444)); padding: 14px 14px 24px; box-sizing: border-box; }
+  /* The scrollbar gutter is always reserved, so a list growing past the window
+     never reflows the panel; the 15px it takes are added to the panel's width
+     and come off the map, which is elastic, so the fields keep their size. */
+  #side { width: 435px; flex: none; overflow-y: auto; scrollbar-gutter: stable; border-left: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, #444)); padding: 14px 14px 24px; box-sizing: border-box; }
   /* The picture keeps the panel's own margin on every side, so it lines up with
      the text under it and stands the same distance off the top. */
   .header { margin: 0; padding: 0; background-size: cover; background-position: center; }
@@ -114,12 +117,14 @@ const PAGE_STYLE = String.raw`
   .header.pictured .file, .header.pictured .id { opacity: 0.95; }
   h1 { font-size: 1.2em; margin: 6px 0 2px; display: flex; align-items: baseline; gap: 8px; min-width: 0; white-space: nowrap; }
   .header.pictured h1 { margin: 0; flex: 1; }
+  h1 .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   h1 .id { font-weight: 400; opacity: 0.7; flex: none; }
   h1 .file { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 400; }
-  h1 .badge { flex: none; }
   h2 { font-size: 1.05em; font-weight: 600; margin: 16px 0 8px; display: flex; align-items: baseline; gap: 10px; min-width: 0; }
   h2 .title { flex: none; font-size: 1.2em; font-weight: 700; letter-spacing: 0.01em; }
-  h2 .file { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; direction: rtl; text-align: left; }
+  h2 .file { flex: 1; min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 400; }
+  /* Only a path is trimmed from the left; a sentence keeps its own direction. */
+  h2 .file.path { direction: rtl; text-align: left; }
   h2 button { flex: none; align-self: center; }
   h3 { font-size: 0.85em; font-weight: 700; margin: 12px 0 6px; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.07em; display: flex; align-items: center; gap: 6px; }
   /* A rule opens every section and every group inside one, so a Save always
@@ -128,12 +133,13 @@ const PAGE_STYLE = String.raw`
   .form > .group { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, #444)); }
   .form > .group:first-child { margin-top: 0; padding-top: 0; border-top: none; }
   p.hint { margin: 4px 0 8px; opacity: 0.75; line-height: 1.4; }
-  .badge { font-size: 0.8em; padding: 1px 6px; border-radius: 8px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
   .file { font-family: var(--vscode-editor-font-family); font-size: 0.85em; opacity: 0.75; word-break: break-all; margin: 2px 0 6px; }
   .warning { color: var(--vscode-editorWarning-foreground); }
   .error { color: var(--vscode-errorForeground); }
   .ok { color: var(--vscode-testing-iconPassed, var(--vscode-charts-green)); }
   input, select { padding: 3px 6px; background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border, transparent); border-radius: 2px; font-family: inherit; font-size: inherit; box-sizing: border-box; min-width: 0; }
+  /* One height for every control, so a slider stands level with the fields beside it. */
+  input:not([type=checkbox]), select { height: 24px; }
   input:focus, select:focus { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
   input[type=number] { width: 90px; }
   #layers .find { display: flex; gap: 6px; margin-top: 4px; }
@@ -158,10 +164,28 @@ const PAGE_STYLE = String.raw`
   button.outline:hover { opacity: 1; background: var(--vscode-list-hoverBackground); }
   .grid { display: grid; grid-template-columns: 110px 1fr; gap: 6px 8px; align-items: center; }
   .grid label { opacity: 0.85; }
+  /* A row standing on its own above a form or a table keeps a grid's own gap under it. */
+  .grid.lone { margin-bottom: 6px; }
   .rows { display: flex; flex-direction: column; gap: 4px; }
   .row { display: flex; gap: 4px; align-items: center; }
   .row input, .row select, .row .combo { flex: 1; }
   .row .narrow { flex: 0 0 70px; }
+  .row .half { flex: 0 0 50%; }
+  .row .slider { flex: 1; }
+  .slider { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .slider .range { position: relative; flex: 1; min-width: 0; display: flex; }
+  /* The range keeps the box every other field has — same height, same corners — and draws its track inside it. */
+  .slider input[type=range] { -webkit-appearance: none; appearance: none; flex: 1; min-width: 0; margin: 0; padding: 0 6px; cursor: pointer; }
+  .slider input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--vscode-scrollbarSlider-background, rgba(121, 121, 121, 0.4)); }
+  .slider input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; margin-top: -4px; border-radius: 50%; background: var(--vscode-button-background, #0e639c); }
+  /* One dot per step, under the thumb, so a short slider shows the levels it picks from. Inset by the
+     field's border and padding plus half a thumb, which is where the thumb's centre starts and ends. */
+  .slider .rail { position: absolute; inset: 0 13px; display: flex; align-items: center; justify-content: space-between; pointer-events: none; }
+  .slider .rail span { width: 3px; height: 3px; border-radius: 50%; background: var(--vscode-foreground); opacity: 0.45; }
+  .slider .readout { flex: 0 0 26px; text-align: right; font-variant-numeric: tabular-nums; opacity: 0.85; }
+  /* A stepped slider picks from a handful of levels: it takes a third of the field, and its name takes the rest. */
+  .slider.stepped .range { flex: 0 0 33%; }
+  .slider.stepped .readout { flex: 1; text-align: left; }
   .combo { position: relative; min-width: 0; display: flex; }
   .combo input { width: 100%; padding-right: 22px; }
   .combo::after { content: ''; position: absolute; right: 4px; top: 0; bottom: 0; margin: auto; width: 16px; height: 16px; pointer-events: none; background-color: var(--vscode-foreground); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M7.976 10.072l4.357-4.357.62.618L8.284 11h-.618L3 6.333l.619-.618 4.357 4.357z'/%3E%3C/svg%3E") center / 16px no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M7.976 10.072l4.357-4.357.62.618L8.284 11h-.618L3 6.333l.619-.618 4.357 4.357z'/%3E%3C/svg%3E") center / 16px no-repeat; }
@@ -169,10 +193,6 @@ const PAGE_STYLE = String.raw`
   .combo-item { padding: 3px 8px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .combo-item.active, .combo-item:hover { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
   .combo-item.empty { opacity: 0.7; font-style: italic; }
-  /* A suggestion input (building, ideology, pops file) wears the same shell as a
-     pick list: the browser draws its own arrow, which never matches ours. */
-  input[list]::-webkit-calendar-picker-indicator { display: none; }
-  .combo.picker::after { pointer-events: auto; cursor: pointer; }
   .row .remove { flex: none; }
   /* An empty list keeps one row to show what goes in it: dimmed until it is
      used, and its placeholders name the field rather than give a real value. */
@@ -182,6 +202,10 @@ const PAGE_STYLE = String.raw`
   .head { display: flex; gap: 4px; font-size: 0.8em; opacity: 0.7; padding: 0 30px 0 0; position: relative; top: -2px; }
   .head span { flex: 1; }
   .head span.narrow { flex: 0 0 70px; }
+  .head span.half { flex: 0 0 50%; }
+  .head span.tick { flex: 0 0 70px; text-align: center; }
+  .row .tick { flex: 0 0 70px; display: flex; align-items: center; justify-content: center; }
+  .tick input { margin: 0; }
   .actions { display: flex; gap: 8px; align-items: center; justify-content: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, #444)); flex-wrap: wrap; }
   .inline { display: flex; gap: 8px; align-items: center; min-width: 0; }
   .inline label { flex: none; opacity: 0.85; }
@@ -192,14 +216,17 @@ const PAGE_STYLE = String.raw`
   details.dated summary { display: flex; gap: 6px; align-items: center; cursor: pointer; }
   details.dated summary input { width: 120px; }
   .total { opacity: 0.8; font-size: 0.9em; margin-top: 4px; }
+  /* A running total that belongs to a list's title sits after its + button, as an aside rather than a heading. */
+  h3 .total { margin: 0; font-style: italic; font-weight: 400; text-transform: none; letter-spacing: normal; opacity: 0.6; }
+  h3 .total.warning { opacity: 1; }
   /* The legend: the same colour the map draws the position with. */
   .swatch { flex: none; width: 10px; height: 10px; border-radius: 50%; }
   .pos-row .pos-label { flex: 0 0 78px; opacity: 0.85; margin-left: 4px; }
   .pos-row input { flex: 1; min-width: 0; width: auto; }
   .pos-head { padding-left: 96px; }
   label.check { display: flex; gap: 6px; align-items: center; opacity: 0.9; margin-top: 2px; position: relative; top: 2px; }
-  .tabs { display: flex; gap: 2px; margin: 10px 0 4px; border-bottom: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, #444)); }
-  .tabs button { background: transparent; color: var(--vscode-foreground); opacity: 0.7; border-radius: 0; padding: 6px 14px; border-bottom: 2px solid transparent; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 2px; margin: 10px 0 4px; border-bottom: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, #444)); }
+  .tabs button { background: transparent; color: var(--vscode-foreground); opacity: 0.7; border-radius: 0; padding: 6px 10px; border-bottom: 2px solid transparent; }
   .tabs button:hover { background: var(--vscode-list-hoverBackground); }
   .tabs button.active { opacity: 1; border-bottom-color: var(--vscode-focusBorder); font-weight: 600; }
   .tabs button:disabled { opacity: 0.35; cursor: default; }

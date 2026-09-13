@@ -27,7 +27,6 @@ import type {
   ProvincePositions,
   SaveResult,
   FileRef,
-  Vocabulary,
   Rgb,
 } from '../model/mapEditor.js';
 
@@ -263,31 +262,51 @@ function appendChildren(node: HTMLElement, child: Child): void {
   if (child instanceof Node) { node.append(child); return; }
   for (const item of child) { appendChildren(node, item); }
 }
-function textInput(
-  value: string | undefined,
-  listId?: string,
-  type?: string,
-  extraClass?: string,
-): HTMLInputElement {
-  const input = h('input', { type: type ?? 'text', list: listId ?? undefined, class: 'field' + (extraClass ? ' ' + extraClass : ''), spellcheck: 'false' });
+function textInput(value: string | undefined, type?: string, extraClass?: string): HTMLInputElement {
+  const input = h('input', { type: type ?? 'text', class: 'field' + (extraClass ? ' ' + extraClass : ''), spellcheck: 'false' });
   input.value = value ?? '';
   return input;
 }
-/**
- * A datalist input in the pick lists' shell, so its arrow is the same one and
- * still opens the suggestions when clicked.
- */
-function withChevron(input: HTMLInputElement): HTMLDivElement {
-  const wrapper = h('div', { class: 'combo picker' }, input);
-  wrapper.addEventListener('mousedown', function (event) { if (event.target === wrapper) { event.preventDefault(); } });
-  wrapper.addEventListener('click', function (event) {
-    if (event.target !== wrapper) { return; }
-    input.focus();
-    // The browser may refuse to open the list; the field still takes typing.
-    try { input.showPicker(); } catch { /* nothing to recover: the field is still usable */ }
+/** A range with its value beside it, read and written like a plain field. */
+function sliderInput(value: string | undefined, range: SliderRange, extraClass?: string): FieldElement {
+  const input = h('input', { type: 'range', min: String(range.min), max: String(range.max) });
+  const readout = h('span', { class: 'readout' });
+  const dots = range.ticks
+    ? h('div', { class: 'rail' }, Array.from({ length: range.max - range.min + 1 }, function () { return h('span'); }))
+    : null;
+  const track = h('div', { class: 'range' }, dots, input);
+  const classes = 'slider field' + (range.ticks ? ' stepped' : '') + (extraClass ? ' ' + extraClass : '');
+  const wrapper = h('div', { class: classes }, track, readout);
+  function show(): void {
+    readout.textContent = range.labels?.[Number(input.value) - range.min] ?? input.value;
+  }
+  function setValue(next: string): void {
+    input.value = next === '' ? String(range.min) : next;
+    show();
+  }
+  input.addEventListener('input', show);
+  Object.defineProperty(wrapper, 'value', {
+    get: function (): string { return input.value; },
+    set: setValue,
   });
-  return wrapper;
+  setValue(value ?? '');
+  // `value` is installed by defineProperty just above; no DOM type can say so.
+  return wrapper as unknown as FieldElement;
 }
+
+/** A yes/no field as a box: ticked reads `yes`, unticked reads empty, which writes no line. */
+function checkInput(value: string | undefined): FieldElement {
+  const box = h('input', { type: 'checkbox' });
+  box.checked = (value ?? '').trim().toLowerCase() === 'yes';
+  const wrapper = h('div', { class: 'tick field' }, box);
+  Object.defineProperty(wrapper, 'value', {
+    get: function (): string { return box.checked ? 'yes' : ''; },
+    set: function (next: string): void { box.checked = next.trim().toLowerCase() === 'yes'; },
+  });
+  // `value` is installed by defineProperty just above; no DOM type can say so.
+  return wrapper as unknown as FieldElement;
+}
+
 /** The element that takes the caret and the placeholder: a plain input, or the one inside a combo. */
 function fieldInput(node: HTMLElement): HTMLElement | null {
   return node.tagName === 'INPUT' ? node : node.querySelector('input');
@@ -339,6 +358,7 @@ function selectInput(
   value: string | undefined,
   entries: readonly NamedIdentifier[],
   emptyLabel?: string,
+  freeText?: boolean,
 ): FieldElement {
   const byId = new Map<string, ComboEntry>();
   for (const entry of entries) { byId.set(entry.id, entry); }
@@ -350,7 +370,8 @@ function selectInput(
   let activeIndex = -1;
   function labelOf(id: string): string {
     const entry = byId.get(id);
-    return entry ? entry.label : (id === '' ? '' : id + ' (not in the mod)');
+    if (entry) { return entry.label; }
+    return id === '' || freeText === true ? id : id + ' (not in the mod)';
   }
   function setValue(id: string | undefined): void {
     selected = id ?? '';
@@ -379,17 +400,25 @@ function selectInput(
     const active = list.querySelector('.active');
     if (active) { active.scrollIntoView({ block: 'nearest' }); }
   }
-  // Only an entry of the list (or nothing) can be picked; other text reverts to the current value.
+  // Only an entry of the list (or nothing) can be picked; other text reverts to
+  // the current value, unless the field takes free text — a file name the mod
+  // has yet to hold is one, and the single shown entry must not hijack it.
   function commit(): void {
     const text = input.value.trim();
     if (text === labelOf(selected)) { return; }
     if (text === '') { pick(''); return; }
     const lower = text.toLowerCase();
     const match = entries.find(function (entry) { return entry.label.toLowerCase() === lower || entry.id.toLowerCase() === lower; });
+    if (match) { pick(match.id); return; }
+    if (freeText === true) { pick(text); return; }
     const only = shown.length === 1 ? shown[0] : undefined;
-    if (match) { pick(match.id); } else if (only && !only.empty) { pick(only.id); } else { setValue(selected); }
+    if (only && !only.empty) { pick(only.id); return; }
+    setValue(selected);
   }
-  input.addEventListener('focus', function () { input.select(); activeIndex = -1; render(''); });
+  input.addEventListener('focus', function () { input.select(); activeIndex = -1; });
+  // A click opens the list, focus alone does not: a row added to a list lands on
+  // an empty field with the rows under it still in view.
+  input.addEventListener('click', function () { if (list.hidden) { activeIndex = -1; render(''); } });
   input.addEventListener('input', function () { activeIndex = -1; render(input.value.trim()); });
   input.addEventListener('blur', function () { commit(); close(); });
   input.addEventListener('keydown', function (event) {
@@ -1182,10 +1211,9 @@ function renderHeader(id: number, current: ProvinceDetails | null, currentMap: M
   const terrainLabel = terrainLabelOf(current, terrainName);
   headerTerrainLabel = h('span', { class: 'file' }, terrainLabel === '' ? currentMap.targetName : terrainLabel);
   const heading = h('h1', { title: headingTip(id, currentMap, terrainLabel, terrain?.fromHistory ?? false) },
-    headingTitle(id, current),
+    h('span', { class: 'name' }, headingTitle(id, current)),
     h('span', { class: 'id' }, '- ' + String(id) + ' -'),
-    headerTerrainLabel,
-    seaIds.has(id) ? h('span', { class: 'badge' }, 'sea') : null);
+    headerTerrainLabel);
   previewTerrain = terrainName;
   if (terrainName !== '' && terrain?.pictureDataUri) { terrainPictures.set(terrainName, terrain.pictureDataUri); }
   const box = h('div', { class: 'header' }, heading);
@@ -1214,7 +1242,6 @@ function renderSide(id: number): void {
   const current = details;
   side.append(renderHeader(id, current, currentMap));
   if (!current) { side.append(h('p', { class: 'hint' }, 'Loading…')); return; }
-  renderDatalists(current.vocabulary);
   // The disk is the truth after every read: the draft restarts from it.
   resetDraft(current);
   const history = historySections(current);
@@ -1265,29 +1292,36 @@ function showTerrain(name: string): void {
   vscode.postMessage({ type: 'terrainPicture', terrain: effective });
 }
 
-function renderDatalists(vocabulary: Vocabulary): void {
-  const lists = [
-    { names: vocabulary.buildings, id: 'dl-buildings' },
-    { names: vocabulary.rebelTypes, id: 'dl-rebeltypes' },
-  ];
-  for (const entry of lists) {
-    const list = h('datalist', { id: entry.id });
-    for (const name of entry.names) { list.append(option(name, name)); }
-    side.append(list);
-  }
-}
-
 /** Title, file path (grey, trimmed from the left) and an Open File button on one line. */
 interface SectionFile {
   readonly file: FileRef | undefined;
   readonly inTarget: boolean;
 }
 
-function sectionHeader(title: string, section: SectionFile, whenMissing: string): HTMLElement {
+/** What the header says instead of a path, and whether that is worth a warning colour. */
+interface MissingNote {
+  readonly text: string;
+  readonly warning: boolean;
+}
+
+function sectionHeader(title: string, section: SectionFile, missing: MissingNote): HTMLElement {
   const file = section.file;
-  const text = !file ? whenMissing : section.inTarget ? file.absolutePath.replace(map?.targetRoot ?? '', '').replace(/^[\\/]/, '') : file.absolutePath;
   const open = file ? h('button', { class: 'outline', onclick: function () { vscode.postMessage({ type: 'openFile', absolutePath: file.absolutePath, line: file.line }); } }, 'Open File') : null;
-  return h('h2', null, h('span', { class: 'title' }, title), h('span', { class: 'file' + (file && section.inTarget ? '' : ' warning'), title: text }, '\u200e' + text), open);
+  return h('h2', null, h('span', { class: 'title' }, title), pathOrNote(section, missing), open);
+}
+
+/**
+ * A path is trimmed from the left, which takes `direction: rtl` and a mark to
+ * keep its own order; a sentence takes neither, or its full stop would move to
+ * the front of it.
+ */
+function pathOrNote(section: SectionFile, missing: MissingNote): HTMLElement {
+  const file = section.file;
+  if (!file) {
+    return h('span', { class: 'file' + (missing.warning ? ' warning' : ''), title: missing.text }, missing.text);
+  }
+  const text = section.inTarget ? file.absolutePath.replace(map?.targetRoot ?? '', '').replace(/^[\\/]/, '') : file.absolutePath;
+  return h('span', { class: 'file path' + (section.inTarget ? '' : ' warning'), title: text }, '\u200e' + text);
 }
 function layerNote(section: SectionFile): HTMLElement | null {
   if (!section.file || section.inTarget) { return null; }
@@ -1331,14 +1365,17 @@ function localisationSection(current: ProvinceDetails): HTMLElement {
   const rename = h('input', { type: 'checkbox' });
   // A base-game province keeps the name vanilla gave its file, and other tools match
   // on it, so renaming there is opt-in. Above that id the province is the mod's own.
-  rename.checked = current.id > VANILLA_MAX_PROVINCES;
+  const renamable = current.history.file !== undefined && !current.isSea;
+  rename.checked = current.id > VANILLA_MAX_PROVINCES && renamable;
+  const renameRow = h('label', { class: 'check' }, rename, 'Rename the history file to match');
+  if (!renamable) { lock(renameRow); }
   const bar = saveBar(function () { postSave({ section: 'localisation', text: input.value, renameHistoryFile: rename.checked }); });
   input.addEventListener('keydown', function (event) { if (event.key === 'Enter') { bar.button.click(); } });
   return h('div', { class: 'section' },
-    sectionHeader('Localisation', loc, loc.key + ' is not defined; saving adds it to the mod\'s province names file.'),
+    sectionHeader('Localisation', loc, { text: loc.key + ' is not defined; saving adds it to the mod\'s province names file.', warning: true }),
     layerNote(loc),
     h('div', { class: 'inline' }, h('label', null, loc.key), input, bar.button, bar.cancel, bar.status),
-    h('label', { class: 'check' }, rename, 'Rename the history file to match'));
+    renameRow);
 }
 
 // History — one form behind four tabs. Cores, Buildings and the dated blocks
@@ -1353,16 +1390,19 @@ interface HistoryPanes {
 function historySections(current: ProvinceDetails): HistoryPanes {
   const history = current.history;
   const form = historyForm(current, history.data ?? emptyHistory(), true);
-  let folder: HTMLSelectElement | null = null;
-  let folderRow: HTMLElement | null = null;
-  if (!history.data) {
-    const folders = map && map.historyFolders.length > 0 ? map.historyFolders : [''];
-    folder = h('select', null, folders.map(function (name) { return option(name, name || '(history/provinces)'); }));
-    folderRow = h('div', { class: 'grid' }, h('label', null, 'Folder'), folder);
-  }
+  // Where a new history file goes. The row stands whether it is needed or not,
+  // greyed once the file exists, so the panel keeps its height from one province
+  // to the next; a sea province has the whole pane locked over it.
+  const folders = map && map.historyFolders.length > 0 ? map.historyFolders : [''];
+  const folder = h('select', null, folders.map(function (name) { return option(name, name || '(history/provinces)'); }));
+  const folderRow = h('div', { class: 'grid lone' }, h('label', null, 'Folder'), folder);
+  if (history.data) { lock(folderRow); }
   function pane(title: string, body: Child): HTMLElement {
-    const bar = saveBar(function () { postSave({ section: 'history', data: form.read(), createInFolder: folder ? folder.value : undefined }); });
-    return h('div', { class: 'section' }, sectionHeader(title, history, 'No history file; saving creates one'), layerNote(history), body, bar.node);
+    const bar = saveBar(function () { postSave({ section: 'history', data: form.read(), createInFolder: folder.value }); });
+    const missing: MissingNote = current.isSea
+      ? { text: 'Sea tiles don\'t need history files.', warning: false }
+      : { text: 'No history file; saving creates one', warning: true };
+    return h('div', { class: 'section' }, sectionHeader(title, history, missing), layerNote(history), body, bar.node);
   }
   return {
     definition: pane('History', h('div', null, folderRow, form.node)),
@@ -1383,6 +1423,7 @@ interface HistoryFieldSpec {
   readonly name: HistoryField;
   readonly label: string;
   readonly entries: readonly NamedIdentifier[] | null;
+  readonly slider?: SliderRange;
 }
 
 interface HistoryFormHandle {
@@ -1390,6 +1431,62 @@ interface HistoryFormHandle {
   readonly buildings: HTMLElement;
   readonly dated: HTMLElement | null;
   readonly read: () => ProvinceHistory;
+}
+
+const LOYALTY_RANGE: SliderRange = { min: 1, max: 100 };
+const COLONIAL_RANGE: SliderRange = {
+  min: 0, max: 2, ticks: true, labels: ['No', 'Colony', 'Colonial State'],
+};
+
+function historyField(spec: HistoryFieldSpec, value: string | undefined): FieldElement {
+  if (spec.slider) { return sliderInput(value, spec.slider); }
+  if (spec.entries) { return selectInput(value, spec.entries, '(none)'); }
+  return textInput(value, 'number');
+}
+
+/**
+ * The lowest level is the game's default, so a slider left there writes nothing
+ * — unless the block already spelled it out: a dated `colonial = 0` is how a
+ * province stops being a colony, and dropping it would change what the file says.
+ */
+function levelOf(input: FieldElement, written: boolean): string | undefined {
+  const value = input.value.trim();
+  if (value === '0' && !written) { return undefined; }
+  return value === '' ? undefined : value;
+}
+
+/** The loyalty sliders that stand for a line of the file; the example row is not one. */
+function loyaltyFields(rows: HTMLElement): FieldElement[] {
+  return [...rows.querySelectorAll('.row:not(.ghost) .loyalty')]
+    .filter(function (node): node is FieldElement { return node instanceof HTMLElement && 'value' in node; });
+}
+
+/**
+ * Loyalty is a share of the province's parties, so the rows together stop at
+ * 100: each slider reaches only what the others leave it. A file already over
+ * the cap is never rewritten — a slider is never capped below the value it
+ * came with — and the running total says so until the modder brings it down.
+ */
+function capLoyalties(table: RowsHandle): void {
+  const total = h('span', { class: 'total' });
+  table.heading.append(total);
+  function apply(): void {
+    const fields = loyaltyFields(table.rows);
+    const sum = fields.reduce(function (acc, field) { return acc + (Number(field.value) || 0); }, 0);
+    for (const field of fields) {
+      const own = Number(field.value) || 0;
+      const input = fieldInput(field);
+      if (input instanceof HTMLInputElement) {
+        input.max = String(Math.max(own, LOYALTY_RANGE.max - (sum - own), LOYALTY_RANGE.min));
+      }
+    }
+    total.textContent = 'Total loyalty: ' + String(sum) + ' / ' + String(LOYALTY_RANGE.max);
+    total.classList.toggle('warning', sum > LOYALTY_RANGE.max);
+  }
+  table.node.addEventListener('input', apply);
+  // Adding a row is a click, not an input, and its slider needs a cap as well.
+  table.node.addEventListener('click', apply);
+  apply();
 }
 
 function historyForm(current: ProvinceDetails, data: ProvinceHistory, topLevel: boolean): HistoryFormHandle {
@@ -1400,15 +1497,13 @@ function historyForm(current: ProvinceDetails, data: ProvinceHistory, topLevel: 
     { name: 'tradeGoods', label: 'Trade goods', entries: vocabulary.goods },
     { name: 'lifeRating', label: 'Life rating', entries: null },
     { name: 'terrain', label: 'Terrain', entries: vocabulary.terrains },
-    { name: 'colonial', label: 'Colonial', entries: null },
+    { name: 'colonial', label: 'Colonial', entries: null, slider: COLONIAL_RANGE },
     { name: 'colony', label: 'Colony', entries: null },
   ];
   const inputs = {} as Record<HistoryField, FieldElement>;
   const grid = h('div', { class: 'grid' });
   for (const spec of fields) {
-    const field = spec.entries
-      ? selectInput(data[spec.name], spec.entries, '(none)')
-      : textInput(data[spec.name], undefined, 'number');
+    const field = historyField(spec, data[spec.name]);
     inputs[spec.name] = field;
     grid.append(h('label', null, spec.label), field);
   }
@@ -1421,9 +1516,10 @@ function historyForm(current: ProvinceDetails, data: ProvinceHistory, topLevel: 
   // Only a dated block edits remove_core: at the start date a core is simply
   // listed or not. A remove_core line already in the file rides along.
   const removeCores = topLevel ? null : listEditor('Remove cores', data.removeCores, vocabulary.countries, 'country');
-  const buildings = rowsEditor('Buildings', data.buildings, [{ key: 'key', placeholder: 'building', listId: 'dl-buildings' }, { key: 'value', placeholder: 'level', type: 'number', extraClass: 'narrow' }], function () { return { key: '', value: '1' }; });
-  const partyLoyalty = rowsEditor('Party loyalty', data.partyLoyalty, [{ key: 'ideology', placeholder: 'ideology', entries: vocabulary.ideologies }, { key: 'loyaltyValue', placeholder: 'loyalty', type: 'number', extraClass: 'narrow' }], function () { return { ideology: '', loyaltyValue: '' }; });
-  const stateBuildings = rowsEditor('State buildings', data.stateBuildings, [{ key: 'building', placeholder: 'building', listId: 'dl-buildings' }, { key: 'level', placeholder: 'level', type: 'number', extraClass: 'narrow' }, { key: 'upgrade', placeholder: 'upgrade', type: 'text', extraClass: 'narrow' }], function () { return { building: '', level: '1', upgrade: 'yes' }; });
+  const buildings = rowsEditor('Buildings', data.buildings, [{ key: 'key', placeholder: 'building', entries: vocabulary.buildings }, { key: 'value', placeholder: 'level', type: 'number', extraClass: 'narrow' }], function () { return { key: '', value: '1' }; });
+  const partyLoyalty = rowsEditor('Party loyalty', data.partyLoyalty, [{ key: 'ideology', placeholder: 'ideology', entries: vocabulary.ideologies, extraClass: 'half' }, { key: 'loyaltyValue', placeholder: 'loyalty', slider: LOYALTY_RANGE, extraClass: 'loyalty' }], function () { return { ideology: '', loyaltyValue: String(LOYALTY_RANGE.min) }; });
+  capLoyalties(partyLoyalty);
+  const stateBuildings = rowsEditor('State buildings', data.stateBuildings, [{ key: 'building', placeholder: 'factory', entries: vocabulary.factories }, { key: 'level', placeholder: 'level', type: 'number', extraClass: 'narrow' }, { key: 'upgrade', placeholder: 'upgrade', check: true, extraClass: 'tick' }], function () { return { building: '', level: '1', upgrade: 'yes' }; });
   const dated = topLevel ? datedEditor(current, data.dated) : null;
   const coresGroup = h('div', { class: 'form' }, cores.node, removeCores ? removeCores.node : null);
   const buildingsGroup = h('div', { class: 'form' }, buildings.node, stateBuildings.node);
@@ -1441,7 +1537,7 @@ function historyForm(current: ProvinceDetails, data: ProvinceHistory, topLevel: 
         owner: valueOf(inputs.owner), controller: valueOf(inputs.controller),
         cores: cores.read(), removeCores: removeCores ? removeCores.read() : data.removeCores,
         tradeGoods: valueOf(inputs.tradeGoods), lifeRating: valueOf(inputs.lifeRating), terrain: valueOf(inputs.terrain),
-        colonial: valueOf(inputs.colonial), colony: valueOf(inputs.colony), isSlave: isSlave.checked ? 'yes' : undefined,
+        colonial: levelOf(inputs.colonial, data.colonial !== undefined), colony: valueOf(inputs.colony), isSlave: isSlave.checked ? 'yes' : undefined,
         buildings: buildings.read().map(function (row) { return { key: row['key'] ?? '', value: row['value'] ?? '' }; }),
         partyLoyalty: partyLoyalty.read().map(function (row) { return { ideology: row['ideology'] ?? '', loyaltyValue: row['loyaltyValue'] ?? '' }; }),
         stateBuildings: stateBuildings.read().map(function (row) { return { building: row['building'] ?? '', level: row['level'] ?? '', upgrade: row['upgrade'] ?? '' }; }),
@@ -1497,17 +1593,29 @@ function listEditor(
 /** A table row as the form holds it: every value is script text. */
 type RowItem = Record<string, string | undefined>;
 
+interface SliderRange {
+  readonly min: number;
+  readonly max: number;
+  /** Draw a dot per step: a short range is picked, not dragged. */
+  readonly ticks?: boolean;
+  /** What each step is called, from `min` up; the number itself when absent. */
+  readonly labels?: readonly string[];
+}
+
 interface ColumnSpec {
   readonly key: string;
   readonly placeholder: string;
-  readonly listId?: string;
   readonly type?: string;
   readonly extraClass?: string;
   readonly entries?: readonly NamedIdentifier[];
+  readonly slider?: SliderRange;
+  /** A yes/no column: ticked writes `yes`, unticked writes no line at all. */
+  readonly check?: boolean;
 }
 
 interface RowsHandle {
   readonly node: HTMLElement;
+  readonly heading: HTMLElement;
   readonly rows: HTMLElement;
   readonly read: () => RowItem[];
 }
@@ -1526,6 +1634,13 @@ function toRowItem(item: object): RowItem {
   return out;
 }
 
+function columnField(column: ColumnSpec, value: string | undefined): FieldElement {
+  if (column.check) { return checkInput(value); }
+  if (column.slider) { return sliderInput(value, column.slider, column.extraClass); }
+  if (column.entries) { return selectInput(value, column.entries, '(pick)'); }
+  return textInput(value, column.type, column.extraClass);
+}
+
 function rowsEditor(
   title: string,
   items: readonly object[],
@@ -1539,19 +1654,11 @@ function rowsEditor(
   const hiddenFields = new WeakMap<HTMLElement, RowItem>();
   function addRow(item: RowItem, ghost?: boolean): HTMLElement {
     const inputs = columns.map(function (column) {
-      const input = column.entries
-        ? selectInput(item[column.key], column.entries, '(pick)')
-        : textInput(item[column.key], column.listId, column.type, column.extraClass);
+      const input = columnField(column, item[column.key]);
       if (column.extraClass) { input.classList.add(column.extraClass); }
       return input;
     });
-    // inputs stays the list of fields, in column order, for readRow; a
-    // suggestion field goes into the page inside its chevron shell.
-    const fields = inputs.map(function (input, index) {
-      const column = columns[index];
-      return column?.listId && input instanceof HTMLInputElement ? withChevron(input) : input;
-    });
-    const row = h('div', { class: 'row' + (ghost ? ' ghost' : '') }, fields,
+    const row = h('div', { class: 'row' + (ghost ? ' ghost' : '') }, inputs,
       options.duplicate ? h('button', { class: 'secondary icon', title: 'Duplicate', onclick: function () { addRow(readRow(row)); } }, '⧉') : null,
       h('button', { class: 'secondary icon remove', title: 'Remove', onclick: function () { row.remove(); keepOne(); rows.dispatchEvent(new Event('input', { bubbles: true })); } }, '×'));
     if (ghost) {
@@ -1580,15 +1687,19 @@ function rowsEditor(
   for (const item of items) { addRow(toRowItem(item)); }
   keepOne();
   const head = h('div', { class: 'head' }, columns.map(function (column) { return h('span', { class: column.extraClass ?? undefined }, column.placeholder); }));
-  const node = h('div', { class: 'group' }, h('h3', null, title, plusButton('Add to ' + title, function () { dropGhost(rows); addRow(blank()).querySelector('input')?.focus(); })), head, rows);
-  const firstKey = columns[0]?.key ?? '';
+  const heading = h('h3', null, title, plusButton('Add to ' + title, function () { dropGhost(rows); addRow(blank()).querySelector('input')?.focus(); }));
+  const node = h('div', { class: 'group' }, heading, head, rows);
+  // A tick box is never missing: unticked is an answer. Every other column has
+  // to be filled in for the row to be a line of the file — a half-written row is
+  // dropped by a Save, the way an empty one is.
+  const required = columns.filter(function (column) { return !column.check; });
   return {
-    node: node, rows: rows,
+    node: node, heading: heading, rows: rows,
     read: function (): RowItem[] {
       return [...rows.children]
         .filter(function (row): row is HTMLElement { return row instanceof HTMLElement; })
         .map(readRow)
-        .filter(function (item) { return item[firstKey] !== ''; });
+        .filter(function (item) { return required.every(function (column) { return item[column.key] !== ''; }); });
     },
   };
 }
@@ -1630,8 +1741,8 @@ function positionsSection(current: ProvinceDetails): HTMLElement {
   const rows = h('div', { class: 'rows' });
   for (const spec of POSITION_KIND_SPECS) {
     const point = draft?.[spec.kind];
-    const x = textInput(point ? point.x : '', undefined, 'number');
-    const y = textInput(point ? point.y : '', undefined, 'number');
+    const x = textInput(point ? point.x : '', 'number');
+    const y = textInput(point ? point.y : '', 'number');
     x.step = '0.01'; y.step = '0.01'; x.placeholder = 'x'; y.placeholder = 'y';
     function changed(): void {
       const xText = x.value.trim();
@@ -1663,7 +1774,7 @@ function positionsSection(current: ProvinceDetails): HTMLElement {
     postSave({ section: 'positions', data: data });
   });
   return h('div', { class: 'section' },
-    sectionHeader('Positions', section, 'No entry in map/positions.txt; saving adds one'),
+    sectionHeader('Positions', section, { text: 'No entry in map/positions.txt; saving adds one', warning: true }),
     layerNote(section),
     h('p', { class: 'hint' }, current.isSea
       ? 'A sea province carries one point: where the game draws fleets in it. y counts from the bottom of the map. Zoom in until the point shows; drag it to move it, or type here.'
@@ -1675,22 +1786,24 @@ function positionsSection(current: ProvinceDetails): HTMLElement {
 
 function popsSection(current: ProvinceDetails): HTMLElement {
   const pops = current.pops;
-  const parts: Child[] = [sectionHeader('Pops', pops, 'No pops in history/pops/' + popDate + '; pick a file below'), layerNote(pops)];
+  const missing: MissingNote = current.isSea
+    ? { text: 'Sea tiles don\'t need pops.', warning: false }
+    : { text: 'No pops in history/pops/' + popDate + '; pick a file below', warning: true };
+  const parts: Child[] = [sectionHeader('Pops', pops, missing), layerNote(pops)];
   const currentMap = map;
   if (currentMap && currentMap.popDates.length > 1) {
     const dateSelect = h('select', { onchange: function () { popDate = dateSelect.value; selectProvince(current.id); } }, currentMap.popDates.map(function (date) { return option(date, date); }));
     dateSelect.value = popDate;
-    parts.push(h('div', { class: 'grid' }, h('label', null, 'Start date'), dateSelect));
+    parts.push(h('div', { class: 'grid lone' }, h('label', null, 'Start date'), dateSelect));
   }
-  let fileInput: HTMLInputElement | null = null;
-  if (!pops.pops) {
-    const listId = 'dl-popfiles';
-    const names = currentMap?.popFiles[popDate] ?? [];
-    const list = h('datalist', { id: listId }, names.map(function (name) { return option(name, name); }));
-    fileInput = textInput('', listId);
-    fileInput.placeholder = 'Existing or new file name';
-    parts.push(list, h('div', { class: 'grid' }, h('label', null, 'File'), withChevron(fileInput)));
-  }
+  const names = currentMap?.popFiles[popDate] ?? [];
+  const fileField = selectInput('', names.map(function (name) { return { id: name, label: name }; }), 'Existing or new file name', true);
+  const fileRow = h('div', { class: 'grid lone' }, h('label', null, 'File'), fileField);
+  // Where a block would be created. The row stands whether it is needed or not,
+  // greyed once the province has a block, so the panel keeps its height from one
+  // province to the next.
+  if (pops.pops) { lock(fileRow); }
+  parts.push(fileRow);
   const vocabulary = current.vocabulary;
   const table = rowsEditor('Pops', pops.pops ?? [], [
     { key: 'type', placeholder: 'type', entries: vocabulary.popTypes },
@@ -1712,7 +1825,7 @@ function popsSection(current: ProvinceDetails): HTMLElement {
         size: pop['size'] ?? '', militancy: blankToUndefined(pop['militancy']), rebelType: blankToUndefined(pop['rebelType']),
       };
     });
-    postSave({ section: 'pops', pops: rows, createInFile: fileInput ? fileInput.value : undefined });
+    postSave({ section: 'pops', pops: rows, createInFile: fileField.value });
   });
   parts.push(table.node, total, bar.node);
   return h('div', { class: 'section' }, parts);

@@ -60,6 +60,8 @@ export interface ModIndex {
   readonly researchBonusKeys: ReadonlySet<string>;
   /** `min_build_<building>` modifier keys the mod's own buildings grant. */
   readonly minBuildKeys: ReadonlySet<string>;
+  /** Buildings declared `type = factory`: the ones a state holds, not a province. */
+  readonly factoryBuildings: ReadonlySet<string>;
   /** `max_provinces` from map/default.map; province ids must stay below it. */
   readonly maxProvinces: number | undefined;
   /** Province ids listed under `sea_starts` in map/default.map. */

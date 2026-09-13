@@ -15,9 +15,16 @@ export function vocabularyOf(index: ModIndex): Vocabulary {
     religions: namesOf(index, 'religion').map((religion) => localised(index, religion)),
     popTypes: namesOf(index, 'popType').map((popType) => localised(index, popType)),
     ideologies: namesOf(index, 'ideology').map((ideology) => qualified(index, ideology)),
-    buildings: namesOf(index, 'building'),
-    rebelTypes: namesOf(index, 'rebelType'),
+    buildings: buildingsOf(index, false),
+    factories: buildingsOf(index, true),
   };
+}
+
+/** A province builds what is not a factory; a state building is a factory. */
+function buildingsOf(index: ModIndex, factories: boolean): NamedIdentifier[] {
+  return namesOf(index, 'building')
+    .filter((name) => index.factoryBuildings.has(name) === factories)
+    .map((name) => qualified(index, name));
 }
 
 /** `identifier - localised name`: the identifier is what the file holds, and several of them can share one name. */

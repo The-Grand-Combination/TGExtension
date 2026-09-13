@@ -33,6 +33,10 @@ suite('modIndex', () => {
     assert.ok(hasIdentifier(index, 'modifier', 'triggered_thing'));
   });
 
+  test('tells a factory from what a province builds', () => {
+    assert.deepStrictEqual([...index.factoryBuildings], ['steel_factory']);
+  });
+
   test('indexes issues into classes, options, and party issues', () => {
     assert.ok(hasIdentifier(index, 'reformClass', 'slavery'));
     assert.ok(hasIdentifier(index, 'reformClass', 'trade_policy'));

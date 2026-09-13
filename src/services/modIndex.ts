@@ -58,6 +58,19 @@ function topLevelScalarNames(provider: ModFileProvider, relativePath: string): s
   return names;
 }
 
+/** Buildings whose block says `type = factory`; a state builds those, a province the rest. */
+function factoryBuildingNames(provider: ModFileProvider): Set<string> {
+  const document = parseRelative(provider, 'common/buildings.txt');
+  const names = new Set<string>();
+  for (const assignment of document ? blockKeysOf(document) : []) {
+    const block = asBlock(assignment.value);
+    if (block && scalarValueOf(block.entries, 'type')?.toLowerCase() === 'factory') {
+      names.add(assignment.key.value.toLowerCase());
+    }
+  }
+  return names;
+}
+
 function topLevelOccurrences(provider: ModFileProvider, filePath: string): IdentifierOccurrence[] {
   const document = parseRelative(provider, filePath);
   if (!document) {
@@ -519,6 +532,7 @@ class IndexBuild {
       techFolders: this.techFolders,
       researchBonusKeys: new Set(this.techFolders.map(researchBonusKey)),
       minBuildKeys: this.minBuildKeys(),
+      factoryBuildings: factoryBuildingNames(this.provider),
     };
   }
 

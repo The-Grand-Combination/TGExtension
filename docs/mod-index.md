@@ -80,6 +80,9 @@ Two fields come from `common/technology.txt`'s `folders` section:
 `min_build_<name>`, so a mod that adds a building named `farmland` can write `min_build_farmland`
 in a terrain category. `factory` is a synthetic member of the building set and is excluded.
 
+`factoryBuildings` holds the buildings whose block says `type = factory` — what a state builds, as
+against what a province does. The Map Editor's two building lists are that split.
+
 ## Reform classes and options
 
 `common/issues.txt` is indexed at three levels: `reformClass` (category → class name, e.g.

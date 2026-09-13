@@ -65,13 +65,38 @@ the mountains texture.
 
 The side panel has five tabs: **Definition** (localisation, the history fields, party loyalty and
 cores), **Positions**, **Buildings**, **Extra Dates** and **Pops**. The three history tabs save the
-same history file, so a Save posts the whole form and the tabs never drift. Owner,
-controller, cores, trade goods, terrain, ideology, pop type, culture and religion are pick lists over
-the mod's identifiers. Owner, controller, cores, trade goods, terrain and ideology are labelled
-`identifier - localised name` (`USA - United States of America`, `grain - Grain`,
-`urban_fez - Urban`, `conservative - Conservative`), the identifier first because it is what the file
-holds and several of them can share one name; pop type, culture and religion carry the localised name
-alone. A value the mod does not define stays selectable so a save never drops it.
+same history file, so a Save posts the whole form and the tabs never drift. Every identifier field is
+the same pick list over the mod's identifiers: owner, controller, cores, trade goods, terrain,
+ideology, building, pop type, culture and religion. All but the last three are labelled `identifier -
+localised name` (`USA - United States of America`, `grain - Grain`, `urban_fez - Urban`,
+`conservative - Conservative`, `steel_factory - Steel Factory`), the identifier first because it is
+what the file holds and several of them can share one name; pop type, culture and religion carry the
+localised name alone. A value the mod does not define stays selectable so a save never drops it. The
+list opens on a click, not on focus, so a row added to a list does not open over the rows under it.
+
+The two building lists are split by what the game lets each hold: **State buildings** offers the
+`type = factory` buildings of `common/buildings.txt`, **Buildings** every other one (fort, naval_base,
+railroad, and whatever else the mod declares).
+
+A field the province does not need is greyed out rather than removed, so the panel keeps its height
+as you click from one province to the next. The scrollbar gutter is reserved the same way: a list
+that grows past the window gets its scrollbar without anything under it moving.
+
+A row is a line of the file only once it is filled in: a Save drops an empty core and, the same way,
+any row still missing one of its fields. A tick box is never missing — `upgrade` on a state building
+is one, and unticked simply writes no `upgrade` line.
+
+**Colonial** is a slider over the three levels the game reads, with a dot for each and the level named
+beside it: 0 is **No**, 1 is **Colony**, 2 is **Colonial State**. A province at 0 writes no `colonial`
+line at all — that is the game's default — unless the block
+already had one, because a dated `colonial = 0` is how a province stops being a colony and dropping it
+would change what the file says.
+
+A `party_loyalty` row is an ideology and a slider from 1 to 100. Loyalty is a share of the province's
+parties, so the rows together stop at 100: each slider reaches only what the others leave it, and the
+running total beside the list's title says where they stand. A file that is already over the cap is not
+rewritten — a slider is never capped below the value it came with, so it can only be brought down —
+and the total is marked until it is.
 
 The rows are drawn in the order the file stores them, which is how the game reads them: the map
 appears flipped vertically compared with an image editor. Hovering shows the id and the `definition.csv` name. The box in the bottom-left corner of the map
@@ -80,10 +105,12 @@ the search: type a province id or a name and press **Go** or Enter. A name is ma
 `definition.csv`, ignoring case — the whole name first, then one starting with what was typed, then
 one holding it.
 
-A sea province (from `sea_starts`) opens like any other, marked **sea**, but it can only have the two
-things the game gives it: its name and the `unit` point fleets are drawn at. The history sections,
-the other position kinds and the Buildings, Extra Dates and Pops tabs are greyed out and take no
-input, so a save never invents a history or a pops block for open water.
+A sea province (from `sea_starts`) opens like any other, under the ocean picture, but it can only have
+the two things the game gives it: its name and the `unit` point fleets are drawn at. The history
+sections, the other position kinds and the Buildings, Extra Dates and Pops tabs are greyed out and
+take no input, so a save never invents a history or a pops block for open water. The History and Pops
+headers say as much instead of naming a file that would be created, and the localisation's rename box
+is greyed with them.
 
 Ctrl+click on a Map Report finding that names a pixel opens the editor there and selects the province
 under it, reading the map with the mods that report was made for. The report gives pixels as an image
@@ -146,7 +173,8 @@ mod's own code page — see [encoding.md](encoding.md).
   text become spaces. With **Rename the history file to match** ticked, a history file of the
   target whose name differs from `<id> - <new name>.txt` is renamed; characters Windows forbids in
   file names are dropped. The box starts ticked only above vanilla's `max_provinces` (3249): a
-  base-game province keeps the file name vanilla gave it unless you ask for the rename.
+  base-game province keeps the file name vanilla gave it unless you ask for the rename. With no
+  history file to rename, the box is greyed out.
 - **History** (`services/provinceHistoryEdit.ts`): each top-level entry is compared with the form.
   A changed field is rewritten in its place; a removed one loses its line; a new one is inserted
   after the last entry of the same kind, or after the last plain field (before the first dated
@@ -154,15 +182,17 @@ mod's own code page — see [encoding.md](encoding.md).
   block is rewritten whole when anything inside it changed. `set_province_flag` /
   `clr_province_flag` lines, the province's own `remove_core` (only a dated block edits that one)
   and top-level entries the form does not know (a non-numeric unknown key, a stray token) are left
-  untouched. Without a history file, the
-  panel offers the `history/provinces` subfolders and creates `<folder>/<id> - <name>.txt` (name from
-  the localisation, else `definition.csv`).
+  untouched. The **Folder** row offers the
+  `history/provinces` subfolders and creates `<folder>/<id> - <name>.txt` (name from the
+  localisation, else `definition.csv`) where the province has no file yet; it is greyed out, not
+  taken away, once it has one.
 - **Pops** (`services/provincePopsEdit.ts`): the province's block is rewritten whole, from the
   first `<type> = {` to the closing brace; comments inside it are lost, the rest of the file is
   untouched. Every pop keeps `culture`, `religion`, `size`, and `militancy` / `rebel_type` when set.
-  With more than one start date under `history/pops` a selector picks the date. Without a block for
-  the province, the panel asks for the file name (an existing file of that date, or a new one) and
-  appends the block.
+  With more than one start date under `history/pops` a selector picks the date. The **File** row says
+  where a block would be created — a pick list of that date's files that also takes a name the date
+  does not have yet — and the block is appended there. It is greyed out, not taken away, once the
+  province has a block of its own.
 - **Positions** (`services/provincePositionsEdit.ts`): a moved point rewrites only the `x` / `y`
   values that differ (compared as numbers, written with the game's six decimals); a cleared point
   loses its lines and the blank line after them; a new point is added before the closing brace of
