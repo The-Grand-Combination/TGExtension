@@ -131,6 +131,8 @@ export function settingsHtml(cspSource: string): string {
   .error { color: var(--vscode-errorForeground); }
   .list { margin-top: 8px; padding: 4px 0; background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
     border: 1px solid var(--vscode-widget-border, var(--vscode-panel-border, transparent)); border-radius: 2px; }
+  label.check { display: flex; align-items: center; gap: 8px; margin: 10px 0 6px; cursor: pointer; font-weight: 600; }
+  label.check input { margin: 0; }
   label.row { display: flex; align-items: center; gap: 8px; padding: 4px 10px; cursor: pointer; }
   label.row:hover { background: var(--vscode-list-hoverBackground); }
   label.row.submod { padding-left: 34px; }
