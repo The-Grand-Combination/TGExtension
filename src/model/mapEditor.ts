@@ -19,6 +19,14 @@ export const DEFAULT_COUNTRY_COLORS_TINT = 82;
 /** `victorianTools.mapEditor.provinceFolderPattern`: empty, so every subfolder counts. */
 export const DEFAULT_PROVINCE_FOLDER_PATTERN = '';
 
+/**
+ * Vanilla's `max_provinces`. A province id at or below it is one the base game
+ * already names, so the Map Editor leaves the rename of its history file unticked:
+ * those file names are what every other tool expects to find. A higher id is a
+ * province the mod added itself, and there the file follows the name being saved.
+ */
+export const VANILLA_MAX_PROVINCES = 3249;
+
 /** Folder names are case-insensitive on Windows, so the pattern is matched that way. */
 export const PROVINCE_FOLDER_FLAGS = 'i';
 

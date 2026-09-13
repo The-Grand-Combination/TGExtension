@@ -31,6 +31,8 @@ import type {
   Rgb,
 } from '../model/mapEditor.js';
 
+import { VANILLA_MAX_PROVINCES } from '../model/mapEditor.js';
+
 import { decodeBmp as decodeBmpFile, type BmpImage } from '../services/bmpDecoder.js';
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
@@ -1328,7 +1330,9 @@ function localisationSection(current: ProvinceDetails): HTMLElement {
   const loc = current.localisation;
   const input = textInput(loc.text);
   const rename = h('input', { type: 'checkbox' });
-  rename.checked = true;
+  // A base-game province keeps the name vanilla gave its file, and other tools match
+  // on it, so renaming there is opt-in. Above that id the province is the mod's own.
+  rename.checked = current.id > VANILLA_MAX_PROVINCES;
   const bar = saveBar(function () { postSave({ section: 'localisation', text: input.value, renameHistoryFile: rename.checked }); });
   input.addEventListener('keydown', function (event) { if (event.key === 'Enter') { bar.button.click(); } });
   return h('div', { class: 'section' },

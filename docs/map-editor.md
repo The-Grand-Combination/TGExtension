@@ -140,9 +140,10 @@ mod's own code page — see [encoding.md](encoding.md).
 
 - **Localisation** (`services/provinceLocEdit.ts`): only the second field of the `PROV<id>` line is
   replaced; the other language columns and the `;x` terminator stay. `;` and line breaks in the new
-  text become spaces. With **Rename the history file to match** ticked (the default), a history
-  file of the target whose name differs from `<id> - <new name>.txt` is renamed; characters Windows
-  forbids in file names are dropped.
+  text become spaces. With **Rename the history file to match** ticked, a history file of the
+  target whose name differs from `<id> - <new name>.txt` is renamed; characters Windows forbids in
+  file names are dropped. The box starts ticked only above vanilla's `max_provinces` (3249): a
+  base-game province keeps the file name vanilla gave it unless you ask for the rename.
 - **History** (`services/provinceHistoryEdit.ts`): each top-level entry is compared with the form.
   A changed field is rewritten in its place; a removed one loses its line; a new one is inserted
   after the last entry of the same kind, or after the last plain field (before the first dated

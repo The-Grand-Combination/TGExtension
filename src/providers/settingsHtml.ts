@@ -165,7 +165,7 @@ export function settingsHtml(cspSource: string): string {
 <section id="extensionPane">
 
 <h2>Game folder</h2>
-<p class="hint">The Victoria 2 install: the folder holding <code>mod/</code>, <code>common/</code> and <code>map/</code>. Leave empty to detect it above the workspace folder. Mods are read on top of the game files they do not <code>replace_path</code>. Stored in your user settings (<code>victorianTools.gamePath</code>).</p>
+<p class="hint">The Victoria 2 install: the folder holding <code>mod/</code>, <code>common/</code> and <code>map/</code>. Leave empty to detect it above the workspace. (<code>victorianTools.gamePath</code>)</p>
 <div class="field">
   <input id="gamePath" type="text" placeholder="Detected automatically" spellcheck="false">
   <button id="browse">Browse…</button>
@@ -174,7 +174,7 @@ export function settingsHtml(cspSource: string): string {
 <div id="gameStatus" class="status"></div>
 
 <h2>Skip-validation marker</h2>
-<p class="hint">Write this on a line and every finding on it is silenced. Make it a comment so the game ignores it: <code>prestige = 5 #VT - Skip Validation</code>. Matched anywhere in the line, case-insensitively, and it silences every rule &mdash; syntax, structure, semantics, the map CSVs and cross-file duplicates. It is literal text, not a regular expression. Leave empty to turn the escape hatch off. Stored in the workspace settings (<code>victorianTools.ignoreMarker</code>).</p>
+<p class="hint">Every finding on a line containing this text is silenced. Write it as a comment so the game ignores it: <code>prestige = 5 #VT - Skip Validation</code>. Literal text, matched anywhere in the line, case-insensitively. Empty turns it off. (<code>victorianTools.ignoreMarker</code>)</p>
 <div class="field">
   <input id="ignoreMarker" type="text" placeholder="Empty: no line can be silenced" spellcheck="false">
   <button id="ignoreDefault" class="secondary">Default</button>
@@ -183,7 +183,7 @@ export function settingsHtml(cspSource: string): string {
 <div id="ignoreStatus" class="status"></div>
 
 <h2>Map Editor: Country Colors tint</h2>
-<p class="hint">How much of each province's colour comes from its owner's <code>color</code> when the <b>Country Colors</b> layer is on; the rest is the province's own <code>definition.csv</code> colour, which keeps neighbours apart. <code>100</code> paints every province of a country the same; <code>0</code> shows the plain map. Stored in your user settings (<code>victorianTools.mapEditor.countryColorsTint</code>); the default is <code>82</code>.</p>
+<p class="hint">How much of a province's colour comes from its owner when the <b>Country Colors</b> layer is on. <code>0</code> shows the plain map; <code>100</code> paints a whole country alike. Default <code>82</code>. (<code>victorianTools.mapEditor.countryColorsTint</code>)</p>
 <div class="field">
   <input id="tint" type="range" min="0" max="100" step="1">
   <span id="tintValue" class="value"></span>
@@ -191,7 +191,7 @@ export function settingsHtml(cspSource: string): string {
 </div>
 
 <h2>Mods and submods</h2>
-<p class="hint">Nothing needs ticking for everyday work: every mod is read on top of the game files it does not <code>replace_path</code>, and a submod on top of the mods it depends on. Tick mods here only to work on them <b>together</b>: the ticked mods and their dependencies then form one stack, in load order, for validation and for the full report. Any combination is allowed, as in the launcher. Stored in the workspace settings (<code>victorianTools.activeMods</code>). <a id="refresh" href="#">Refresh</a> after adding or editing a <code>.mod</code> file outside the workspace.</p>
+<p class="hint">Nothing needs ticking: every mod is already read on top of the game files and its dependencies. Tick mods only to work on them <b>together</b>, as one stack in load order. <a id="refresh" href="#">Refresh</a> after editing a <code>.mod</code> file outside the workspace. (<code>victorianTools.activeMods</code>)</p>
 <div id="mods"></div>
 <div id="order" class="order"></div>
 
@@ -200,7 +200,7 @@ export function settingsHtml(cspSource: string): string {
 <section id="patternsPane" hidden>
 
 <h2>Localisation key pattern</h2>
-<p class="hint">A regular expression deciding which <code>title</code>, <code>desc</code> and <code>name</code> values are localisation keys. A value that does not match is treated as literal display text and is never reported as a missing key, so <code>desc = "Death of Dom Pedro II"</code> stays silent while <code>desc = "EVTDESC48300"</code> is still checked against <code>localisation/</code>. Leave empty to check every value. Stored in the workspace settings (<code>victorianTools.localisation.keyPattern</code>); the default is <code>^EVT</code>.</p>
+<p class="hint">Which <code>title</code>, <code>desc</code> and <code>name</code> values are localisation keys. A value that does not match is literal display text and is never reported as missing. Empty checks every value. Default <code>^EVT</code>. (<code>victorianTools.localisation.keyPattern</code>)</p>
 <div class="field">
   <input id="locPattern" type="text" placeholder="Empty: check every value" spellcheck="false">
   <button id="locDefault" class="secondary">Default</button>
@@ -209,7 +209,7 @@ export function settingsHtml(cspSource: string): string {
 <div id="locStatus" class="status"></div>
 
 <h2>Flag name pattern</h2>
-<p class="hint">A regular expression narrowing the never-set flag check. A <code>has_country_flag</code> or <code>has_global_flag</code> value whose name does not match is never reported as checked-but-never-set, which exempts flags the mod sets outside the files the index reads. Leave empty to check every flag. Stored in the workspace settings (<code>victorianTools.flags.namePattern</code>); the default is empty.</p>
+<p class="hint">Which flags the never-set check applies to. A flag whose name does not match is exempt &mdash; for flags the mod sets outside the indexed files. Empty checks every flag. (<code>victorianTools.flags.namePattern</code>)</p>
 <div class="field">
   <input id="flagPattern" type="text" placeholder="Empty: check every flag" spellcheck="false">
   <button id="flagDefault" class="secondary">Default</button>
@@ -218,7 +218,7 @@ export function settingsHtml(cspSource: string): string {
 <div id="flagStatus" class="status"></div>
 
 <h2>Null TAG exception</h2>
-<p class="hint">A regular expression matching the tags a script uses to mean <i>no country</i>. A country value that matches becomes a warning instead of an unknown-tag error, so <code>war = { target = --- }</code> and <code>secede_province = QQQ</code> stay legible while a genuine typo is still an error. Matched case-insensitively. Leave empty to allow no exception: every unknown tag is then an error. Stored in the workspace settings (<code>victorianTools.nullTags.pattern</code>).</p>
+<p class="hint">Tags a script uses to mean <i>no country</i>. A country value that matches is a warning instead of an unknown-tag error, so <code>secede_province = QQQ</code> stays legible while a typo does not. Case-insensitive. Empty: every unknown tag is an error. (<code>victorianTools.nullTags.pattern</code>)</p>
 <div class="field">
   <input id="nullTagPattern" type="text" placeholder="Empty: no exception" spellcheck="false">
   <button id="nullTagDefault" class="secondary">Default</button>
@@ -226,10 +226,10 @@ export function settingsHtml(cspSource: string): string {
 </div>
 <div id="nullTagStatus" class="status"></div>
 <label class="check"><input type="checkbox" id="nullTagSuppress"> Suppress Null tag warnings</label>
-<p class="hint">On by default: a tag the pattern above matches is reported nowhere at all &mdash; no <code>null-country-tag</code>, no <code>war = { target = --- }</code> exploit note, and no <code>uncolonize-province</code> for <code>secede_province = QQQ</code>. A script that writes a null tag wrote it on purpose. Turn it off to audit those spots. A tag the pattern does <i>not</i> match is untouched: <code>secede_province = ZZZ</code> still warns, and an unknown tag elsewhere is still an error (<code>victorianTools.nullTags.suppressWarnings</code>).</p>
+<p class="hint">On by default: a tag the pattern above matches is not reported at all. Turn it off to audit those spots. A tag it does <i>not</i> match is untouched &mdash; <code>secede_province = ZZZ</code> still warns. (<code>victorianTools.nullTags.suppressWarnings</code>)</p>
 
 <h2>Map Editor: province folder pattern</h2>
-<p class="hint">A regular expression narrowing which subfolders of <code>history/provinces</code> hold the mod's real province files. Matched against the subfolder alone &mdash; <code>middle earth</code>, <code>usa</code>, or empty for files sitting directly in <code>history/provinces</code> &mdash; case-insensitively, so <code>^middle</code> keeps <code>middle earth</code> and drops the rest. Made for total conversions mods. (<code>victorianTools.mapEditor.provinceFolderPattern</code>).</p>
+<p class="hint">Which subfolders of <code>history/provinces</code> hold the real province files. Matched against the subfolder name alone, case-insensitively, so <code>^middle</code> keeps <code>middle earth</code>. Made for total conversions. Empty uses every folder. (<code>victorianTools.mapEditor.provinceFolderPattern</code>)</p>
 <div class="field">
   <input id="provinceFolderPattern" type="text" placeholder="Empty: every folder under history/provinces" spellcheck="false">
   <button id="provinceFolderDefault" class="secondary">Default</button>
