@@ -42,6 +42,33 @@ async function waitForDiagnostics(
   return vscode.languages.getDiagnostics(uri);
 }
 
+/**
+ * Snippets answer from the first keystroke, so an empty list is no signal: wait
+ * for the wanted label, which only the index-backed server can produce.
+ */
+async function waitForCompletion(
+  uri: vscode.Uri,
+  position: vscode.Position,
+  label: string,
+  timeoutMs: number,
+): Promise<readonly string[]> {
+  const deadline = Date.now() + timeoutMs;
+  let labels: readonly string[] = [];
+  while (Date.now() < deadline) {
+    const list = await vscode.commands.executeCommand<vscode.CompletionList>(
+      'vscode.executeCompletionItemProvider',
+      uri,
+      position,
+    );
+    labels = list.items.map((item) => (typeof item.label === 'string' ? item.label : item.label.label));
+    if (labels.includes(label)) {
+      return labels;
+    }
+    await delay(200);
+  }
+  return labels;
+}
+
 suite('Victorian Tools — integration', () => {
   suiteSetup(async () => {
     const extension = vscode.extensions.getExtension(EXTENSION_ID);
@@ -225,6 +252,41 @@ suite('Victorian Tools — integration', () => {
       codes.includes('unknown-country'),
       `expected unknown-country, got: [${codes.join(', ')}]`,
     );
+  });
+
+  test('completes a modifier value from the mod index', async function (this: Mocha.Context): Promise<void> {
+    this.timeout(20000);
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'vic2comp-'));
+    fs.mkdirSync(path.join(directory, 'common'));
+    fs.writeFileSync(
+      path.join(directory, 'common', 'countries.txt'),
+      'ENG = "countries/England.txt"\n',
+      'utf8',
+    );
+    fs.writeFileSync(
+      path.join(directory, 'common', 'event_modifiers.txt'),
+      'a_completed_modifier = { icon = 1 }\n',
+      'utf8',
+    );
+    const eventsDirectory = path.join(directory, 'events');
+    fs.mkdirSync(eventsDirectory);
+    const filePath = path.join(eventsDirectory, 'completion_event.txt');
+    const text =
+      'country_event = {\n  id = 1\n  title = "t"\n  desc = "d"\n  is_triggered_only = yes\n' +
+      '  immediate = { add_country_modifier = { name = ';
+    fs.writeFileSync(filePath, `${text} duration = 30 } }\n}\n`, 'utf8');
+
+    const uri = vscode.Uri.file(filePath);
+    const document = await vscode.workspace.openTextDocument(uri);
+    await vscode.window.showTextDocument(document);
+
+    const labels = await waitForCompletion(
+      uri,
+      document.positionAt(text.length),
+      'a_completed_modifier',
+      15000,
+    );
+    assert.ok(labels.includes('a_completed_modifier'), `got: [${labels.slice(0, 20).join(', ')}]`);
   });
 
   test('publishes a semantic diagnostic for a bad TAG in history/diplomacy', async function (this: Mocha.Context): Promise<void> {

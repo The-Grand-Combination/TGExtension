@@ -20,6 +20,7 @@ export interface DuplicateIdentifier {
 }
 
 export interface LocKeyDefinition {
+  readonly name: string;
   readonly filePath: string;
   readonly line: number;
   readonly length: number;

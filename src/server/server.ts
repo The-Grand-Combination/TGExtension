@@ -1,15 +1,21 @@
 import * as path from 'node:path';
 import {
   createConnection,
+  CompletionItemKind,
+  InsertTextFormat,
+  MarkupKind,
   ProposedFeatures,
   TextDocuments,
   TextDocumentSyncKind,
+  type CompletionItem,
+  type CompletionList,
   type Connection,
   type HandlerResult,
   type InitializeParams,
   type InitializeResult,
   type Location,
   type Position,
+  type Range as LspRange,
   type WorkspaceFoldersChangeEvent,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -100,6 +106,7 @@ import {
 } from '../services/modLayout.js';
 import { pictureHoverAt, pictureHoverMarkdown, type PictureHover } from '../services/pictureHover.js';
 import { resolveKeyAt, symbolHoverMarkdown } from '../services/symbolHover.js';
+import { completionsAt, type CompletionEntry, type CompletionKind } from '../services/completion.js';
 import { BoundedCache } from '../services/boundedCache.js';
 import { MapEditorHandlers } from '../services/mapEditorHandlers.js';
 import { ModCache, type ModContext } from '../services/modCache.js';
@@ -223,6 +230,8 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
       textDocumentSync: TextDocumentSyncKind.Incremental,
       definitionProvider: true,
       hoverProvider: true,
+      // '=' and ' ' are what open the list on `key = ` before anything is typed.
+      completionProvider: { triggerCharacters: ['=', ' '], resolveProvider: false },
       ...(supportsWorkspaceFolders ? { workspace: { workspaceFolders: { supported: true } } } : {}),
     },
   };
@@ -712,6 +721,52 @@ function hoverResult(
       start: document.positionAt(tokenRange.start),
       end: document.positionAt(tokenRange.end),
     },
+  };
+}
+
+const COMPLETION_ITEM_KINDS: Readonly<Record<CompletionKind, CompletionItemKind>> = {
+  value: CompletionItemKind.Value,
+  trigger: CompletionItemKind.Function,
+  effect: CompletionItemKind.Function,
+  scope: CompletionItemKind.Module,
+  field: CompletionItemKind.Property,
+};
+
+connection.onCompletion((params): CompletionList | null => {
+  const document = documents.get(params.textDocument.uri);
+  const modContext = document ? contextForUri(document.uri) : undefined;
+  if (!document || !modContext?.index) {
+    return null;
+  }
+  const result = completionsAt(
+    document.getText(),
+    document.offsetAt(params.position),
+    classifyFile(modContext.relativePath),
+    modContext.index,
+  );
+  if (!result) {
+    return null;
+  }
+  const range: LspRange = {
+    start: document.positionAt(result.range.start),
+    end: document.positionAt(result.range.end),
+  };
+  return {
+    isIncomplete: result.incomplete,
+    items: result.entries.map((entry) => completionItem(entry, range)),
+  };
+});
+
+function completionItem(entry: CompletionEntry, range: LspRange): CompletionItem {
+  return {
+    label: entry.label,
+    kind: COMPLETION_ITEM_KINDS[entry.kind],
+    detail: entry.detail,
+    ...(entry.documentation === undefined
+      ? {}
+      : { documentation: { kind: MarkupKind.Markdown, value: entry.documentation } }),
+    textEdit: { range, newText: entry.insertText },
+    insertTextFormat: entry.snippet ? InsertTextFormat.Snippet : InsertTextFormat.PlainText,
   };
 }
 

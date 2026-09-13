@@ -154,7 +154,8 @@
     },
     "configurationDefaults": {
       "[victoria2]": {
-        "files.encoding": "windows1252"
+        "files.encoding": "windows1252",
+        "editor.wordBasedSuggestions": "off"
       },
       "[victoria2-csv]": {
         "files.encoding": "windows1252"

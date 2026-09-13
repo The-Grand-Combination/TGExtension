@@ -92,6 +92,9 @@ way.
   - `fullReport.ts` + `reportText.ts` — the whole-mod scan and its plain-text rendering.
   - `symbolHover.ts`, `locDefinition.ts`, `pictureHover.ts`, `pictureDecoder.ts` — hover markdown
     and go-to-definition support (see [hover-and-highlighting.md](hover-and-highlighting.md)).
+  - `completion.ts`, `completionContext.ts`, `completionScope.ts` — the suggestion list: where the
+    cursor is (from the token stream), what scope it sits in, and the values or keys valid there
+    (see [completion.md](completion.md)).
   - `suggestions.ts` — banded Levenshtein "did you mean" suggestions used throughout diagnostics.
   - `scheduling.ts` — `yieldToEventLoop`, the pause between steps of the long-running services.
 - **Parser** (`src/parser/lexer.ts`, `parser.ts`, `csv.ts`) — tokenize then parse Paradox script

@@ -30,6 +30,12 @@ Only localisation keys are currently resolvable: the word/string under the curso
 against `locKeyDefinitions`, and the editor jumps to that key's line in its `localisation/*.csv`
 file.
 
+## Completion
+
+The same datasets answer the suggestion list (`connection.onCompletion`); see
+[completion.md](completion.md). Word-based suggestions are turned off for the `victoria2` language
+so the list holds only what the server offers and the snippets below.
+
 ## Snippets
 
 Both languages also get a set of snippets (`contributes.snippets`); see

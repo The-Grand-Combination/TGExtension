@@ -354,7 +354,8 @@ function enterScopeChanger(
   return true;
 }
 
-function resolveProduces(changer: ScopeChangerDef, scope: ScopeType): ScopeType {
+/** The scope a changer produces from the one it is used in. */
+export function resolveProduces(changer: ScopeChangerDef, scope: ScopeType): ScopeType {
   if (typeof changer.produces === 'string') {
     return changer.produces;
   }
@@ -406,7 +407,7 @@ function checkSymbol(
 
 // Exact check: the datasets carry the engine's full per-symbol scope sets
 // (including its internal fallbacks), so no blanket fallback applies here.
-function scopeAllowed(requirement: ScopeRequirement, scope: ScopeType): boolean {
+export function scopeAllowed(requirement: ScopeRequirement, scope: ScopeType): boolean {
   return requirement.includes('any') || requirement.includes(scope);
 }
 

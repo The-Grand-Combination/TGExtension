@@ -47,6 +47,8 @@ is treated as a genuine mod bug, not as a reason to widen a rule.
   what triggers it.
 - [hover-and-highlighting.md](hover-and-highlighting.md) — hover tooltips, go-to-definition, syntax
   highlighting, and the CSV language.
+- [completion.md](completion.md) — what the suggestion list holds at each position: the values an
+  argument accepts, the keys valid in the scope, and where each list comes from.
 - [snippets.md](snippets.md) — every snippet prefix the extension contributes, for script files
   and for localisation CSVs.
 

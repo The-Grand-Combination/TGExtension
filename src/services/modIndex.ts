@@ -403,6 +403,7 @@ function localisationDefinitions(provider: ModFileProvider): Map<string, LocKeyD
       const keyLower = key.toLowerCase();
       if (key !== '' && !definitions.has(keyLower)) {
         definitions.set(keyLower, {
+          name: key,
           filePath,
           line: row.line,
           length: key.length,
