@@ -8,6 +8,7 @@ import {
   DEFAULT_LOC_KEY_PATTERN,
   DEFAULT_IGNORE_MARKER,
   DEFAULT_NULL_TAG_PATTERN,
+  DEFAULT_SUPPRESS_NULL_TAG_WARNINGS,
 } from '../model/validationOptions.js';
 import { DEFAULT_CODEPAGE } from '../io/textCodec.js';
 import { DEFAULT_COUNTRY_COLORS_TINT, DEFAULT_PROVINCE_FOLDER_PATTERN } from '../model/mapEditor.js';
@@ -122,6 +123,7 @@ suite('Victorian Tools — integration', () => {
       [SETTING.locKeyPattern]: DEFAULT_LOC_KEY_PATTERN,
       [SETTING.flagNamePattern]: DEFAULT_FLAG_NAME_PATTERN,
       [SETTING.nullTagPattern]: DEFAULT_NULL_TAG_PATTERN,
+      [SETTING.nullTagSuppress]: DEFAULT_SUPPRESS_NULL_TAG_WARNINGS,
       [SETTING.ignoreMarker]: DEFAULT_IGNORE_MARKER,
       [SETTING.countryColorsTint]: DEFAULT_COUNTRY_COLORS_TINT,
       [SETTING.provinceFolderPattern]: DEFAULT_PROVINCE_FOLDER_PATTERN,

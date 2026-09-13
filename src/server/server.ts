@@ -142,23 +142,31 @@ interface CompiledOptions {
 
 function compile(source: ServerConfig): CompiledOptions {
   return {
-    sources: patternSourcesOf(source),
+    sources: optionSourcesOf(source),
     options: {
       locKeyPattern: compilePattern(source.locKeyPattern),
       flagNamePattern: compilePattern(source.flagNamePattern),
       nullTagPattern: compilePattern(source.nullTagPattern, NULL_TAG_FLAGS),
+      suppressNullTagWarnings: source.nullTagSuppressWarnings,
       ignoreMarker: source.ignoreMarker,
     },
   };
 }
 
-function patternSourcesOf(source: ServerConfig): readonly string[] {
-  return [source.locKeyPattern, source.flagNamePattern, source.nullTagPattern, source.ignoreMarker];
+/** What the compiled options were built from; a change to any of them recompiles. */
+function optionSourcesOf(source: ServerConfig): readonly string[] {
+  return [
+    source.locKeyPattern,
+    source.flagNamePattern,
+    source.nullTagPattern,
+    String(source.nullTagSuppressWarnings),
+    source.ignoreMarker,
+  ];
 }
 
 /** The validation options of the current configuration; the regexes are compiled once per change. */
 function validationOptions(): ValidationOptions {
-  const sources = patternSourcesOf(config);
+  const sources = optionSourcesOf(config);
   if (sources.some((source, position) => source !== compiled.sources[position])) {
     compiled = compile(config);
   }

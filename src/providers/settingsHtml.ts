@@ -30,6 +30,8 @@ export interface SettingsState {
   readonly flagNamePattern: string;
   /** `victorianTools.nullTags.pattern`; empty means no tag is treated as null. */
   readonly nullTagPattern: string;
+  /** `victorianTools.nullTags.suppressWarnings`; on means those tags say nothing at all. */
+  readonly nullTagSuppress: boolean;
   /** `victorianTools.ignoreMarker`; empty means no line can be silenced. */
   readonly ignoreMarker: string;
   /** `victorianTools.mapEditor.provinceFolderPattern`; empty means every subfolder is used. */
@@ -45,6 +47,7 @@ export interface CurrentSettings {
   readonly locKeyPattern: string;
   readonly flagNamePattern: string;
   readonly nullTagPattern: string;
+  readonly nullTagSuppress: boolean;
   readonly ignoreMarker: string;
   readonly provinceFolderPattern: string;
   readonly countryColorsTint: number;
@@ -64,6 +67,7 @@ export function settingsState(installed: ModsResult, current: CurrentSettings): 
     locKeyPattern: current.locKeyPattern,
     flagNamePattern: current.flagNamePattern,
     nullTagPattern: current.nullTagPattern,
+    nullTagSuppress: current.nullTagSuppress,
     ignoreMarker: current.ignoreMarker,
     provinceFolderPattern: current.provinceFolderPattern,
     countryColorsTint: current.countryColorsTint,
@@ -219,6 +223,8 @@ export function settingsHtml(cspSource: string): string {
   <button id="nullTagSave" class="secondary">Save</button>
 </div>
 <div id="nullTagStatus" class="status"></div>
+<label class="check"><input type="checkbox" id="nullTagSuppress"> Suppress Null tag warnings</label>
+<p class="hint">On by default: a tag the pattern above matches is reported nowhere at all &mdash; no <code>null-country-tag</code>, no <code>war = { target = --- }</code> exploit note, and no <code>uncolonize-province</code> for <code>secede_province = QQQ</code>. A script that writes a null tag wrote it on purpose. Turn it off to audit those spots. A tag the pattern does <i>not</i> match is untouched: <code>secede_province = ZZZ</code> still warns, and an unknown tag elsewhere is still an error (<code>victorianTools.nullTags.suppressWarnings</code>).</p>
 
 <h2>Map Editor: province folder pattern</h2>
 <p class="hint">A regular expression narrowing which subfolders of <code>history/provinces</code> hold the mod's real province files. Matched against the subfolder alone &mdash; <code>middle earth</code>, <code>usa</code>, or empty for files sitting directly in <code>history/provinces</code> &mdash; case-insensitively, so <code>^middle</code> keeps <code>middle earth</code> and drops the rest. Made for total conversions mods. (<code>victorianTools.mapEditor.provinceFolderPattern</code>).</p>
@@ -409,6 +415,12 @@ export function settingsHtml(cspSource: string): string {
   gamePath.addEventListener('keydown', (event) => { if (event.key === 'Enter') vscode.postMessage({ type: 'gamePath', value: gamePath.value }); });
   document.getElementById('refresh').addEventListener('click', (event) => { event.preventDefault(); vscode.postMessage({ type: 'refresh' }); });
 
+  const nullTagSuppress = document.getElementById('nullTagSuppress');
+  nullTagSuppress.addEventListener('change', () => vscode.postMessage({ type: 'nullTagSuppress', value: nullTagSuppress.checked }));
+  function renderNullTagSuppress(value) {
+    if (document.activeElement !== nullTagSuppress) nullTagSuppress.checked = value;
+  }
+
   const tint = document.getElementById('tint');
   const tintValue = document.getElementById('tintValue');
   const showTint = () => { tintValue.textContent = tint.value + '%'; };
@@ -428,6 +440,7 @@ export function settingsHtml(cspSource: string): string {
       renderLocPattern(state.locKeyPattern);
       renderFlagPattern(state.flagNamePattern);
       renderNullTagPattern(state.nullTagPattern);
+      renderNullTagSuppress(state.nullTagSuppress);
       renderProvinceFolderPattern(state.provinceFolderPattern);
       renderIgnoreMarker(state.ignoreMarker);
       renderTint(state.countryColorsTint);

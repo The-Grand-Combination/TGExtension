@@ -14,6 +14,7 @@ export const SETTING = {
   locKeyPattern: 'localisation.keyPattern',
   flagNamePattern: 'flags.namePattern',
   nullTagPattern: 'nullTags.pattern',
+  nullTagSuppress: 'nullTags.suppressWarnings',
   countryColorsTint: 'mapEditor.countryColorsTint',
   provinceFolderPattern: 'mapEditor.provinceFolderPattern',
   validationEnabled: 'validation.enable',

@@ -4,6 +4,7 @@ import {
   DEFAULT_LOC_KEY_PATTERN,
   DEFAULT_IGNORE_MARKER,
   DEFAULT_NULL_TAG_PATTERN,
+  DEFAULT_SUPPRESS_NULL_TAG_WARNINGS,
 } from '../model/validationOptions.js';
 import { DEFAULT_PROVINCE_FOLDER_PATTERN } from '../model/mapEditor.js';
 import { SETTING, SETTINGS_SECTION, type SettingKey } from '../model/settingsKeys.js';
@@ -30,6 +31,8 @@ export interface ServerConfig {
   readonly flagNamePattern: string;
   /** Regex source of the tags meaning "no country"; empty allows no exception. */
   readonly nullTagPattern: string;
+  /** Whether a tag the pattern calls null is reported at all; on by default. */
+  readonly nullTagSuppressWarnings: boolean;
   /** Regex source narrowing which `history/provinces` subfolders the Map Editor sees; empty sees all. */
   readonly provinceFolderPattern: string;
   /** A line carrying this marker is not reported; empty turns the escape hatch off. */
@@ -47,6 +50,7 @@ export const DEFAULT_CONFIG: ServerConfig = {
   locKeyPattern: DEFAULT_LOC_KEY_PATTERN,
   flagNamePattern: DEFAULT_FLAG_NAME_PATTERN,
   nullTagPattern: DEFAULT_NULL_TAG_PATTERN,
+  nullTagSuppressWarnings: DEFAULT_SUPPRESS_NULL_TAG_WARNINGS,
   provinceFolderPattern: DEFAULT_PROVINCE_FOLDER_PATTERN,
   ignoreMarker: DEFAULT_IGNORE_MARKER,
 };
@@ -80,6 +84,10 @@ export function readServerConfig(configuration: unknown): ServerConfig {
     locKeyPattern: readPattern(at(root, SETTING.locKeyPattern), DEFAULT_LOC_KEY_PATTERN),
     flagNamePattern: readPattern(at(root, SETTING.flagNamePattern), DEFAULT_FLAG_NAME_PATTERN),
     nullTagPattern: readPattern(at(root, SETTING.nullTagPattern), DEFAULT_NULL_TAG_PATTERN),
+    nullTagSuppressWarnings: readBoolean(
+      at(root, SETTING.nullTagSuppress),
+      DEFAULT_CONFIG.nullTagSuppressWarnings,
+    ),
     provinceFolderPattern: readPattern(at(root, SETTING.provinceFolderPattern), DEFAULT_PROVINCE_FOLDER_PATTERN),
     ignoreMarker: readPattern(at(root, SETTING.ignoreMarker), DEFAULT_IGNORE_MARKER),
   };
@@ -127,6 +135,7 @@ export function configEquals(left: ServerConfig, right: ServerConfig): boolean {
     left.locKeyPattern === right.locKeyPattern &&
     left.flagNamePattern === right.flagNamePattern &&
     left.nullTagPattern === right.nullTagPattern &&
+    left.nullTagSuppressWarnings === right.nullTagSuppressWarnings &&
     left.ignoreMarker === right.ignoreMarker &&
     layoutConfigEquals(left, right)
   );

@@ -9,6 +9,7 @@ import {
   readIgnoreMarker,
   readLocKeyPattern,
   readNullTagPattern,
+  readNullTagSuppress,
   readProvinceFolderPattern,
   writeActiveMods,
   writeCountryColorsTint,
@@ -17,6 +18,7 @@ import {
   writeIgnoreMarker,
   writeLocKeyPattern,
   writeNullTagPattern,
+  writeNullTagSuppress,
   writeProvinceFolderPattern,
 } from '../config.js';
 import { LAYOUT_CHANGED_NOTIFICATION, MODS_REQUEST, type ModsResult } from '../model/modDescriptor.js';
@@ -30,6 +32,7 @@ type SettingsMessage =
   | { readonly type: 'locKeyPattern'; readonly value: string }
   | { readonly type: 'flagNamePattern'; readonly value: string }
   | { readonly type: 'nullTagPattern'; readonly value: string }
+  | { readonly type: 'nullTagSuppress'; readonly value: boolean }
   | { readonly type: 'ignoreMarker'; readonly value: string }
   | { readonly type: 'provinceFolderPattern'; readonly value: string }
   | { readonly type: 'countryColorsTint'; readonly value: number }
@@ -124,6 +127,9 @@ export class SettingsPanel implements vscode.Disposable {
       case 'nullTagPattern':
         await writeNullTagPattern(parsed.value);
         return;
+      case 'nullTagSuppress':
+        await writeNullTagSuppress(parsed.value);
+        return;
       case 'ignoreMarker':
         await writeIgnoreMarker(parsed.value);
         return;
@@ -166,6 +172,7 @@ export class SettingsPanel implements vscode.Disposable {
       locKeyPattern: readLocKeyPattern(),
       flagNamePattern: readFlagNamePattern(),
       nullTagPattern: readNullTagPattern(),
+      nullTagSuppress: readNullTagSuppress(),
       ignoreMarker: readIgnoreMarker(),
       provinceFolderPattern: readProvinceFolderPattern(),
       countryColorsTint: readCountryColorsTint(),
@@ -190,6 +197,8 @@ function asMessage(message: unknown): SettingsMessage | undefined {
     case 'ignoreMarker':
     case 'provinceFolderPattern':
       return typeof record['value'] === 'string' ? { type: record['type'], value: record['value'] } : undefined;
+    case 'nullTagSuppress':
+      return typeof record['value'] === 'boolean' ? { type: 'nullTagSuppress', value: record['value'] } : undefined;
     case 'countryColorsTint':
       return asTintMessage(record['value']);
     case 'select':

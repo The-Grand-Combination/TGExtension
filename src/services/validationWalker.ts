@@ -238,6 +238,11 @@ function reportUncolonize(walk: Walk, assignment: Assignment): boolean {
   if (!explicit && !undefinedTag) {
     return false;
   }
+  // Handled, not skipped: returning false would send a silenced null tag on to
+  // the country check, which reports it as an unknown tag — louder than before.
+  if (explicit && walk.options.suppressNullTagWarnings) {
+    return true;
+  }
   const message = explicit
     ? `'secede_province = ${raw}' uncolonizes the province (it goes to no one). This may crash the game.`
     : `'${raw}' is not a defined country tag, so secede_province uncolonizes the province instead (it goes to no one). This may crash the game.`;
@@ -478,6 +483,11 @@ function reportScalarMismatch(
   // it appears, not an unknown-tag error. Positions where it is a known engine
   // exploit carry their own note (`war = { target = --- }`).
   if (categories.includes('country') && isNullTag(walk, raw)) {
+    // Returning, not falling through: an unknown-tag error is not what
+    // "suppress the warnings" asked for.
+    if (walk.options.suppressNullTagWarnings) {
+      return;
+    }
     const exploit = spec.nullTagNote;
     walk.diagnostics.push(
       diagnostic(

@@ -2,7 +2,7 @@
   "name": "victorian-tools",
   "displayName": "Victorian Tools",
   "description": "Tooling for Victoria 2 mod files: a language server that parses Paradox script and validates it inline.",
-  "version": "4.5.2",
+  "version": "4.6.0",
   "publisher": "TGCModdingTeam",
   "private": true,
   "license": "MIT",
@@ -201,6 +201,11 @@
       "type": "string",
       "default": "^(QQQ|---|null)$",
       "markdownDescription": "Regular expression matching the tags a script uses to mean *no country*. A country value that matches is reported as a warning (`null-country-tag`) instead of an unknown-tag error, so `war = { target = --- }` and `secede_province = QQQ` stay legible. Matched case-insensitively. Leave empty to allow no exception: every unknown tag is then an error."
+    },
+    "victorianTools.nullTags.suppressWarnings": {
+      "type": "boolean",
+      "default": true,
+      "markdownDescription": "Report nothing at all for a tag `victorianTools.nullTags.pattern` matches: `null-country-tag`, `null-tag-exploit` and the `uncolonize-province` warning for `secede_province = QQQ` all go quiet. On by default, because a script that writes a null tag wrote it on purpose. Turn it off to audit those spots. A tag the pattern does **not** match is unaffected — `secede_province = ZZZ` still warns, and an unknown tag elsewhere is still an error — and with an empty pattern this setting does nothing, since nothing is a null tag."
     },
     "victorianTools.ignoreMarker": {
       "type": "string",

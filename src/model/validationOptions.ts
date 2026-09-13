@@ -18,6 +18,13 @@ export interface ValidationOptions {
    */
   readonly nullTagPattern: RegExp | undefined;
   /**
+   * Whether a null tag is reported at all. The pattern above says what counts as
+   * one; this says whether those are worth a warning, and by default they are
+   * not: a mod uncolonizing by hand would read the same warning a hundred times.
+   * A tag the pattern does not match is untouched: that one is not deliberate.
+   */
+  readonly suppressNullTagWarnings: boolean;
+  /**
    * A marker a modder writes on a line to silence every finding on it. Matched
    * case-insensitively anywhere in the line; empty turns the escape hatch off.
    */
@@ -36,6 +43,13 @@ export const DEFAULT_NULL_TAG_PATTERN = '^(QQQ|---|null)$';
 /** Null tags are written in any case, so the pattern is matched case-insensitively. */
 export const NULL_TAG_FLAGS = 'i';
 
+/**
+ * Mirrors the manifest default of `victorianTools.nullTags.suppressWarnings`: on,
+ * because a mod that writes a null tag wrote it on purpose. Turning it off brings
+ * the warnings back for someone auditing those spots.
+ */
+export const DEFAULT_SUPPRESS_NULL_TAG_WARNINGS = true;
+
 /** Mirrors the manifest default of `victorianTools.ignoreMarker`. */
 export const DEFAULT_IGNORE_MARKER = '#VT - Skip Validation';
 
@@ -43,6 +57,7 @@ export const DEFAULT_VALIDATION_OPTIONS: ValidationOptions = {
   locKeyPattern: new RegExp(DEFAULT_LOC_KEY_PATTERN),
   flagNamePattern: undefined,
   nullTagPattern: new RegExp(DEFAULT_NULL_TAG_PATTERN, NULL_TAG_FLAGS),
+  suppressNullTagWarnings: DEFAULT_SUPPRESS_NULL_TAG_WARNINGS,
   ignoreMarker: DEFAULT_IGNORE_MARKER,
 };
 

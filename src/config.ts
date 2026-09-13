@@ -4,6 +4,7 @@ import {
   DEFAULT_LOC_KEY_PATTERN,
   DEFAULT_IGNORE_MARKER,
   DEFAULT_NULL_TAG_PATTERN,
+  DEFAULT_SUPPRESS_NULL_TAG_WARNINGS,
 } from './model/validationOptions.js';
 import { DEFAULT_COUNTRY_COLORS_TINT, DEFAULT_PROVINCE_FOLDER_PATTERN } from './model/mapEditor.js';
 import { qualifiedSettingKey, SETTING, SETTINGS_SECTION } from './model/settingsKeys.js';
@@ -78,6 +79,19 @@ export function writeNullTagPattern(pattern: string): Thenable<void> {
 }
 
 /**
+ * Whether the tags that pattern matches are reported at all, as stored in
+ * `victorianTools.nullTags.suppressWarnings`. On by default.
+ */
+export function readNullTagSuppress(): boolean {
+  const value = vscode.workspace.getConfiguration(SETTINGS_SECTION).get<unknown>(SETTING.nullTagSuppress);
+  return typeof value === 'boolean' ? value : DEFAULT_SUPPRESS_NULL_TAG_WARNINGS;
+}
+
+export function writeNullTagSuppress(suppress: boolean): Thenable<void> {
+  return vscode.workspace.getConfiguration(SETTINGS_SECTION).update(SETTING.nullTagSuppress, suppress, patternTarget());
+}
+
+/**
  * The marker that silences a line, as stored in `victorianTools.ignoreMarker`.
  * Empty turns the escape hatch off. Never trimmed: trailing space is part of it
  * if the user typed it.
@@ -130,7 +144,7 @@ export function affectsCountryColorsTint(event: vscode.ConfigurationChangeEvent)
 
 /** True when a configuration change touches anything the settings page shows. */
 export function affectsSettingsPage(event: vscode.ConfigurationChangeEvent): boolean {
-  const keys = [SETTING.activeMods, SETTING.gamePath, SETTING.locKeyPattern, SETTING.flagNamePattern, SETTING.nullTagPattern, SETTING.ignoreMarker, SETTING.countryColorsTint, SETTING.provinceFolderPattern];
+  const keys = [SETTING.activeMods, SETTING.gamePath, SETTING.locKeyPattern, SETTING.flagNamePattern, SETTING.nullTagPattern, SETTING.nullTagSuppress, SETTING.ignoreMarker, SETTING.countryColorsTint, SETTING.provinceFolderPattern];
   return keys.some((key) => event.affectsConfiguration(qualifiedSettingKey(key)));
 }
 
