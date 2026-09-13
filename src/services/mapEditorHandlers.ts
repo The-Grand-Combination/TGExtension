@@ -39,6 +39,7 @@ import { isInsideRoot, type FileLocation } from './modLayout.js';
 import {
   filterHistoryFolders,
   findHistoryFile,
+  historyFolderOf,
   historyFoldersOf,
   parseProvinceHistory,
   provinceIdOfHistoryFile,
@@ -151,6 +152,8 @@ export class MapEditorHandlers {
   private readonly positionsByLayers = new Map<string, Promise<PositionsFile | undefined>>();
   /** `<layers key>` → start-date owners and country colours, for the page's Country Colors layer. */
   private readonly countryColorsByLayers = new Map<string, Promise<MapCountryColorsResult>>();
+  /** `<layers key>` → the `history/provinces` walk, which every click and every save would otherwise repeat. */
+  private readonly historyFilesByLayers = new Map<string, HistoryFiles>();
 
   constructor(private readonly host: MapEditorHost) {}
 
@@ -161,6 +164,7 @@ export class MapEditorHandlers {
     this.pictureByPath.clear();
     this.positionsByLayers.clear();
     this.countryColorsByLayers.clear();
+    this.historyFilesByLayers.clear();
   }
 
   async map(params: MapEditorTargetParams): Promise<MapEditorMapResult> {
@@ -553,10 +557,9 @@ export class MapEditorHandlers {
     const key = provinceLocKey(params.provinceId);
     // The only free text a save carries. Asking first turns what would be a
     // silent mangling into a reason the page can show.
-    const codepage = this.host.codepage();
-    const stray = unrepresentableIn(text, codepage);
+    const stray = this.codepageReason(text);
     if (stray !== undefined) {
-      return { ok: false, reason: `'${stray}' cannot be stored in ${codepage}; the game reads this mod one byte per character.` };
+      return { ok: false, reason: stray };
     }
     const written = await this.writeLocalisation(target, key, text);
     if (written === undefined) {
@@ -576,6 +579,29 @@ export class MapEditorHandlers {
   }
 
   /** Patch the key where the target defines it, else add it to the target's province file. */
+  /** The message for a character the mod's code page cannot store, or undefined when it can store them all. */
+  private codepageReason(text: string): string | undefined {
+    const codepage = this.host.codepage();
+    const stray = unrepresentableIn(text, codepage);
+    return stray === undefined
+      ? undefined
+      : `'${stray}' cannot be stored in ${codepage}; the game reads this mod one byte per character.`;
+  }
+
+  /**
+   * Write, or the reason it could not. The code page is asked before the write
+   * and not after: a character with no byte in it and a broken disk both come
+   * back from `writeText` as false, and "could not be written" tells a mod
+   * author nothing they can act on.
+   */
+  private async write(absolutePath: string, text: string, subject: string): Promise<string | undefined> {
+    const stray = this.codepageReason(text);
+    if (stray !== undefined) {
+      return stray;
+    }
+    return (await this.host.writeText(absolutePath, text)) ? undefined : `${subject} could not be written.`;
+  }
+
   private async writeLocalisation(target: Target, key: string, text: string): Promise<FileRef | undefined> {
     const current = this.readLocalisation(target, Number(key.slice('PROV'.length)));
     const absolutePath =
@@ -618,7 +644,25 @@ export class MapEditorHandlers {
       return undefined;
     }
     const destination = path.join(path.dirname(current), wanted);
-    return (await this.host.rename(current, destination)) ? destination : undefined;
+    if (!(await this.host.rename(current, destination))) {
+      return undefined;
+    }
+    // The file the kept walk names is gone.
+    this.forgetHistoryFiles(target.layers);
+    return destination;
+  }
+
+  /**
+   * The history file of the province that the folder pattern hides, if there is
+   * one. A save must stop there: with no file in sight it would create a second
+   * one for the same id, which the game loads as well as the first.
+   */
+  private hiddenHistoryFile(layers: ModLayers, provinceId: number): string | undefined {
+    if (this.host.historyFolderPattern() === undefined) {
+      return undefined;
+    }
+    const cached = this.historyFilesByLayers.get(layers.key);
+    return findHistoryFile(cached?.all ?? this.listRecursive(layers, PROVINCES_FOLDER), provinceId);
   }
 
   private async saveHistory(
@@ -640,16 +684,23 @@ export class MapEditorHandlers {
       destination = isInsideRoot(target.root, source) ? source : path.join(target.root, relativePath);
       updated = applyPatches(text, patches);
     } else {
+      const hidden = this.hiddenHistoryFile(target.layers, params.provinceId);
+      if (hidden !== undefined) {
+        return { ok: false, reason: hiddenHistoryReason(hidden, params.provinceId) };
+      }
       const details = await this.details(target, params.provinceId, params.popDate);
       const name = details.localisation.text !== '' ? details.localisation.text : details.definitionName;
       destination = path.join(target.root, PROVINCES_FOLDER, createInFolder ?? '', historyFileNameFor(params.provinceId, name));
       updated = renderProvinceHistory(data);
     }
-    if (!(await this.host.writeText(destination, updated))) {
-      return { ok: false, reason: 'The history file could not be written.' };
+    const failed = await this.write(destination, updated, 'The history file');
+    if (failed !== undefined) {
+      return { ok: false, reason: failed };
     }
     // The owner may have changed, so the Country Colors layer is read again.
     this.countryColorsByLayers.delete(target.layers.key);
+    // A save may have created the file, which the kept walk does not have.
+    this.forgetHistoryFiles(target.layers);
     return { ok: true, written: [destination], details: await this.details(target, params.provinceId, params.popDate) };
   }
 
@@ -676,8 +727,9 @@ export class MapEditorHandlers {
     if (updated === text) {
       return { ok: true, written: [], details: await this.details(target, provinceId, popDate) };
     }
-    if (!(await this.host.writeText(destination, updated))) {
-      return { ok: false, reason: 'The pops file could not be written.' };
+    const failed = await this.write(destination, updated, 'The pops file');
+    if (failed !== undefined) {
+      return { ok: false, reason: failed };
     }
     this.popsFilesByDate.delete(`${target.layers.key}#${popDate}`);
     return { ok: true, written: [destination], details: await this.details(target, provinceId, popDate) };
@@ -693,8 +745,9 @@ export class MapEditorHandlers {
       return { ok: true, written: [], details: await this.details(target, provinceId, popDate) };
     }
     const destination = file && isInsideRoot(target.root, file.absolutePath) ? file.absolutePath : path.join(target.root, POSITIONS_FILE);
-    if (!(await this.host.writeText(destination, updated))) {
-      return { ok: false, reason: 'map/positions.txt could not be written.' };
+    const failed = await this.write(destination, updated, 'map/positions.txt');
+    if (failed !== undefined) {
+      return { ok: false, reason: failed };
     }
     this.positionsByLayers.delete(target.layers.key);
     return { ok: true, written: [destination], details: await this.details(target, provinceId, popDate) };
@@ -713,11 +766,41 @@ export class MapEditorHandlers {
   /**
    * The province history files the editor works with: every one, unless the mod
    * narrows them to certain subfolders. The pattern is read per call, so a change
-   * to the setting takes effect without a restart.
+   * to the setting takes effect without a restart; the walk behind it is kept,
+   * because a mod of this size has thousands of files there and every click asks
+   * again. `invalidate` drops it when the files change on disk.
    */
-  private provinceHistoryFiles(layers: ModLayers): string[] {
-    return filterHistoryFolders(this.listRecursive(layers, PROVINCES_FOLDER), this.host.historyFolderPattern());
+  private provinceHistoryFiles(layers: ModLayers): readonly string[] {
+    const pattern = this.host.historyFolderPattern();
+    const cached = this.historyFilesByLayers.get(layers.key);
+    if (cached && cached.source === pattern?.source) {
+      return cached.narrowed;
+    }
+    const all = cached?.all ?? this.listRecursive(layers, PROVINCES_FOLDER);
+    const narrowed = filterHistoryFolders(all, pattern);
+    this.historyFilesByLayers.set(layers.key, { all, source: pattern?.source, narrowed });
+    return narrowed;
   }
+
+  /** A history file was written or renamed, so the kept walk no longer describes the folder. */
+  private forgetHistoryFiles(layers: ModLayers): void {
+    this.historyFilesByLayers.delete(layers.key);
+  }
+}
+
+/** A kept `history/provinces` walk and the view of it the current pattern gives. */
+interface HistoryFiles {
+  readonly all: readonly string[];
+  /** Source of the pattern `narrowed` was filtered with; undefined when there was none. */
+  readonly source: string | undefined;
+  readonly narrowed: readonly string[];
+}
+
+/** Why a save stops when the only history file of a province sits outside the pattern. */
+function hiddenHistoryReason(relativePath: string, provinceId: number): string {
+  const folder = historyFolderOf(relativePath);
+  const where = folder === '' ? 'directly in history/provinces' : `in '${folder}'`;
+  return `Province ${String(provinceId)} already has a history file ${where}, which the province folder pattern hides. Widen victorianTools.mapEditor.provinceFolderPattern to edit that file.`;
 }
 
 function withTxt(fileName: string): string {

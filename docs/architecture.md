@@ -282,9 +282,11 @@ Settings are declared under `contributes.configuration` in `package.json` and re
 through `serverConfig.ts`, which pulls the whole `victorianTools` section with
 `connection.workspace.getConfiguration` and narrows it defensively: the value arrives as `unknown`,
 every field falls back to the manifest default, and the two delays are clamped, so a hand-edited
-`settings.json` cannot make the server spin or hang. `configEquals` skips the revalidation pass when
-a configuration change did not actually touch these values. An integration test asserts the manifest
-defaults and `DEFAULT_CONFIG` agree.
+`settings.json` cannot make the server spin or hang. `configChange` sorts what came back into the
+work it implies: `none` skips the revalidation pass entirely, `other` revalidates the open documents,
+`layout` re-reads the install and the mod selection, and `recoded` — a changed code page — also
+rebuilds the indexes, which hold decoded text that no layer key describes. An integration test
+asserts the manifest defaults and `DEFAULT_CONFIG` agree.
 
 | Setting | Default | Effect |
 |---|---|---|

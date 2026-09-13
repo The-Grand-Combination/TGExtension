@@ -7,7 +7,13 @@ import { findModRoot } from '../../io/modFiles.js';
 import { ModCache } from '../../services/modCache.js';
 import { layersOf, singleRootLayers } from '../../services/modLayers.js';
 import { isInsideRoot, relativeToRoot, type FileLocation } from '../../services/modLayout.js';
-import { configEquals, DEFAULT_CONFIG, layoutConfigEquals, readServerConfig } from '../../server/serverConfig.js';
+import {
+  configChange,
+  configEquals,
+  DEFAULT_CONFIG,
+  layoutConfigEquals,
+  readServerConfig,
+} from '../../server/serverConfig.js';
 import type { ModIndex } from '../../model/modIndex.js';
 import { duplicateDiagnosticsByFile, duplicateDiagnosticsFor } from '../../services/duplicateDiagnostics.js';
 import { buildTestIndex } from './testIndex.js';
@@ -191,6 +197,17 @@ suite('modCache — location and index caching', () => {
     assert.deepStrictEqual(builds, [layersA.key, layersA.key]);
   });
 
+  test('resetLocations keeps the indexes, which is why a new code page has to refresh them', async () => {
+    const { cache, builds } = newCache();
+    await cache.ensureIndex(layersA);
+    cache.resetLocations();
+    await cache.ensureIndex(layersA);
+    assert.deepStrictEqual(builds, [layersA.key], 'a plain layout change reuses an identical stack');
+    cache.refresh(cache.knownLayers());
+    await cache.ensureIndex(layersA);
+    assert.deepStrictEqual(builds, [layersA.key, layersA.key], 'only refresh reads the files again');
+  });
+
   test('a refresh during a build runs the build again, so no change is missed', async () => {
     const { cache, builds, built, gates } = newCache({ gated: true });
     const pending = cache.ensureIndex(layersA);
@@ -324,12 +341,28 @@ suite('serverConfig', () => {
     assert.strictEqual(readServerConfig({ encoding: 7 }).encoding, 'windows-1252');
   });
 
-  test('a new code page is a layout change, so the index is rebuilt instead of reused', () => {
+  test('a new code page is a layout change, so the layers are read again', () => {
     const latin = readServerConfig({});
     const cyrillic = readServerConfig({ encoding: 'windows-1251' });
     assert.ok(!configEquals(latin, cyrillic));
     assert.ok(!layoutConfigEquals(latin, cyrillic), 'the index holds already-decoded text');
     assert.ok(layoutConfigEquals(cyrillic, readServerConfig({ encoding: 'windows-1251' })));
+  });
+
+  test('a code page change is told apart from every other layout change', () => {
+    const latin = readServerConfig({});
+    const cyrillic = readServerConfig({ encoding: 'windows-1251' });
+    assert.strictEqual(configChange(latin, latin), 'none');
+    // Reloading the layout is not enough here: the roots are the same, so every
+    // index would be reused, holding text decoded with the page just replaced.
+    assert.strictEqual(configChange(latin, cyrillic), 'recoded');
+    assert.strictEqual(configChange(cyrillic, latin), 'recoded');
+    assert.strictEqual(configChange(latin, readServerConfig({ gamePath: 'F:/game' })), 'layout');
+    assert.strictEqual(
+      configChange(latin, readServerConfig({ mapEditor: { provinceFolderPattern: '^middle' } })),
+      'layout',
+    );
+    assert.strictEqual(configChange(latin, readServerConfig({ ignoreMarker: '# skip' })), 'other');
   });
 
   test('the localisation key pattern falls back to the manifest default, and an empty one is kept', () => {

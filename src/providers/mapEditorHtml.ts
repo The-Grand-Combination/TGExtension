@@ -45,17 +45,19 @@ ${PAGE_STYLE}
   <div id="mapArea">
     <canvas id="canvas"></canvas>
     <div id="tooltip" hidden></div>
-    <div id="layers">
-      <label><input type="checkbox" id="layerCountry"> Country Colors</label>
-      <label><input type="checkbox" id="layerRivers"> Show Rivers</label>
-      <label><input type="checkbox" id="layerPositions" checked> Positions</label>
-      <div class="actions">
-        <button id="fitButton" class="secondary" title="Fit the whole map in the view">Fit</button>
-        <button id="reloadButton" class="secondary" title="Re-read the map and the mod files">Reload</button>
-      </div>
-      <div class="find">
-        <input id="goto" type="text" spellcheck="false" placeholder="id or name" title="Center the map on a province: its id, or a name from definition.csv">
-        <button id="gotoButton" class="secondary">Go</button>
+    <div id="mapControls">
+      <div id="layers">
+        <label><input type="checkbox" id="layerCountry"> Country Colors</label>
+        <label><input type="checkbox" id="layerRivers"> Show Rivers</label>
+        <label><input type="checkbox" id="layerPositions" checked> Positions</label>
+        <div class="actions">
+          <button id="fitButton" class="secondary" title="Fit the whole map in the view">Fit</button>
+          <button id="reloadButton" class="secondary" title="Re-read the map and the mod files">Reload</button>
+        </div>
+        <div class="find">
+          <input id="goto" type="text" spellcheck="false" placeholder="id or name" title="Center the map on a province: its id, or a name from definition.csv">
+          <button id="gotoButton" class="secondary">Go</button>
+        </div>
       </div>
       <button id="saveAllButton" title="Write every province whose positions were moved and not saved" hidden></button>
     </div>
@@ -95,7 +97,11 @@ const PAGE_STYLE = String.raw`
   #tooltip { position: absolute; pointer-events: none; padding: 2px 6px; background: var(--vscode-editorHoverWidget-background, #252526); color: var(--vscode-editorHoverWidget-foreground, #ccc); border: 1px solid var(--vscode-editorHoverWidget-border, #454545); border-radius: 3px; font-size: 0.9em; white-space: nowrap; }
   #loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #ccc; font-size: 1.1em; background: rgba(0, 0, 0, 0.55); }
   #loading[hidden], #tooltip[hidden] { display: none; }
-  #layers { position: absolute; left: 10px; bottom: 10px; display: flex; flex-direction: column; gap: 4px; padding: 6px 10px; background: rgba(30, 30, 30, 0.6); color: #eee; border-radius: 4px; font-size: 0.9em; user-select: none; }
+  /* The overlay controls sit bottom-left. Save all is a sibling of the options
+     box rather than a child of it: its label carries a province count, and a
+     child that wide would stretch the box every time the count changed. */
+  #mapControls { position: absolute; left: 10px; bottom: 10px; display: flex; align-items: flex-end; gap: 8px; max-width: calc(100% - 20px); user-select: none; }
+  #layers { flex: none; display: flex; flex-direction: column; gap: 4px; padding: 6px 10px; background: rgba(30, 30, 30, 0.6); color: #eee; border-radius: 4px; font-size: 0.9em; }
   #layers label { display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
   #layers input { margin: 0; }
   #layers .actions { display: flex; gap: 6px; margin-top: 4px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.15); }
@@ -133,8 +139,8 @@ const PAGE_STYLE = String.raw`
   #layers .find { display: flex; gap: 6px; margin-top: 4px; }
   #layers .find input { flex: 1; width: 92px; min-width: 0; }
   #layers .find button { flex: none; padding: 2px 8px; }
-  #layers #saveAllButton { margin-top: 6px; padding: 3px 8px; }
-  #layers #saveAllButton[hidden] { display: none; }
+  #saveAllButton { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
+  #saveAllButton[hidden] { display: none; }
   button { padding: 3px 10px; background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius: 2px; cursor: pointer; font-family: inherit; font-size: inherit; white-space: nowrap; }
   button:hover { background: var(--vscode-button-hoverBackground); }
   button:disabled { opacity: 0.5; cursor: default; }

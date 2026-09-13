@@ -12,9 +12,11 @@ code page, and no file can mix them.
 | `windows-1252` (default) | English, French, German, Spanish, Italian |
 | `windows-1251` | Russian |
 
-Changing it re-reads every file: the mod index holds text that is already decoded, so the setting is
-treated as a layout change (`layoutConfigEquals` in `server/serverConfig.ts`) and goes through the
-same `applyLayout` path as picking a different mod.
+Changing it re-reads every file. The mod index holds text that is already decoded, and a layer set is
+identified by its roots, so nothing about a cached index says which code page built it: reloading the
+layout alone would hand back the very text the new setting is meant to replace. `configChange`
+(`server/serverConfig.ts`) therefore reports this one change as `recoded`, and `applyLayout` rebuilds
+every index it holds instead of reusing the ones whose roots did not move.
 
 ## Where it applies
 
@@ -32,8 +34,10 @@ bijections, so `encodeText(decodeText(bytes))` returns the original bytes and ed
 
 **A character the code page cannot hold is refused, never mangled.** `writeModFileText` encodes
 first and returns `false` without writing when a character has no byte, so a refused save leaves the
-file exactly as it was. The Map Editor asks `unrepresentableIn` before writing a province name, so
-the page shows *which* character is the problem instead of "could not be written".
+file exactly as it was. That leaves `false` meaning two things, a full disk and an impossible
+character, so the Map Editor asks `unrepresentableIn` before every save it makes — a name, a history
+file, a pops file, positions — and the page names *which* character is the problem instead of saying
+"could not be written".
 
 ## The editor tab is a separate decode
 

@@ -104,10 +104,10 @@ import { BoundedCache } from '../services/boundedCache.js';
 import { MapEditorHandlers } from '../services/mapEditorHandlers.js';
 import { ModCache, type ModContext } from '../services/modCache.js';
 import {
-  configEquals,
+  configChange,
   DEFAULT_CONFIG,
   fetchServerConfig,
-  layoutConfigEquals,
+  type ConfigChange,
   type ServerConfig,
 } from './serverConfig.js';
 import { toLspDiagnostics } from './toLspDiagnostic.js';
@@ -121,7 +121,7 @@ let compiled = compile(config);
 /**
  * Text I/O bound to the mod's code page. These read `config` on every call
  * rather than closing over a value: the setting changes while the server runs,
- * and `applyLayout` re-reads everything when it does.
+ * and `applyLayout(true)` re-reads everything when it does.
  */
 function readText(absolutePath: string): string | undefined {
   return readModFile(absolutePath, config.encoding);
@@ -279,29 +279,31 @@ function warmIndexes(): void {
 
 connection.onDidChangeConfiguration(() => {
   void refreshConfiguration().then((change) => {
-    if (change === 'layout') {
-      applyLayout();
-    } else if (change === 'other') {
+    if (change === 'other') {
       validateAllOpen();
+    } else if (change !== 'none') {
+      applyLayout(change === 'recoded');
     }
   });
 });
 
-async function refreshConfiguration(): Promise<'none' | 'other' | 'layout'> {
+async function refreshConfiguration(): Promise<ConfigChange> {
   const next = await fetchServerConfig(connection);
-  if (configEquals(config, next)) {
-    return 'none';
-  }
-  const layoutChanged = !layoutConfigEquals(config, next);
+  const change = configChange(config, next);
   config = next;
-  return layoutChanged ? 'layout' : 'other';
+  return change;
 }
 
 /** Re-read the install and the selection, then index and revalidate with the new layers. */
-function applyLayout(): void {
+function applyLayout(recoded = false): void {
   layout = loadLayout();
   logLayout();
   modCache.resetLocations();
+  if (recoded) {
+    // Locations are dropped above, but the indexes are not: they hold decoded
+    // text, and only a rebuild reads the files again under the new code page.
+    modCache.refresh(modCache.knownLayers());
+  }
   mapEditor.invalidate();
   warmIndexes();
   validateAllOpen();

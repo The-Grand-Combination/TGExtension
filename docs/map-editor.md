@@ -123,6 +123,11 @@ save patches, the **Folder** list offered when a province has no history file ye
 **Country Colors** layer paints. A pattern matching no folder at all therefore leaves the editor
 believing no province has a history file, and every save offers to create one.
 
+A save is the one place that looks past the pattern. Before it creates a file it checks the folders
+the pattern hides as well, and refuses when the id already has one there, naming the folder: two
+files for the same id is something the game loads twice, and a pattern that is narrower than the mod
+is a typo worth hearing about rather than a second file to clean up later.
+
 Editable from the **Regex Patterns** tab of the **Victorian Tools Settings** page, which compiles
 what is typed and says what it will do before it is saved. Changing it re-reads the mod stack, so an
 open Map Editor redraws on its own.

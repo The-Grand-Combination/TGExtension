@@ -35,8 +35,8 @@ export function encodeText(text: string, codepage: Codepage): Uint8Array | undef
   const table = tableFor(codepage);
   const bytes = new Uint8Array(text.length);
   for (let index = 0; index < text.length; index += 1) {
-    const byte = table.get(text.charAt(index));
-    if (byte === undefined) {
+    const byte = table[text.charCodeAt(index)] ?? NO_BYTE;
+    if (byte === NO_BYTE) {
       return undefined;
     }
     bytes[index] = byte;
@@ -47,12 +47,13 @@ export function encodeText(text: string, codepage: Codepage): Uint8Array | undef
 /**
  * The first character `codepage` cannot store, for an error message. Iterates by
  * code point, so an astral character is reported whole rather than as half of a
- * surrogate pair.
+ * surrogate pair — its leading surrogate has no byte either, which is what makes
+ * looking only at the first code unit enough.
  */
 export function unrepresentableIn(text: string, codepage: Codepage): string | undefined {
   const table = tableFor(codepage);
   for (const character of text) {
-    if (!table.has(character)) {
+    if ((table[character.charCodeAt(0)] ?? NO_BYTE) === NO_BYTE) {
       return character;
     }
   }
@@ -62,8 +63,11 @@ export function unrepresentableIn(text: string, codepage: Codepage): string | un
 // `TextDecoder` is a global value here, not a type name; this keeps the module import-free.
 type Decoder = InstanceType<typeof TextDecoder>;
 
+/** Table entry for a character this code page cannot store; a real byte is 0..255. */
+const NO_BYTE = -1;
+
 const decoders = new Map<Codepage, Decoder>();
-const tables = new Map<Codepage, ReadonlyMap<string, number>>();
+const tables = new Map<Codepage, Int16Array>();
 
 function decoderFor(codepage: Codepage): Decoder {
   const existing = decoders.get(codepage);
@@ -81,16 +85,22 @@ function decoderFor(codepage: Codepage): Decoder {
  * Character → byte, built by decoding every byte once. Deriving the table from
  * the decoder is the point: the two directions cannot drift apart, and there is
  * no `TextEncoder` for anything but UTF-8 to derive it from instead.
+ *
+ * It is an array indexed by UTF-16 code unit rather than a map keyed by the
+ * character: encoding runs over every code unit of a file that can be hundreds
+ * of kilobytes, and an index into a typed array costs neither the one-character
+ * string a lookup by key would allocate nor the hash. Every character of both
+ * code pages is in the basic plane, so a code unit identifies one.
  */
-function tableFor(codepage: Codepage): ReadonlyMap<string, number> {
+function tableFor(codepage: Codepage): Int16Array {
   const existing = tables.get(codepage);
   if (existing) {
     return existing;
   }
   const decoder = decoderFor(codepage);
-  const table = new Map<string, number>();
+  const table = new Int16Array(0x10000).fill(NO_BYTE);
   for (let byte = 0; byte < 256; byte += 1) {
-    table.set(decoder.decode(Uint8Array.of(byte)), byte);
+    table[decoder.decode(Uint8Array.of(byte)).charCodeAt(0)] = byte;
   }
   tables.set(codepage, table);
   return table;

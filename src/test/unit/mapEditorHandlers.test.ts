@@ -19,6 +19,8 @@ const NO_MOD = 'No mod to edit: pick a mod, or open a mod folder in the workspac
 interface Recorder {
   readonly host: MapEditorHost;
   readonly readTextPaths: string[];
+  /** One entry per recursive listing, to tell a kept walk from a repeated one. */
+  readonly walks: string[];
 }
 
 /**
@@ -31,6 +33,7 @@ function recordingHost(
   provinces: { readonly files?: readonly string[]; readonly pattern?: RegExp } = {},
 ): Recorder {
   const readTextPaths: string[] = [];
+  const walks: string[] = [];
   const host: MapEditorHost = {
     targets: (): readonly FileLocation[] => targets,
     modNameOf: (root: string): string => root,
@@ -39,8 +42,10 @@ function recordingHost(
     fileSystem: {
       fileExists: (): boolean => true,
       listFiles: (): string[] => [],
-      listFilesRecursive: (_root: string, relativeFolder: string): string[] =>
-        relativeFolder === 'history/provinces' ? [...(provinces.files ?? [])] : [],
+      listFilesRecursive: (_root: string, relativeFolder: string): string[] => {
+        walks.push(relativeFolder);
+        return relativeFolder === 'history/provinces' ? [...(provinces.files ?? [])] : [];
+      },
     },
     readText: (absolutePath: string): Promise<string | undefined> => {
       readTextPaths.push(absolutePath);
@@ -53,7 +58,7 @@ function recordingHost(
     codepage: (): Codepage => codepage,
     historyFolderPattern: (): RegExp | undefined => provinces.pattern,
   };
-  return { host, readTextPaths };
+  return { host, readTextPaths, walks };
 }
 
 const targetParams: MapEditorTargetParams = { workspaceFolders: [], mods: [] };
@@ -181,6 +186,46 @@ suite('MapEditorHandlers — narrowing the province history folders', () => {
     const { host } = recordingHost([TARGET], DEFAULT_CODEPAGE, { files: FILES, pattern: /^middle.*/i });
     const result = await new MapEditorHandlers(host).map(targetParams);
     assert.deepStrictEqual(result.kind === 'ready' ? result.historyFolders : undefined, ['middle earth']);
+  });
+
+  test('a save refuses to add a second file for an id whose only file the pattern hides', async () => {
+    const hiddenOnly = { files: ['history/provinces/africa/1 - Fez.txt'], pattern: /^middle/i };
+    const { host } = recordingHost([TARGET], DEFAULT_CODEPAGE, hiddenOnly);
+    const result = await new MapEditorHandlers(host).save(saveParams('history'));
+    assert.strictEqual(result.ok, false);
+    assert.ok(result.reason.includes("'africa'"), result.reason);
+    assert.ok(result.reason.includes('provinceFolderPattern'), result.reason);
+  });
+
+  test('with no pattern there is nothing hidden, so the same save creates the file', async () => {
+    const { host } = recordingHost([TARGET], DEFAULT_CODEPAGE, { files: [] });
+    assert.strictEqual((await new MapEditorHandlers(host).save(saveParams('history'))).ok, true);
+  });
+});
+
+suite('MapEditorHandlers — writing', () => {
+  test('a character the code page cannot store is named, in a history save as in a name', async () => {
+    const { host } = recordingHost([TARGET], 'windows-1252');
+    const flagged: SaveParams = { ...saveParams('history'), section: 'history', data: { ...EMPTY_HISTORY, setFlags: ['Москва'] }, createInFolder: undefined };
+    const result = await new MapEditorHandlers(host).save(flagged);
+    assert.strictEqual(result.ok, false);
+    assert.ok(result.reason.includes('М'), result.reason);
+    assert.ok(result.reason.includes('windows-1252'), result.reason);
+  });
+
+  test('the province history folder is walked once, and again after a save adds a file', async () => {
+    const { host, walks } = recordingHost([TARGET], DEFAULT_CODEPAGE, { files: [] });
+    const handlers = new MapEditorHandlers(host);
+    const province = { ...targetParams, provinceId: 1, popDate: '1836.1.1' };
+
+    await handlers.province(province);
+    await handlers.province(province);
+    const provinceWalks = (): number => walks.filter((folder) => folder === 'history/provinces').length;
+    assert.strictEqual(provinceWalks(), 1, 'a second click must reuse the walk');
+
+    assert.strictEqual((await handlers.save(saveParams('history'))).ok, true);
+    await handlers.province(province);
+    assert.ok(provinceWalks() > 1, 'the file the save created must be found');
   });
 });
 

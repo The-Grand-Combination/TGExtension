@@ -98,6 +98,26 @@ function at(root: Record<string, unknown> | undefined, key: SettingKey): unknown
   return value;
 }
 
+/** How much of the server a configuration change reaches; see `configChange`. */
+export type ConfigChange = 'none' | 'other' | 'layout' | 'recoded';
+
+/**
+ * What has to be redone for the new configuration. `recoded` is a layout change
+ * that also changed the code page, and it is worth telling apart: a layer set is
+ * identified by its roots, so nothing about a cached index says which code page
+ * its text was decoded with, and reloading the layout alone would hand every
+ * open document back the text read under the page that was just replaced.
+ */
+export function configChange(left: ServerConfig, right: ServerConfig): ConfigChange {
+  if (configEquals(left, right)) {
+    return 'none';
+  }
+  if (left.encoding !== right.encoding) {
+    return 'recoded';
+  }
+  return layoutConfigEquals(left, right) ? 'other' : 'layout';
+}
+
 export function configEquals(left: ServerConfig, right: ServerConfig): boolean {
   return (
     left.validationEnabled === right.validationEnabled &&
