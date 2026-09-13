@@ -317,6 +317,7 @@ suite('serverConfig', () => {
       locKeyPattern: '^EVT',
       flagNamePattern: '',
       nullTagPattern: '^(QQQ|---|null)$',
+      nullTagSuppressWarnings: true,
       provinceFolderPattern: '',
       ignoreMarker: '#VT - Skip Validation',
     });
@@ -370,6 +371,16 @@ suite('serverConfig', () => {
     assert.strictEqual(readServerConfig({ localisation: { keyPattern: '' } }).locKeyPattern, '');
     assert.strictEqual(readServerConfig({ localisation: { keyPattern: 7 } }).locKeyPattern, '^EVT');
     assert.strictEqual(readServerConfig({ localisation: { keyPattern: '^(EVT|DBG)' } }).locKeyPattern, '^(EVT|DBG)');
+  });
+
+  test('null tag warnings are suppressed by default, and turning them on is an "other" change', () => {
+    const quiet = readServerConfig({});
+    const loud = readServerConfig({ nullTags: { suppressWarnings: false } });
+    assert.strictEqual(quiet.nullTagSuppressWarnings, true);
+    assert.strictEqual(loud.nullTagSuppressWarnings, false);
+    assert.strictEqual(readServerConfig({ nullTags: { suppressWarnings: 'no' } }).nullTagSuppressWarnings, true);
+    // Nothing indexed depends on it, so the open documents are simply revalidated.
+    assert.strictEqual(configChange(quiet, loud), 'other');
   });
 
   test('the null tag pattern defaults to the three conventional spellings', () => {

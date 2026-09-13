@@ -7,9 +7,14 @@ import { buildTestIndex } from './testIndex.js';
 
 const index = buildTestIndex();
 
-function codes(text: string, fileType: FileType = 'event', currentFile = 'events/Test.txt'): string[] {
+function codes(
+  text: string,
+  fileType: FileType = 'event',
+  currentFile = 'events/Test.txt',
+  overrides?: ValidationOptions,
+): string[] {
   const { document } = parseDocument(text);
-  return validateSemantics(document, fileType, index, currentFile).map((item) => item.code);
+  return validateSemantics(document, fileType, index, currentFile, overrides).map((item) => item.code);
 }
 
 function eventWithTrigger(trigger: string): string {
@@ -23,6 +28,14 @@ function options(overrides: Partial<ValidationOptions>): ValidationOptions {
 
 function eventWithOption(effects: string): string {
   return `country_event = { id = 1 title = "t" desc = "d" is_triggered_only = yes option = { name = "o" ${effects} } }`;
+}
+
+/** Null tag warnings are off by default, so a rule about them has to ask for them. */
+const REPORTING_NULL_TAGS = options({ suppressNullTagWarnings: false });
+
+/** `codes` with those warnings turned back on. */
+function nullTagCodes(text: string, fileType: FileType = 'event', currentFile = 'events/Test.txt'): string[] {
+  return codes(text, fileType, currentFile, REPORTING_NULL_TAGS);
 }
 
 suite('validationWalker — trigger names and scopes', () => {
@@ -154,7 +167,7 @@ suite('validationWalker — effects', () => {
   test('secede_province to an undefined tag, null, or --- warns about uncolonizing', () => {
     for (const target of ['QQQ', 'null', '---']) {
       assert.deepStrictEqual(
-        codes(eventWithOption(`any_owned = { secede_province = ${target} }`)),
+        nullTagCodes(eventWithOption(`any_owned = { secede_province = ${target} }`)),
         ['uncolonize-province'],
         target,
       );
@@ -398,6 +411,7 @@ suite('validationWalker — null country tags', () => {
       'event',
       index,
       'events/Test.txt',
+      REPORTING_NULL_TAGS,
     );
     const first = found[0];
     assert.ok(first, 'expected a diagnostic');
@@ -413,13 +427,14 @@ suite('validationWalker — null country tags', () => {
       'event',
       index,
       'events/Test.txt',
+      REPORTING_NULL_TAGS,
     );
     assert.deepStrictEqual(found.map((item) => item.code), ['null-country-tag']);
   });
 
   test('the three conventional spellings are covered, in any case', () => {
     for (const tag of ['QQQ', 'qqq', '---', 'null', 'NULL']) {
-      assert.deepStrictEqual(codes(eventWithOption('war = ' + tag)), ['null-country-tag'], tag);
+      assert.deepStrictEqual(nullTagCodes(eventWithOption('war = ' + tag)), ['null-country-tag'], tag);
     }
   });
 
@@ -429,8 +444,8 @@ suite('validationWalker — null country tags', () => {
   });
 
   test('it applies in triggers and in block fields alike', () => {
-    assert.deepStrictEqual(codes(eventWithTrigger('tag = ---')), ['null-country-tag']);
-    assert.deepStrictEqual(codes(eventWithOption('relation = { who = --- value = -20 }')), ['null-country-tag']);
+    assert.deepStrictEqual(nullTagCodes(eventWithTrigger('tag = ---')), ['null-country-tag']);
+    assert.deepStrictEqual(nullTagCodes(eventWithOption('relation = { who = --- value = -20 }')), ['null-country-tag']);
   });
 
   test('an empty pattern allows no exception at all', () => {
@@ -445,11 +460,45 @@ suite('validationWalker — null country tags', () => {
   });
 
   test('secede_province keeps its own message about uncolonizing', () => {
-    assert.deepStrictEqual(codes(eventWithOption('any_owned = { secede_province = --- }')), ['uncolonize-province']);
+    assert.deepStrictEqual(
+      nullTagCodes(eventWithOption('any_owned = { secede_province = --- }')),
+      ['uncolonize-province'],
+    );
   });
 
   test('defined tags are unaffected', () => {
     assert.deepStrictEqual(codes(eventWithOption('war = FRA')), []);
+  });
+
+  test('by default the mod hears none of it: a null tag is silent everywhere', () => {
+    const war = 'war = { attacker_goal = { casus_belli = acquire_all_cores } call_ally = yes target = --- }';
+    for (const script of [
+      'war = ---',
+      war,
+      'add_casus_belli = { target = --- type = acquire_all_cores }',
+      'relation = { who = QQQ value = -20 }',
+      'any_owned = { secede_province = QQQ }',
+    ]) {
+      assert.deepStrictEqual(codes(eventWithOption(script)), [], script);
+    }
+    assert.deepStrictEqual(codes(eventWithTrigger('tag = ---')), []);
+  });
+
+  test('suppressing is not a mute button: a tag the pattern misses is still reported', () => {
+    // ZZZ is undefined, not null. secede_province keeps its own warning for it,
+    // and everywhere else it stays the error it always was.
+    assert.deepStrictEqual(codes(eventWithOption('any_owned = { secede_province = ZZZ }')), ['uncolonize-province']);
+    assert.deepStrictEqual(codes(eventWithOption('war = ZZZ')), ['unknown-country']);
+    assert.deepStrictEqual(codes(eventWithTrigger('tag = ZZZ')), ['unknown-country']);
+  });
+
+  test('with no pattern there is nothing to suppress, so unknown tags stay errors', () => {
+    const none = options({ nullTagPattern: undefined, suppressNullTagWarnings: true });
+    assert.deepStrictEqual(codes(eventWithOption('war = ---'), 'event', 'events/Test.txt', none), ['unknown-country']);
+    assert.deepStrictEqual(
+      codes(eventWithOption('any_owned = { secede_province = QQQ }'), 'event', 'events/Test.txt', none),
+      ['uncolonize-province'],
+    );
   });
 });
 

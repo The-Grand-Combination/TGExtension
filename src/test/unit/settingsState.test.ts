@@ -20,6 +20,7 @@ function current(
   ignoreMarker = '#VT - Skip Validation',
   countryColorsTint = 82,
   provinceFolderPattern = '',
+  nullTagSuppress = true,
 ): CurrentSettings {
   return {
     gamePathSetting,
@@ -27,6 +28,7 @@ function current(
     locKeyPattern,
     flagNamePattern,
     nullTagPattern,
+    nullTagSuppress,
     ignoreMarker,
     provinceFolderPattern,
     countryColorsTint,
@@ -95,12 +97,18 @@ suite('settingsState', () => {
     );
   });
 
+  test('the null tag suppression is carried through, and defaults to on', () => {
+    assert.strictEqual(settingsState({ gameRoot: 'F:/game', mods: [] }, current('', [])).nullTagSuppress, true);
+    const off = current('', [], '^EVT', '', '^(QQQ)$', '#VT - Skip Validation', 82, '', false);
+    assert.strictEqual(settingsState({ gameRoot: 'F:/game', mods: [] }, off).nullTagSuppress, false);
+  });
+
   test('every regex field sits in the Regex Patterns tab, and the rest in Extension', () => {
     const html = settingsHtml('vscode-webview:');
     const panes = html.split('<section id="patternsPane"');
     assert.strictEqual(panes.length, 2, 'the page has the two tab panes');
     const [extension, patterns] = panes as [string, string];
-    for (const id of ['locPattern', 'flagPattern', 'nullTagPattern', 'provinceFolderPattern']) {
+    for (const id of ['locPattern', 'flagPattern', 'nullTagPattern', 'nullTagSuppress', 'provinceFolderPattern']) {
       assert.ok(patterns.includes(`id="${id}"`), `${id} belongs to Regex Patterns`);
     }
     // The marker is literal text, not a regex, so it stays with the rest.

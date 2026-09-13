@@ -186,17 +186,16 @@ function asMessage(message: unknown): SettingsMessage | undefined {
   }
   // The page is ours, but its messages arrive untyped; every field is checked before use.
   const record = message as Record<string, unknown>;
-  switch (record['type']) {
+  const type = record['type'];
+  // The settings that are plain text share one shape, so they are checked once
+  // rather than as six more branches.
+  if (isTextMessage(type)) {
+    return typeof record['value'] === 'string' ? { type, value: record['value'] } : undefined;
+  }
+  switch (type) {
     case 'refresh':
     case 'browse':
-      return { type: record['type'] };
-    case 'gamePath':
-    case 'locKeyPattern':
-    case 'flagNamePattern':
-    case 'nullTagPattern':
-    case 'ignoreMarker':
-    case 'provinceFolderPattern':
-      return typeof record['value'] === 'string' ? { type: record['type'], value: record['value'] } : undefined;
+      return { type };
     case 'nullTagSuppress':
       return typeof record['value'] === 'boolean' ? { type: 'nullTagSuppress', value: record['value'] } : undefined;
     case 'countryColorsTint':
@@ -208,6 +207,20 @@ function asMessage(message: unknown): SettingsMessage | undefined {
     default:
       return undefined;
   }
+}
+
+/** The settings the page sends as a string; every one is written verbatim. */
+const TEXT_MESSAGES = [
+  'gamePath',
+  'locKeyPattern',
+  'flagNamePattern',
+  'nullTagPattern',
+  'ignoreMarker',
+  'provinceFolderPattern',
+] as const;
+
+function isTextMessage(type: unknown): type is (typeof TEXT_MESSAGES)[number] {
+  return typeof type === 'string' && (TEXT_MESSAGES as readonly string[]).includes(type);
 }
 
 function asTintMessage(value: unknown): SettingsMessage | undefined {

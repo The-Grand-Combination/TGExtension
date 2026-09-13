@@ -55,9 +55,16 @@ Used across every file type that walks triggers/effects/weight-blocks/field tabl
 | `unknown-<category>` | error | A scalar argument doesn't match any accepted identifier category (see the category list above); message names the category and suggests a close match. |
 | `unknown-event-id` | error | An `event`-typed scalar argument (not the block form) doesn't match any indexed event id. |
 | `broken-effect` | error | An effect the engine parses and accepts but does not run correctly (`BROKEN_EFFECTS` in `data/effects.ts`). Today that is `set_province_flag`. Reported in effect blocks and in province history, and the argument is not checked further. |
-| `null-country-tag` | warning | A country value is a null tag — one matching `victorianTools.nullTags.pattern`, by default `QQQ`, `---` or `null`. The script means "no country", so it is not the `unknown-country` error. A tag that is merely undefined still is. |
-| `null-tag-exploit` | warning | A null tag in a position where it is a known engine exploit rather than plain "no country". Today that is `war = { target = <null tag> }`, which tricks the AI into joining your war. The position declares the note in `data/effects.ts` (`exploitField`). |
-| `uncolonize-province` | warning | `secede_province` given a tag the mod never defines (`QQQ` by convention), `null`, or `---`: the province goes to no one and is uncolonized (NCE `annex_to_null_province`). A deliberate modding trick that can crash the game, so it is not the `unknown-country` error. |
+| `null-country-tag` | warning, off by default | A country value is a null tag — one matching `victorianTools.nullTags.pattern`, by default `QQQ`, `---` or `null`. The script means "no country", so it is not the `unknown-country` error. A tag that is merely undefined still is. |
+| `null-tag-exploit` | warning, off by default | A null tag in a position where it is a known engine exploit rather than plain "no country". Today that is `war = { target = <null tag> }`, which tricks the AI into joining your war. The position declares the note in `data/effects.ts` (`exploitField`). |
+| `uncolonize-province` | warning | `secede_province` given a tag the mod never defines (`QQQ` by convention), `null`, or `---`: the province goes to no one and is uncolonized (NCE `annex_to_null_province`). A deliberate modding trick that can crash the game, so it is not the `unknown-country` error. Off by default for a tag the null pattern matches; a merely undefined tag still warns. |
+
+The three rows marked *off by default* are the null-tag family, silenced by
+`victorianTools.nullTags.suppressWarnings` (on out of the box): a script that writes a null tag wrote
+it on purpose, and a mod that uncolonizes by hand would otherwise read the same warning hundreds of
+times. Untick **Suppress Null tag warnings** in the **Regex Patterns** tab to audit those spots. The
+suppression only covers what `victorianTools.nullTags.pattern` matches — nothing else goes quiet, and
+with an empty pattern it does nothing at all.
 | `expected-block` | error | A key that must hold `{ ... }` has a scalar instead (also reused by many per-file validators for the same purpose). |
 | `unknown-field` | error | A block field isn't in that block's known field table (generic; many validators reuse this exact code with a context-specific message). |
 | `missing-field` | error | A required block field is absent. |

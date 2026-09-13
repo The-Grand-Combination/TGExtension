@@ -2,14 +2,23 @@ import * as assert from 'node:assert';
 import type { FileType } from '../../model/fileType.js';
 import { validateSemantics } from '../../services/semanticValidation.js';
 import { parseDocument } from '../../services/syntaxValidation.js';
+import { DEFAULT_VALIDATION_OPTIONS, type ValidationOptions } from '../../model/validationOptions.js';
 import { buildTestIndex } from './testIndex.js';
 
 const index = buildTestIndex();
 
-function codes(text: string, fileType: FileType = 'event', currentFile = 'events/Test.txt'): string[] {
+function codes(
+  text: string,
+  fileType: FileType = 'event',
+  currentFile = 'events/Test.txt',
+  overrides?: ValidationOptions,
+): string[] {
   const { document } = parseDocument(text);
-  return validateSemantics(document, fileType, index, currentFile).map((item) => item.code);
+  return validateSemantics(document, fileType, index, currentFile, overrides).map((item) => item.code);
 }
+
+/** Null tag warnings are off by default, so a rule about them has to ask for them. */
+const REPORTING_NULL_TAGS: ValidationOptions = { ...DEFAULT_VALIDATION_OPTIONS, suppressNullTagWarnings: false };
 
 suite('historyValidation — history files', () => {
   test('country history: fields, reforms, techs, and dated blocks', () => {
@@ -43,8 +52,13 @@ suite('historyValidation — history files', () => {
   test('province history: --- and null mean no owner', () => {
     assert.deepStrictEqual(codes('owner = ---\ncontroller = ---', 'historyProvince', 'history/provinces/x.txt'), []);
     assert.deepStrictEqual(codes('owner = null', 'historyProvince', 'history/provinces/x.txt'), []);
-    // owner/controller take it silently; elsewhere a null tag is the warning, not an error.
-    assert.deepStrictEqual(codes('add_core = ---', 'historyProvince', 'history/provinces/x.txt'), ['null-country-tag']);
+    // owner/controller take it silently; elsewhere a null tag is the warning, not
+    // an error — and that warning is suppressed by default.
+    assert.deepStrictEqual(codes('add_core = ---', 'historyProvince', 'history/provinces/x.txt'), []);
+    assert.deepStrictEqual(
+      codes('add_core = ---', 'historyProvince', 'history/provinces/x.txt', REPORTING_NULL_TAGS),
+      ['null-country-tag'],
+    );
     assert.deepStrictEqual(codes('add_core = ZZZ', 'historyProvince', 'history/provinces/x.txt'), ['unknown-country']);
   });
 
@@ -83,7 +97,8 @@ suite('historyValidation — history files', () => {
       codes('1861.1.1 = { add_attacker = ZZZ }', 'historyWars', 'history/wars/x.txt').includes('unknown-country'),
     );
     assert.ok(
-      codes('1861.1.1 = { add_attacker = QQQ }', 'historyWars', 'history/wars/x.txt').includes('null-country-tag'),
+      codes('1861.1.1 = { add_attacker = QQQ }', 'historyWars', 'history/wars/x.txt', REPORTING_NULL_TAGS)
+        .includes('null-country-tag'),
     );
   });
 });
