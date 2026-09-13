@@ -1267,7 +1267,6 @@ function showTerrain(name: string): void {
 
 function renderDatalists(vocabulary: Vocabulary): void {
   const lists = [
-    { names: vocabulary.ideologies, id: 'dl-ideologies' },
     { names: vocabulary.buildings, id: 'dl-buildings' },
     { names: vocabulary.rebelTypes, id: 'dl-rebeltypes' },
   ];
@@ -1423,7 +1422,7 @@ function historyForm(current: ProvinceDetails, data: ProvinceHistory, topLevel: 
   // listed or not. A remove_core line already in the file rides along.
   const removeCores = topLevel ? null : listEditor('Remove cores', data.removeCores, vocabulary.countries, 'country');
   const buildings = rowsEditor('Buildings', data.buildings, [{ key: 'key', placeholder: 'building', listId: 'dl-buildings' }, { key: 'value', placeholder: 'level', type: 'number', extraClass: 'narrow' }], function () { return { key: '', value: '1' }; });
-  const partyLoyalty = rowsEditor('Party loyalty', data.partyLoyalty, [{ key: 'ideology', placeholder: 'ideology', listId: 'dl-ideologies' }, { key: 'loyaltyValue', placeholder: 'loyalty', type: 'number', extraClass: 'narrow' }], function () { return { ideology: '', loyaltyValue: '' }; });
+  const partyLoyalty = rowsEditor('Party loyalty', data.partyLoyalty, [{ key: 'ideology', placeholder: 'ideology', entries: vocabulary.ideologies }, { key: 'loyaltyValue', placeholder: 'loyalty', type: 'number', extraClass: 'narrow' }], function () { return { ideology: '', loyaltyValue: '' }; });
   const stateBuildings = rowsEditor('State buildings', data.stateBuildings, [{ key: 'building', placeholder: 'building', listId: 'dl-buildings' }, { key: 'level', placeholder: 'level', type: 'number', extraClass: 'narrow' }, { key: 'upgrade', placeholder: 'upgrade', type: 'text', extraClass: 'narrow' }], function () { return { building: '', level: '1', upgrade: 'yes' }; });
   const dated = topLevel ? datedEditor(current, data.dated) : null;
   const coresGroup = h('div', { class: 'form' }, cores.node, removeCores ? removeCores.node : null);

@@ -214,7 +214,7 @@ export interface Vocabulary {
   readonly cultures: readonly NamedIdentifier[];
   readonly religions: readonly NamedIdentifier[];
   readonly popTypes: readonly NamedIdentifier[];
-  readonly ideologies: readonly string[];
+  readonly ideologies: readonly NamedIdentifier[];
   readonly buildings: readonly string[];
   readonly rebelTypes: readonly string[];
 }

@@ -204,9 +204,9 @@ export const MODIFIER_KEYS: ReadonlySet<string> = new Set([
  * value completes the sentence after the key name.
  */
 export const BROKEN_MODIFIER_KEYS: Readonly<Record<string, string>> = {
-  rich_income_modifier: 'is read but never applied by the engine, so it has no effect.',
-  middle_income_modifier: 'is read but never applied by the engine, so it has no effect.',
-  poor_income_modifier: 'is read but never applied by the engine, so it has no effect.',
+  rich_income_modifier: 'does not actually work in vanilla Victoria II.',
+  middle_income_modifier: 'does not actually work in vanilla Victoria II.',
+  poor_income_modifier: 'does not actually work in vanilla Victoria II.',
 };
 
 /** Every tech folder in common/technology.txt grants this modifier key. */

@@ -66,9 +66,12 @@ the mountains texture.
 The side panel has five tabs: **Definition** (localisation, the history fields, party loyalty and
 cores), **Positions**, **Buildings**, **Extra Dates** and **Pops**. The three history tabs save the
 same history file, so a Save posts the whole form and the tabs never drift. Owner,
-controller, cores, trade goods, terrain, pop type, culture and religion are pick lists over the
-mod's identifiers, labelled with their localised names (`USA - United States of America`, `Grain`,
-`Urban (urban_fez)`); a value the mod does not define stays selectable so a save never drops it.
+controller, cores, trade goods, terrain, ideology, pop type, culture and religion are pick lists over
+the mod's identifiers. Owner, controller, cores, trade goods, terrain and ideology are labelled
+`identifier - localised name` (`USA - United States of America`, `grain - Grain`,
+`urban_fez - Urban`, `conservative - Conservative`), the identifier first because it is what the file
+holds and several of them can share one name; pop type, culture and religion carry the localised name
+alone. A value the mod does not define stays selectable so a save never drops it.
 
 The rows are drawn in the order the file stores them, which is how the game reads them: the map
 appears flipped vertically compared with an image editor. Hovering shows the id and the `definition.csv` name. The box in the bottom-left corner of the map
