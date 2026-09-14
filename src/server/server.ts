@@ -51,6 +51,7 @@ import {
 import {
   MAP_EDITOR_COUNTRY_COLORS_REQUEST,
   MAP_EDITOR_MAP_REQUEST,
+  MAP_EDITOR_NEW_PROVINCE_REQUEST,
   MAP_EDITOR_PAINT_REQUEST,
   MAP_EDITOR_POSITIONS_REQUEST,
   MAP_EDITOR_PROVINCE_REQUEST,
@@ -60,6 +61,7 @@ import {
   type MapCountryColorsResult,
   type MapEditorMapResult,
   type MapEditorTargetParams,
+  type NewProvinceParams,
   type PaintParams,
   type PaintResult,
   type MapPositionsResult,
@@ -869,6 +871,8 @@ onRequest(MAP_EDITOR_PROVINCE_REQUEST, (params: ProvinceRequestParams): Promise<
 onRequest(MAP_EDITOR_POSITIONS_REQUEST, (params: MapEditorTargetParams): Promise<MapPositionsResult> => mapEditor.positions(params));
 onRequest(MAP_EDITOR_COUNTRY_COLORS_REQUEST, (params: MapEditorTargetParams): Promise<MapCountryColorsResult> => mapEditor.countryColors(params));
 onRequest(MAP_EDITOR_TERRAIN_PICTURE_REQUEST, (params: TerrainPictureParams): Promise<TerrainPictureResult> => mapEditor.terrainPictureFor(params));
+onRequest(MAP_EDITOR_NEW_PROVINCE_REQUEST, (params: NewProvinceParams): Promise<ProvinceResult> => mapEditor.newProvince(params));
+
 onRequest(MAP_EDITOR_PAINT_REQUEST, async (params: PaintParams): Promise<PaintResult> => {
   const result = await mapEditor.paint(params);
   connection.console.log(

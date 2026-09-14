@@ -215,7 +215,11 @@ the page fetches and decodes `provinces.bmp` (and, for the Show Rivers layer, `r
 and tints it by owner in the browser. Saves are text patches
 computed by `vscode`-free services (`provinceLocEdit.ts`, `provinceHistoryEdit.ts`,
 `provincePopsEdit.ts`, `provincePositionsEdit.ts` over `textPatch.ts`) and
-written only into the top mod of the stack. Painting works the same way one level down:
+written only into the top mod of the stack. A province created from a painted colour goes the same
+route: `provinceDefinitionEdit.ts` appends the `definition.csv` row and `mapDefaultEdit.ts` patches
+`max_provinces` / `sea_starts`, both run from the save that creates it — which can also be asked to
+write nothing and answer with the files it would touch, which is what the confirmation modal lists.
+Painting works the same way one level down:
 `provincePaint.ts` holds the brush, the fill and the run encoding the page and the server share, and
 writes the pixels back into the bitmap's own bytes. Behaviour and rules in
 [map-editor.md](map-editor.md).

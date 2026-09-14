@@ -62,6 +62,42 @@ suite('mapEditorMessages', () => {
     assert.strictEqual(asPageMessage({ type: 'paintPending', pixels: 'many' }), undefined);
   });
 
+  test('newProvince carries the colour and the date, and nothing less', () => {
+    assert.deepStrictEqual(asPageMessage({ type: 'newProvince', color: 255, popDate: '1836.1.1' }), {
+      type: 'newProvince',
+      color: 255,
+      popDate: '1836.1.1',
+    });
+    assert.strictEqual(asPageMessage({ type: 'newProvince', color: '255', popDate: '1836.1.1' }), undefined);
+    assert.strictEqual(asPageMessage({ type: 'newProvince', color: 255 }), undefined);
+  });
+
+  test('a save that creates a province carries the colour, the sea tick and the name', () => {
+    const message = asPageMessage({
+      type: 'save',
+      section: 'positions',
+      data: {},
+      provinceId: 9,
+      popDate: '1836.1.1',
+      create: { color: 255, isSea: true, name: 'Nova' },
+    });
+    assert.ok(message?.type === 'save');
+    assert.deepStrictEqual(message.params.create, { color: 255, isSea: true, name: 'Nova' });
+  });
+
+  test('a creation without a whole colour is no creation: the save goes out on its own', () => {
+    const message = asPageMessage({
+      type: 'save',
+      section: 'positions',
+      data: {},
+      provinceId: 9,
+      popDate: '1836.1.1',
+      create: { isSea: true, name: 'Nova' },
+    });
+    assert.ok(message?.type === 'save');
+    assert.strictEqual(message.params.create, undefined);
+  });
+
   test('the messages that carry plain fields still parse', () => {
     assert.deepStrictEqual(asPageMessage({ type: 'select', provinceId: 3, popDate: '1836.1.1' }), {
       type: 'select',

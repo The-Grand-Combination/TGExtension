@@ -13,6 +13,7 @@ export const MAP_EDITOR_TERRAIN_PICTURE_REQUEST = requestDescriptor<TerrainPictu
 export const MAP_EDITOR_POSITIONS_REQUEST = requestDescriptor<MapEditorTargetParams, MapPositionsResult>('victorianTools/mapEditor/positions');
 export const MAP_EDITOR_COUNTRY_COLORS_REQUEST = requestDescriptor<MapEditorTargetParams, MapCountryColorsResult>('victorianTools/mapEditor/countryColors');
 export const MAP_EDITOR_PAINT_REQUEST = requestDescriptor<PaintParams, PaintResult>('victorianTools/mapEditor/paint');
+export const MAP_EDITOR_NEW_PROVINCE_REQUEST = requestDescriptor<NewProvinceParams, ProvinceResult>('victorianTools/mapEditor/newProvince');
 
 /** `victorianTools.mapEditor.countryColorsTint`: percent of the owner's colour in the Country Colors layer. */
 export const DEFAULT_COUNTRY_COLORS_TINT = 82;
@@ -61,6 +62,8 @@ export interface MapEditorMap {
   readonly seaProvinces: readonly number[];
   /** Start dates found under `history/pops`, earliest first. */
   readonly popDates: readonly string[];
+  /** Colours of the lake rows of `definition.csv` (the ones with no id). */
+  readonly lakeColors: readonly number[];
   /** Subfolders of `history/provinces`; `''` when files sit directly in it. */
   readonly historyFolders: readonly string[];
   /** File names under `history/pops/<date>`, per date. */
@@ -239,6 +242,8 @@ export interface ProvinceDetails {
   readonly id: number;
   readonly definitionName: string;
   readonly isSea: boolean;
+  /** True while `definition.csv` has no row for the id: a province painted and not created yet. */
+  readonly isNew: boolean;
   readonly localisation: LocSection;
   readonly history: HistorySection;
   readonly pops: PopsSection;
@@ -266,7 +271,26 @@ export type SaveSection =
   | { readonly section: 'pops'; readonly pops: readonly PopEntry[]; readonly createInFile: string | undefined }
   | { readonly section: 'positions'; readonly data: ProvincePositions };
 
-export type SaveParams = ProvinceRequestParams & SaveSection;
+/** What a province painted in a colour of its own needs before any section can be written. */
+export interface NewProvince {
+  /** Packed `red << 16 | green << 8 | blue`, as the bitmap holds it. */
+  readonly color: number;
+  readonly isSea: boolean;
+  /** The name the `definition.csv` row carries. */
+  readonly name: string;
+}
+
+export interface NewProvinceParams extends MapEditorTargetParams {
+  readonly color: number;
+  readonly popDate: string;
+}
+
+export type SaveParams = ProvinceRequestParams & SaveSection & {
+  /** Set while the province is new: the save creates it before writing its own section. */
+  readonly create?: NewProvince;
+  /** Answer with the files the save would write, and write none of them. */
+  readonly dryRun?: boolean;
+};
 
 export type SaveResult =
   | { readonly ok: true; readonly written: readonly string[]; readonly details: ProvinceDetails }

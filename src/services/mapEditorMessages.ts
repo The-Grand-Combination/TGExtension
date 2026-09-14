@@ -1,5 +1,6 @@
 import {
   POSITION_KINDS,
+  type NewProvince,
   type PopEntry,
   type PositionKind,
   type PositionPoint,
@@ -21,6 +22,8 @@ export type PageMessage =
   | { readonly type: 'log'; readonly message: string }
   | { readonly type: 'terrainPicture'; readonly terrain: string }
   | { readonly type: 'select'; readonly provinceId: number; readonly popDate: string }
+  /** A colour with no province: the page asks for a province that does not exist yet. */
+  | { readonly type: 'newProvince'; readonly color: number; readonly popDate: string }
   | { readonly type: 'openFile'; readonly absolutePath: string; readonly line: number }
   | { readonly type: 'save'; readonly params: SaveParams }
   | { readonly type: 'pending'; readonly edits: readonly PendingPositions[] }
@@ -47,6 +50,10 @@ export function asPageMessage(message: unknown): PageMessage | undefined {
       return asSave(record);
     case 'pending':
       return { type: 'pending', edits: asArray(record['edits'], asPending) };
+    case 'newProvince':
+      return typeof record['color'] === 'number' && typeof record['popDate'] === 'string'
+        ? { type: 'newProvince', color: record['color'], popDate: record['popDate'] }
+        : undefined;
     case 'paint':
       return asPaint(record);
     default:
@@ -75,6 +82,15 @@ function asFieldMessage(record: UnknownRecord): PageMessage | undefined {
   }
 }
 
+/** What a save of a province that is only paint so far carries; anything short of whole is no creation at all. */
+function asCreate(value: unknown): NewProvince | undefined {
+  const record = asRecord(value);
+  if (!record || typeof record['color'] !== 'number' || !Number.isInteger(record['color'])) {
+    return undefined;
+  }
+  return { color: record['color'], isSea: record['isSea'] === true, name: optionalString(record['name']) ?? '' };
+}
+
 /** A triple short of whole, or holding anything but whole numbers, is dropped: it would paint the wrong pixels. */
 function asPaint(record: UnknownRecord): PageMessage | undefined {
   const value: unknown = record['runs'];
@@ -98,9 +114,17 @@ function asSave(record: UnknownRecord): PageMessage | undefined {
   if (!section || typeof record['provinceId'] !== 'number' || typeof record['popDate'] !== 'string') {
     return undefined;
   }
+  const create = asCreate(record['create']);
   return {
     type: 'save',
-    params: { workspaceFolders: [], mods: [], provinceId: record['provinceId'], popDate: record['popDate'], ...section },
+    params: {
+      workspaceFolders: [],
+      mods: [],
+      provinceId: record['provinceId'],
+      popDate: record['popDate'],
+      ...section,
+      ...(create ? { create } : {}),
+    },
   };
 }
 

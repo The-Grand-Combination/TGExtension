@@ -4,6 +4,7 @@ import type { LanguageClient } from 'vscode-languageclient/node';
 import {
   MAP_EDITOR_COUNTRY_COLORS_REQUEST,
   MAP_EDITOR_MAP_REQUEST,
+  MAP_EDITOR_NEW_PROVINCE_REQUEST,
   MAP_EDITOR_PAINT_REQUEST,
   MAP_EDITOR_POSITIONS_REQUEST,
   MAP_EDITOR_PROVINCE_REQUEST,
@@ -142,6 +143,10 @@ export class MapEditorPanel implements vscode.Disposable {
       case 'select':
         this.popDate = message.popDate;
         await this.select(panel, client, message.provinceId, message.popDate);
+        return;
+      case 'newProvince':
+        this.popDate = message.popDate;
+        await this.newProvince(panel, client, message.color, message.popDate);
         return;
       case 'paint':
         await this.paint(panel, client, message.runs);
@@ -295,6 +300,44 @@ export class MapEditorPanel implements vscode.Disposable {
     }
   }
 
+  /**
+   * Creating a province writes files that did not exist, in three places at
+   * once, so the modal names every one of them first. The list comes from the
+   * save itself, run with nothing written.
+   */
+  private async confirmCreate(client: LanguageClient, params: SaveParams): Promise<boolean> {
+    const plan = await request(client, MAP_EDITOR_SAVE_REQUEST, { ...params, dryRun: true });
+    if (!plan.ok) {
+      void vscode.window.showErrorMessage(`Victorian Tools: ${plan.reason}`);
+      return false;
+    }
+    const create = 'Create';
+    const answer = await vscode.window.showWarningMessage(
+      `Create province ${String(params.provinceId)}?`,
+      { modal: true, detail: `This writes:\n${listFiles(this.map?.targetRoot ?? '', plan.written)}` },
+      create,
+    );
+    return answer === create;
+  }
+
+  /** The panel for a colour that is painted and not yet a province of definition.csv. */
+  private async newProvince(
+    panel: vscode.WebviewPanel,
+    client: LanguageClient,
+    color: number,
+    popDate: string,
+  ): Promise<void> {
+    if (!this.params) {
+      return;
+    }
+    const result = await request(client, MAP_EDITOR_NEW_PROVINCE_REQUEST, { ...this.params, color, popDate });
+    if (result.kind === 'details') {
+      post(panel, { type: 'details', details: result.details });
+    } else {
+      post(panel, { type: 'error', message: result.reason });
+    }
+  }
+
   /** Write every province the page is still holding, in one go. */
   private async saveAll(panel: vscode.WebviewPanel, client: LanguageClient): Promise<void> {
     const result = await this.writePending(client);
@@ -365,6 +408,10 @@ export class MapEditorPanel implements vscode.Disposable {
     if (!this.params) {
       return;
     }
+    if (params.create && !(await this.confirmCreate(client, { ...params, ...this.params }))) {
+      post(panel, { type: 'saved', result: { ok: false, reason: 'Nothing was written.' } });
+      return;
+    }
     const result = await request(client, MAP_EDITOR_SAVE_REQUEST, { ...params, ...this.params });
     post(panel, { type: 'saved', result });
     if (!result.ok) {
@@ -373,6 +420,11 @@ export class MapEditorPanel implements vscode.Disposable {
       await this.sendCountryColors(panel, client);
     }
   }
+}
+
+/** The files a save would write, as the modal lists them: inside the target mod, by their path there. */
+function listFiles(root: string, files: readonly string[]): string {
+  return files.map((file) => (file.startsWith(root) ? file.slice(root.length).replace(/^[\\/]/, '') : file)).join('\n');
 }
 
 /** Every message to the page goes through the shared union, so a drifting payload fails to compile. */

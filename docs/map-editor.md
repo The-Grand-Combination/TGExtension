@@ -103,9 +103,38 @@ its size, its header, its bit depth — is left exactly as it was. A **Reload** 
 asks first, and closing the tab with pixels still held says so: a webview cannot refuse to close, and
 the page is the only place those pixels exist.
 
-`map/definition.csv` is not touched: painting writes colours, and the table is what says which
-province a colour is. A province left with no pixels at all, or a colour the table does not name, is
-what the [map report](map-images.md) checks for.
+## Creating a province
+
+Painting is colours, and `map/definition.csv` is what says which province a colour is — so a colour
+the table does not name is a province waiting to be declared. Clicking one opens **the same province
+panel**, for a province that does not exist yet: the header says *New province*, the id is the next
+free one (past the last in the table, never one another province had), and the Definition tab grows a
+**Sea province** tick. The map tooltip says as much over those pixels; a colour that is a *lake* row
+of the table says that instead, and opens nothing.
+
+The panel works as it always does, and the **first Save is what creates the province**. Before
+anything is written, a modal names every file the save will touch:
+
+> Create province 3531?
+> This writes: map/definition.csv, map/default.map, history/provinces/3531 - Nova.txt
+
+**Create** writes them; **Cancel** writes nothing at all. What the save does, in order:
+
+1. the row `id;red;green;blue;name;x` goes at the end of `map/definition.csv`, with the name from the
+   localisation field;
+2. `map/default.map` gets room for the id — `max_provinces` is a count, so it has to end up *over*
+   the new id, and the engine ignores any province at or past it — and, with **Sea province** ticked,
+   the id joins `sea_starts`;
+3. the section saves what it would have saved anyway (the history file of a new province is named
+   after the name being created).
+
+Everything lands in the **target mod**, copying the file from the layer below when the mod has none
+of its own, exactly as the other saves do. From then on the colour is a province like any other:
+clicking it opens it, and the per-section Saves take over. The new pixels still have to be written to
+`provinces.bmp` with **Save** in the tool box — the two are separate files and separate saves.
+
+The rest of what a new province needs is ordinary editing: its `PROV<id>` name, its history file, its
+pops, and its points in `positions.txt`, each with its own Save in the panel.
 
 The panel header shows the province view's terrain picture behind the name: the sprite
 `GFX_terrainimg_<terrain>` of `interface/*.gfx` (the `.dds` twin of a declared `.tga` is accepted,

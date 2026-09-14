@@ -306,6 +306,108 @@ suite('MapEditorHandlers — painting the map', () => {
   });
 });
 
+suite('MapEditorHandlers — creating a province from a painted colour', () => {
+  const COLOR = (10 << 16) | (20 << 8) | 30;
+  const DEFINITION = ';red;green;blue;x;x\n1;1;1;1;One;x\n2;2;2;2;Two;x\n';
+  const DEFAULT_MAP = 'max_provinces = 3\nsea_starts = {\n\t2\n}\n';
+
+  interface Maker {
+    readonly host: MapEditorHost;
+    readonly written: Map<string, string>;
+  }
+
+  /** A mod whose map folder holds definition.csv and default.map, and nothing else. */
+  function maker(): Maker {
+    const files = new Map<string, string>([
+      [path.join(ROOT, 'map/definition.csv'), DEFINITION],
+      [path.join(ROOT, 'map/default.map'), DEFAULT_MAP],
+    ]);
+    const written = new Map<string, string>();
+    const host: MapEditorHost = {
+      targets: (): readonly FileLocation[] => [TARGET],
+      modNameOf: (root: string): string => root,
+      ensureIndex: (): Promise<ReturnType<typeof buildTestIndex> | undefined> => Promise.resolve(buildTestIndex()),
+      fileSystem: {
+        fileExists: (absolutePath: string): boolean => files.has(absolutePath),
+        listFiles: (): string[] => [],
+        listFilesRecursive: (): string[] => [],
+      },
+      readText: (absolutePath: string): Promise<string | undefined> => Promise.resolve(written.get(absolutePath) ?? files.get(absolutePath)),
+      readBytes: (): Promise<Uint8Array | undefined> => Promise.resolve(undefined),
+      assetsFolder: '/extension/assets',
+      writeText: (absolutePath: string, text: string): Promise<boolean> => {
+        written.set(absolutePath, text);
+        return Promise.resolve(true);
+      },
+      writeBytes: (): Promise<boolean> => Promise.resolve(true),
+      rename: (): Promise<boolean> => Promise.resolve(true),
+      codepage: (): Codepage => DEFAULT_CODEPAGE,
+      historyFolderPattern: (): RegExp | undefined => undefined,
+    };
+    return { host, written };
+  }
+
+  function createParams(isSea: boolean): SaveParams {
+    return {
+      ...targetParams,
+      provinceId: 3,
+      popDate: '1836.1.1',
+      section: 'history',
+      data: EMPTY_HISTORY,
+      createInFolder: '',
+      create: { color: COLOR, isSea, name: 'Nova' },
+    };
+  }
+
+  test('a colour no row names answers with the next free id, marked as new', async () => {
+    const result = await new MapEditorHandlers(maker().host).newProvince({ ...targetParams, color: COLOR, popDate: '1836.1.1' });
+    assert.ok(result.kind === 'details', result.kind === 'unavailable' ? result.reason : '');
+    assert.strictEqual(result.details.id, 3);
+    assert.strictEqual(result.details.isNew, true);
+  });
+
+  test('a colour already in the table is refused, and says whose it is', async () => {
+    const result = await new MapEditorHandlers(maker().host).newProvince({ ...targetParams, color: (2 << 16) | (2 << 8) | 2, popDate: '1836.1.1' });
+    assert.ok(result.kind === 'unavailable');
+    assert.ok(result.reason.includes('province 2'), result.reason);
+  });
+
+  test('a save with create writes the row, the room for the id, and the section file', async () => {
+    const { host, written } = maker();
+    const result = await new MapEditorHandlers(host).save(createParams(false));
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+    assert.strictEqual(written.get(path.join(ROOT, 'map/definition.csv')), DEFINITION + '3;10;20;30;Nova;x\n');
+    assert.ok(written.get(path.join(ROOT, 'map/default.map'))?.startsWith('max_provinces = 4'));
+    assert.strictEqual(result.written.length, 3, result.written.join(', '));
+  });
+
+  test('a sea province joins sea_starts as well', async () => {
+    const { host, written } = maker();
+    assert.strictEqual((await new MapEditorHandlers(host).save(createParams(true))).ok, true);
+    assert.ok(written.get(path.join(ROOT, 'map/default.map'))?.includes('2 3'), written.get(path.join(ROOT, 'map/default.map')));
+  });
+
+  test('a dry run lists the same files and writes none of them', async () => {
+    const { host, written } = maker();
+    const plan = await new MapEditorHandlers(host).save({ ...createParams(false), dryRun: true });
+    assert.ok(plan.ok, plan.ok ? '' : plan.reason);
+    assert.strictEqual(written.size, 0, 'a dry run must not touch a file');
+    const { host: other } = maker();
+    const real = await new MapEditorHandlers(other).save(createParams(false));
+    assert.ok(real.ok);
+    assert.deepStrictEqual(plan.written, real.written);
+  });
+
+  test('a second save of a province already created adds no second row', async () => {
+    const { host, written } = maker();
+    const handlers = new MapEditorHandlers(host);
+    assert.strictEqual((await handlers.save(createParams(false))).ok, true);
+    const table = written.get(path.join(ROOT, 'map/definition.csv'));
+    assert.strictEqual((await handlers.save(createParams(false))).ok, true);
+    assert.strictEqual(written.get(path.join(ROOT, 'map/definition.csv')), table);
+  });
+});
+
 suite('MapEditorHandlers — caching by layers key', () => {
   test('country colors are read once and reused', async () => {
     const { host, readTextPaths } = recordingHost();

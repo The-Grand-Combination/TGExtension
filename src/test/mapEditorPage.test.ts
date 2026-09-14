@@ -55,6 +55,7 @@ async function loadPage(
     popDates: ['1836.1.1'],
     historyFolders: [''],
     popFiles: { '1836.1.1': [] },
+    lakeColors: [],
   };
   const done = new Promise<void>((resolve) => {
     const timer = setTimeout(resolve, timeoutMs);
@@ -148,6 +149,7 @@ suite('Map Editor panel', () => {
       popDates: ['1836.1.1'],
       historyFolders: [''],
       popFiles: { '1836.1.1': [] },
+      lakeColors: [],
     };
     const fakeClient = {
       sendRequest: (method: string): Promise<MapEditorMap | MapPositionsResult | MapCountryColorsResult> =>

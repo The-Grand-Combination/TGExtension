@@ -99,6 +99,11 @@ let view: View = { scale: 1, x: 0, y: 0 };
 let selection: Highlight | null = null;
 /** The province the side panel is about, set before its answer arrives. */
 let selectedId: number | null = null;
+/** The painted colour the panel is about while the province it names does not exist yet. */
+let newColor: number | null = null;
+/** The localisation field and the Sea province tick, read when a save has to create the province. */
+let nameInput: HTMLInputElement | null = null;
+let seaInput: HTMLInputElement | null = null;
 let details: ProvinceDetails | null = null;
 /** From a map report link, applied once the bitmap is decoded. */
 let pendingReveal: MapEditorReveal | null = null;
@@ -1422,8 +1427,7 @@ window.addEventListener('mouseup', function (event) {
   mapArea.classList.remove('dragging');
   if (restore) { setTool(restore); }
   if (wasClick && event.target === canvas) {
-    const id = provinceAt(toImage(event.clientX, event.clientY));
-    if (id !== undefined) { toggleProvince(id); }
+    clickAt(toImage(event.clientX, event.clientY));
   }
 });
 // The right button is the page's own: no menu over the map.
@@ -1439,8 +1443,9 @@ function showTooltip(event: MouseEvent): void {
   if (!image || event.target !== canvas) { tooltip.hidden = true; mapArea.classList.remove('moving'); return; }
   const kind = tool === 'hand' ? markerAt(event.clientX, event.clientY) : null;
   mapArea.classList.toggle('moving', kind !== null);
-  const id = kind ? selectedId : provinceAt(toImage(event.clientX, event.clientY));
-  if (id === undefined || id === null) { tooltip.hidden = true; return; }
+  const place = toImage(event.clientX, event.clientY);
+  const id = kind ? selectedId : provinceAt(place);
+  if (id === undefined || id === null) { showColorTooltip(event, place); return; }
   const definition = definitionById.get(id);
   const kindLabel = POSITION_KIND_SPECS.find(function (spec) { return spec.kind === kind; })?.label ?? String(kind);
   tooltip.textContent = kind
@@ -1452,25 +1457,43 @@ function showTooltip(event: MouseEvent): void {
   tooltip.style.top = String(event.clientY - rect.top + 12) + 'px';
 }
 
-function highlightOf(id: number): Highlight | null {
-  const definition = definitionById.get(id);
+/** A colour of definition.csv is a province; anything else is paint waiting for a province. */
+function showColorTooltip(event: MouseEvent, place: Point): void {
   const currentImage = image;
-  if (!definition || !currentImage) { return null; }
-  const color = definition.color;
+  const color = currentImage === null ? undefined : currentImage.packed[place.y * currentImage.width + place.x];
+  if (color === undefined) { tooltip.hidden = true; return; }
+  tooltip.textContent = map?.lakeColors.includes(color) === true
+    ? hexOf(color) + ' (lake)'
+    : hexOf(color) + ' · click to make it a province';
+  tooltip.hidden = false;
+  const rect = mapArea.getBoundingClientRect();
+  tooltip.style.left = String(event.clientX - rect.left + 12) + 'px';
+  tooltip.style.top = String(event.clientY - rect.top + 12) + 'px';
+}
+
+/** The box the colour's pixels fit in; `maxX` below zero when the map has none of it. */
+function boundsOfColor(currentImage: DecodedImage, color: number): { minX: number; minY: number; maxX: number; maxY: number } {
   const packed = currentImage.packed;
   const width = currentImage.width;
-  let minX = width;
-  let minY = currentImage.height;
-  let maxX = -1;
-  let maxY = -1;
+  const box = { minX: width, minY: currentImage.height, maxX: -1, maxY: -1 };
   for (let index = 0; index < packed.length; index++) {
     if (packed[index] === color) {
       const x = index % width;
       const y = (index - x) / width;
-      if (x < minX) { minX = x; } if (x > maxX) { maxX = x; }
-      if (y < minY) { minY = y; } if (y > maxY) { maxY = y; }
+      if (x < box.minX) { box.minX = x; } if (x > box.maxX) { box.maxX = x; }
+      if (y < box.minY) { box.minY = y; } if (y > box.maxY) { box.maxY = y; }
     }
   }
+  return box;
+}
+
+function highlightOf(id: number, painted?: number): Highlight | null {
+  const color = painted ?? definitionById.get(id)?.color;
+  const currentImage = image;
+  if (color === undefined || !currentImage) { return null; }
+  const packed = currentImage.packed;
+  const width = currentImage.width;
+  const { minX, minY, maxX, maxY } = boundsOfColor(currentImage, color);
   if (maxX < 0) { return null; }
   const boxWidth = maxX - minX + 1;
   const boxHeight = maxY - minY + 1;
@@ -1491,6 +1514,32 @@ function highlightOf(id: number): Highlight | null {
   overlayContext.putImageData(new ImageData(mask, boxWidth, boxHeight), 0, 0);
   return { id: id, color: color, canvas: overlay, x: minX, y: minY, width: boxWidth, height: boxHeight };
 }
+/**
+ * A click on the map: the province opens, or — for a colour painted here and
+ * named by no row of definition.csv — the panel of a province that does not
+ * exist yet, which the first Save creates.
+ */
+function clickAt(point: Point): void {
+  const currentImage = image;
+  const id = provinceAt(point);
+  if (id !== undefined) { toggleProvince(id); return; }
+  const color = currentImage?.packed[point.y * currentImage.width + point.x];
+  if (color === undefined) { return; }
+  if (map?.lakeColors.includes(color)) {
+    setStatus(hexOf(color) + ' is a lake row of definition.csv, not a province.', 'warning');
+    return;
+  }
+  capturePending();
+  newColor = color;
+  selectedId = null;
+  details = null;
+  draft = null;
+  selection = null;
+  render();
+  setStatus('Reading a province for ' + hexOf(color) + '…');
+  vscode.postMessage({ type: 'newProvince', color: color, popDate: popDate });
+}
+
 /** A click on the map: the province opens, or closes when it is the one already open. */
 function toggleProvince(id: number): void {
   if (id !== selectedId) { selectProvince(id); return; }
@@ -1500,6 +1549,7 @@ function toggleProvince(id: number): void {
 
 function selectProvince(id: number): void {
   capturePending();
+  newColor = null;
   selection = highlightOf(id);
   selectedId = id;
   details = null;
@@ -1512,6 +1562,9 @@ function selectProvince(id: number): void {
 function clearSelection(): void {
   selection = null;
   selectedId = null;
+  newColor = null;
+  nameInput = null;
+  seaInput = null;
   details = null;
   draft = null;
   draftBaseline = null;
@@ -1608,7 +1661,8 @@ function headingTitle(id: number, current: ProvinceDetails | null): string {
   const locText = current?.localisation.text ?? '';
   if (locText !== '') { return locText; }
   const name = definitionById.get(id)?.name ?? '';
-  return name === '' ? 'Province ' + String(id) : name;
+  if (name !== '') { return name; }
+  return current?.isNew === true ? 'New province' : 'Province ' + String(id);
 }
 
 /** A terrain's localised label, falling back to the identifier itself. */
@@ -1778,12 +1832,28 @@ function saveBar(onSave: () => void): SaveBar {
 /** One section's edit, addressed to the province the panel is about. */
 function postSave(payload: Record<string, unknown>): void {
   if (!details) { return; }
-  vscode.postMessage({ ...payload, type: 'save', provinceId: details.id, popDate: popDate });
+  const create = details.isNew && newColor !== null
+    ? { color: newColor, isSea: seaInput?.checked === true, name: nameInput?.value ?? '' }
+    : undefined;
+  vscode.postMessage({
+    ...payload,
+    ...(create ? { create: create } : {}),
+    type: 'save',
+    provinceId: details.id,
+    popDate: popDate,
+  });
 }
 
 function localisationSection(current: ProvinceDetails): HTMLElement {
   const loc = current.localisation;
   const input = textInput(loc.text);
+  // The name a save writes into definition.csv, and whether the id joins sea_starts.
+  nameInput = input;
+  const sea = h('input', { type: 'checkbox' });
+  seaInput = current.isNew ? sea : null;
+  const seaRow = current.isNew
+    ? h('label', { class: 'check' }, sea, 'Sea province (the id joins sea_starts in default.map)')
+    : null;
   const rename = h('input', { type: 'checkbox' });
   // A base-game province keeps the name vanilla gave its file, and other tools match
   // on it, so renaming there is opt-in. Above that id the province is the mod's own.
@@ -1797,6 +1867,7 @@ function localisationSection(current: ProvinceDetails): HTMLElement {
     sectionHeader('Localisation', loc, { text: loc.key + ' is not defined; saving adds it to the mod\'s province names file.', warning: true }),
     layerNote(loc),
     h('div', { class: 'inline' }, h('label', null, loc.key), input, bar.button, bar.cancel, bar.status),
+    seaRow,
     renameRow);
 }
 
@@ -2292,15 +2363,27 @@ function handleMessage(message: HostMessage): void {
 }
 
 /** Everything that changes an already-loaded map: a province, the layers, a save. */
+/**
+ * Two clicks in a row race: a late answer would redraw the province we left,
+ * terrain picture and all, over the one we are now on. A province that is still
+ * only paint has no id to match on, so its colour stands for it.
+ */
+function handleDetails(fresh: ProvinceDetails): void {
+  const forPaint = newColor !== null && fresh.isNew && selectedId === null;
+  if (selectedId !== fresh.id && !forPaint) { return; }
+  if (forPaint) {
+    selectedId = fresh.id;
+    selection = highlightOf(fresh.id, newColor ?? undefined);
+  }
+  details = fresh;
+  replaceMarkers(fresh.id, fresh.positions);
+  renderSide(fresh.id);
+  setStatus('Province ' + String(fresh.id));
+}
+
 function handleUpdate(message: Exclude<HostMessage, { type: 'map' | 'revealPixel' }>): void {
   if (message.type === 'details') {
-    // Two clicks in a row race: a late answer would redraw the province we
-    // left, terrain picture and all, over the one we are now on.
-    if (selectedId !== message.details.id) { return; }
-    details = message.details;
-    replaceMarkers(message.details.id, message.details.positions);
-    renderSide(message.details.id);
-    setStatus('Province ' + String(message.details.id));
+    handleDetails(message.details);
   } else if (message.type === 'positions') {
     markers = [...message.markers];
     render();
@@ -2373,6 +2456,12 @@ function handleSaved(result: SaveResult): void {
     return;
   }
   const saved = result.details;
+  if (newColor !== null && !saved.isNew) {
+    definitionById.set(saved.id, { id: saved.id, color: newColor, name: saved.definitionName });
+    idByColor.set(newColor, saved.id);
+    if (saved.isSea) { seaIds.add(saved.id); }
+    newColor = null;
+  }
   pendingPositions.delete(saved.id);
   refreshPending();
   replaceMarkers(saved.id, saved.positions);

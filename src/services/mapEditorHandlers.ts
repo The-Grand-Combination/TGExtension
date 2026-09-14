@@ -9,6 +9,8 @@ import {
   type MapEditorMapResult,
   type MapEditorTargetParams,
   type MapPositionsResult,
+  type NewProvince,
+  type NewProvinceParams,
   type PaintParams,
   type PaintResult,
   type PopEntry,
@@ -76,8 +78,10 @@ import {
   positionMarkersOf,
   renderPositionsFile,
 } from './provincePositionsEdit.js';
+import { planDefaultMapEdit } from './mapDefaultEdit.js';
+import { appendDefinitionRow, nextProvinceId, rowOfColor } from './provinceDefinitionEdit.js';
 import { applyRuns } from './provincePaint.js';
-import { parseProvinceDefinitions, parseProvinceRows } from './provinceTable.js';
+import { parseProvinceDefinitions, parseProvinceRows, type ProvinceRow } from './provinceTable.js';
 import { parseDocument } from './syntaxValidation.js';
 import {
   dominantTerrainByProvince,
@@ -110,6 +114,8 @@ export interface MapEditorHost {
 
 const PROVINCES_FOLDER = 'history/provinces';
 const PROVINCES_BMP = 'map/provinces.bmp';
+const DEFINITION_CSV = 'map/definition.csv';
+const DEFAULT_MAP = 'map/default.map';
 const COUNTRIES_FILE = 'common/countries.txt';
 /** History files read at once while collecting owners. */
 const OWNER_BATCH = 64;
@@ -182,7 +188,8 @@ export class MapEditorHandlers {
     if (provincesBmpPath === undefined || definitionPath === undefined) {
       return { kind: 'unavailable', reason: 'The picked mods have no map/provinces.bmp or map/definition.csv.' };
     }
-    const definitions = parseProvinceDefinitions((await this.host.readText(definitionPath)) ?? '');
+    const definitionText = (await this.host.readText(definitionPath)) ?? '';
+    const definitions = parseProvinceDefinitions(definitionText);
     // Reading both bitmaps takes a moment; start now so the first click finds it done.
     void this.terrainInfo(target.layers);
     const popPaths = this.listRecursive(target.layers, POPS_FOLDER);
@@ -194,6 +201,7 @@ export class MapEditorHandlers {
       provincesBmpPath,
       riversBmpPath: this.resolve(target.layers, 'map/rivers.bmp'),
       definitions,
+      lakeColors: parseProvinceRows(definitionText).flatMap((row) => (row.id === undefined ? [row.color] : [])),
       seaProvinces: [...target.index.seaProvinces].map(Number).filter((id) => Number.isInteger(id)),
       popDates,
       historyFolders: historyFoldersOf(this.provinceHistoryFiles(target.layers)),
@@ -209,11 +217,41 @@ export class MapEditorHandlers {
     return { kind: 'details', details: await this.details(target, params.provinceId, params.popDate) };
   }
 
+  /** A colour no row of `definition.csv` names: the next free id, with every section empty. */
+  async newProvince(params: NewProvinceParams): Promise<ProvinceResult> {
+    const target = await this.resolveTarget(params);
+    if (typeof target === 'string') {
+      return { kind: 'unavailable', reason: target };
+    }
+    const rows = await this.definitionRows(target);
+    const taken = rowOfColor(rows, params.color);
+    if (taken) {
+      const what = taken.id === undefined ? `the lake ${taken.name}` : `province ${String(taken.id)}`;
+      return { kind: 'unavailable', reason: `That colour is already ${what} in map/definition.csv.` };
+    }
+    return { kind: 'details', details: await this.details(target, nextProvinceId(rows), params.popDate) };
+  }
+
+  /**
+   * A save writes one section — and, for a province that only exists as paint,
+   * creates it first: the `definition.csv` row, and the room `default.map` has
+   * to make for its id. With `dryRun` nothing is written and the answer is the
+   * list of files the save would have touched.
+   */
   async save(params: SaveParams): Promise<SaveResult> {
     const target = await this.resolveTarget(params);
     if (typeof target === 'string') {
       return { ok: false, reason: target };
     }
+    const created = params.create ? await this.createProvince(target, params, params.create) : { ok: true as const, written: [] };
+    if (!created.ok) {
+      return created;
+    }
+    const result = await this.saveSection(target, params);
+    return result.ok ? { ...result, written: [...created.written, ...result.written] } : result;
+  }
+
+  private saveSection(target: Target, params: SaveParams): Promise<SaveResult> {
     switch (params.section) {
       case 'localisation':
         return this.saveLocalisation(target, params, params.text, params.renameHistoryFile);
@@ -224,6 +262,57 @@ export class MapEditorHandlers {
       case 'positions':
         return this.savePositions(target, params, params.data);
     }
+  }
+
+  private async definitionRows(target: Target): Promise<ProvinceRow[]> {
+    const absolutePath = this.resolve(target.layers, DEFINITION_CSV);
+    return parseProvinceRows(absolutePath === undefined ? '' : ((await this.host.readText(absolutePath)) ?? ''));
+  }
+
+  /** The row the province needs to exist at all, and the `default.map` it has to fit in. */
+  private async createProvince(
+    target: Target,
+    params: SaveParams,
+    create: NewProvince,
+  ): Promise<{ readonly ok: true; readonly written: string[] } | { readonly ok: false; readonly reason: string }> {
+    const source = this.resolve(target.layers, DEFINITION_CSV);
+    const text = source === undefined ? undefined : await this.host.readText(source);
+    if (source === undefined || text === undefined) {
+      return { ok: false, reason: 'The picked mods have no map/definition.csv.' };
+    }
+    const rows = parseProvinceRows(text);
+    // A second save of the same province arrives here with the row already written.
+    if (rowOfColor(rows, create.color) !== undefined) {
+      return { ok: true, written: [] };
+    }
+    if (rows.some((row) => row.id === params.provinceId)) {
+      return { ok: false, reason: `Province ${String(params.provinceId)} is already in map/definition.csv; click the colour again for a free id.` };
+    }
+    const name = create.name.trim() === '' ? `Province ${String(params.provinceId)}` : create.name.trim();
+    const row = { id: params.provinceId, color: create.color, name };
+    const destination = isInsideRoot(target.root, source) ? source : path.join(target.root, DEFINITION_CSV);
+    const failed = await this.write(destination, appendDefinitionRow(text, row), 'map/definition.csv', params.dryRun === true);
+    if (failed !== undefined) {
+      return { ok: false, reason: failed };
+    }
+    const written = [destination, ...(await this.makeRoom(target, params, create))];
+    return { ok: true, written };
+  }
+
+  /** `max_provinces` over the new id, and the id in `sea_starts` when it is a sea province. */
+  private async makeRoom(target: Target, params: SaveParams, create: NewProvince): Promise<string[]> {
+    const source = this.resolve(target.layers, DEFAULT_MAP);
+    const text = source === undefined ? undefined : await this.host.readText(source);
+    if (source === undefined || text === undefined) {
+      return [];
+    }
+    const patches = planDefaultMapEdit(parseDocument(text).document, { provinceId: params.provinceId, isSea: create.isSea });
+    if (patches.length === 0) {
+      return [];
+    }
+    const destination = isInsideRoot(target.root, source) ? source : path.join(target.root, DEFAULT_MAP);
+    const failed = await this.write(destination, applyPatches(text, patches), 'map/default.map', params.dryRun === true);
+    return failed === undefined ? [destination] : [];
   }
 
   /**
@@ -314,10 +403,12 @@ export class MapEditorHandlers {
     );
     const history = await this.readHistory(target, provinceId);
     const isSea = target.index.seaProvinces.has(String(provinceId));
+    const declared = definitions.find((definition) => definition.id === provinceId);
     return {
       id: provinceId,
-      definitionName: definitions.find((definition) => definition.id === provinceId)?.name ?? '',
+      definitionName: declared?.name ?? '',
       isSea,
+      isNew: declared === undefined,
       localisation: this.readLocalisation(target, provinceId),
       history,
       pops: await this.readPops(target, provinceId, popDate),
@@ -585,7 +676,7 @@ export class MapEditorHandlers {
 
   private async saveLocalisation(
     target: Target,
-    params: ProvinceRequestParams,
+    params: SaveParams,
     text: string,
     renameHistoryFile: boolean,
   ): Promise<SaveResult> {
@@ -596,13 +687,13 @@ export class MapEditorHandlers {
     if (stray !== undefined) {
       return { ok: false, reason: stray };
     }
-    const written = await this.writeLocalisation(target, key, text);
+    const written = await this.writeLocalisation(target, key, text, params.dryRun === true);
     if (written === undefined) {
       return { ok: false, reason: 'The localisation file could not be written.' };
     }
     const files = [written.absolutePath];
     if (renameHistoryFile) {
-      const renamed = await this.renameHistoryFile(target, params.provinceId, text);
+      const renamed = await this.renameHistoryFile(target, params.provinceId, text, params.dryRun === true);
       if (renamed !== undefined) {
         files.push(renamed);
       }
@@ -629,21 +720,27 @@ export class MapEditorHandlers {
    * back from `writeText` as false, and "could not be written" tells a mod
    * author nothing they can act on.
    */
-  private async write(absolutePath: string, text: string, subject: string): Promise<string | undefined> {
+  private async write(absolutePath: string, text: string, subject: string, dryRun = false): Promise<string | undefined> {
     const stray = this.codepageReason(text);
     if (stray !== undefined) {
       return stray;
     }
+    if (dryRun) {
+      return undefined;
+    }
     return (await this.host.writeText(absolutePath, text)) ? undefined : `${subject} could not be written.`;
   }
 
-  private async writeLocalisation(target: Target, key: string, text: string): Promise<FileRef | undefined> {
+  private async writeLocalisation(target: Target, key: string, text: string, dryRun = false): Promise<FileRef | undefined> {
     const current = this.readLocalisation(target, Number(key.slice('PROV'.length)));
     const absolutePath =
       current.file !== undefined && current.inTarget
         ? current.file.absolutePath
         : path.join(target.root, 'localisation', await this.locFileForNewKey(target.root));
     const existing = await this.host.readText(absolutePath);
+    if (dryRun) {
+      return { absolutePath, line: existing === undefined ? 1 : (locKeyLine(existing, key) ?? 0) };
+    }
     if (existing === undefined) {
       return (await this.host.writeText(absolutePath, newProvinceLocFile(key, text))) ? { absolutePath, line: 1 } : undefined;
     }
@@ -668,7 +765,7 @@ export class MapEditorHandlers {
   }
 
   /** Rename `<id> - <old>.txt` to match the new name; only a file inside the target moves. */
-  private async renameHistoryFile(target: Target, provinceId: number, name: string): Promise<string | undefined> {
+  private async renameHistoryFile(target: Target, provinceId: number, name: string, dryRun = false): Promise<string | undefined> {
     const history = await this.readHistory(target, provinceId);
     if (history.file === undefined || !history.inTarget) {
       return undefined;
@@ -679,6 +776,9 @@ export class MapEditorHandlers {
       return undefined;
     }
     const destination = path.join(path.dirname(current), wanted);
+    if (dryRun) {
+      return destination;
+    }
     if (!(await this.host.rename(current, destination))) {
       return undefined;
     }
@@ -702,7 +802,7 @@ export class MapEditorHandlers {
 
   private async saveHistory(
     target: Target,
-    params: ProvinceRequestParams,
+    params: SaveParams,
     data: ProvinceHistory,
     createInFolder: string | undefined,
   ): Promise<SaveResult> {
@@ -724,11 +824,13 @@ export class MapEditorHandlers {
         return { ok: false, reason: hiddenHistoryReason(hidden, params.provinceId) };
       }
       const details = await this.details(target, params.provinceId, params.popDate);
-      const name = details.localisation.text !== '' ? details.localisation.text : details.definitionName;
+      // A province being created is named by the save itself: the table row it
+      // writes is not there to be read yet on a dry run.
+      const name = historyName(params.create?.name ?? '', details);
       destination = path.join(target.root, PROVINCES_FOLDER, createInFolder ?? '', historyFileNameFor(params.provinceId, name));
       updated = renderProvinceHistory(data);
     }
-    const failed = await this.write(destination, updated, 'The history file');
+    const failed = await this.write(destination, updated, 'The history file', params.dryRun === true);
     if (failed !== undefined) {
       return { ok: false, reason: failed };
     }
@@ -741,7 +843,7 @@ export class MapEditorHandlers {
 
   private async savePops(
     target: Target,
-    params: ProvinceRequestParams,
+    params: SaveParams,
     pops: readonly PopEntry[],
     createInFile: string | undefined,
   ): Promise<SaveResult> {
@@ -762,7 +864,7 @@ export class MapEditorHandlers {
     if (updated === text) {
       return { ok: true, written: [], details: await this.details(target, provinceId, popDate) };
     }
-    const failed = await this.write(destination, updated, 'The pops file');
+    const failed = await this.write(destination, updated, 'The pops file', params.dryRun === true);
     if (failed !== undefined) {
       return { ok: false, reason: failed };
     }
@@ -770,7 +872,7 @@ export class MapEditorHandlers {
     return { ok: true, written: [destination], details: await this.details(target, provinceId, popDate) };
   }
 
-  private async savePositions(target: Target, params: ProvinceRequestParams, data: ProvincePositions): Promise<SaveResult> {
+  private async savePositions(target: Target, params: SaveParams, data: ProvincePositions): Promise<SaveResult> {
     const { provinceId, popDate } = params;
     const file = await this.positionsFile(target.layers);
     const updated = file
@@ -780,7 +882,7 @@ export class MapEditorHandlers {
       return { ok: true, written: [], details: await this.details(target, provinceId, popDate) };
     }
     const destination = file && isInsideRoot(target.root, file.absolutePath) ? file.absolutePath : path.join(target.root, POSITIONS_FILE);
-    const failed = await this.write(destination, updated, 'map/positions.txt');
+    const failed = await this.write(destination, updated, 'map/positions.txt', params.dryRun === true);
     if (failed !== undefined) {
       return { ok: false, reason: failed };
     }
@@ -821,6 +923,14 @@ export class MapEditorHandlers {
   private forgetHistoryFiles(layers: ModLayers): void {
     this.historyFilesByLayers.delete(layers.key);
   }
+}
+
+/** What a new history file is named after: the name being created, else the province's own. */
+function historyName(created: string, details: ProvinceDetails): string {
+  if (created.trim() !== '') {
+    return created.trim();
+  }
+  return details.localisation.text !== '' ? details.localisation.text : details.definitionName;
 }
 
 /** A kept `history/provinces` walk and the view of it the current pattern gives. */
