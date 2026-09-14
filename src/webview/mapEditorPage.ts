@@ -34,7 +34,7 @@ import type { PaintResult } from '../model/mapEditor.js';
 
 import { DEFAULT_PAINT_UNDO_STEPS, VANILLA_MAX_PROVINCES } from '../model/mapEditor.js';
 
-import { enclosedPixels, floodFill, runsOf, strokePixels } from '../services/provincePaint.js';
+import { enclosedPixels, floodFill, runsOf, strokePixels, unusedColor } from '../services/provincePaint.js';
 
 import { decodeBmp as decodeBmpFile, type BmpImage } from '../services/bmpDecoder.js';
 
@@ -101,14 +101,35 @@ let selection: Highlight | null = null;
 let selectedId: number | null = null;
 /** The painted colour the panel is about while the province it names does not exist yet. */
 let newColor: number | null = null;
-/** The localisation field and the Sea province tick, read when a save has to create the province. */
+/** The localisation row: the Definition tab has one Save, and it writes this too. */
 let nameInput: HTMLInputElement | null = null;
 let seaInput: HTMLInputElement | null = null;
+let renameInput: HTMLInputElement | null = null;
+/** The Definition tab's Save, for Enter in the name field to reach. */
+let definitionSave: HTMLButtonElement | null = null;
 let details: ProvinceDetails | null = null;
 /** From a map report link, applied once the bitmap is decoded. */
 let pendingReveal: MapEditorReveal | null = null;
 let popDate = '';
 let saving = false;
+/** What the save in flight writes: the only parts its answer may read back from disk. */
+let savingParts: ReadonlySet<string> = new Set();
+// A Save writes one file, and the other tabs are still holding what was typed
+// into them. What they hold is carried across the re-render the save triggers.
+let historyRead: (() => ProvinceHistory) | null = null;
+let popsRead: (() => PopEntry[]) | null = null;
+/** The climate box and the states list, also read when a save has to create the province. */
+let climateInput: FieldElement | null = null;
+let statesRead: (() => string[]) | null = null;
+/** What each form was built from, to tell a form that was touched from one that was not. */
+let historyRendered = '';
+let popsRendered = '';
+let climateRendered = '';
+let statesRendered = '';
+let carriedHistory: ProvinceHistory | null = null;
+let carriedPops: readonly PopEntry[] | null = null;
+let carriedClimate: string | null = null;
+let carriedStates: readonly string[] | null = null;
 let activeTab: TabName = 'definition';
 /** Terrain name -> data URI, or null for "asked, none"; per map. */
 const terrainPictures = new Map<string, string | null>();
@@ -355,7 +376,14 @@ type FieldElement = HTMLElement & { value: string };
 interface ComboEntry {
   readonly id: string;
   readonly label: string;
+  readonly name?: string;
   readonly empty?: boolean;
+}
+
+/** A row of the pick list: `identifier` plain, and the localised name after it set apart. */
+function comboItemContent(entry: ComboEntry): (string | HTMLElement)[] {
+  if (entry.name === undefined || entry.name === '') { return [entry.label]; }
+  return [entry.id, h('span', { class: 'combo-name' }, ' - ' + entry.name)];
 }
 
 const COMBO_LIMIT = 80;
@@ -375,18 +403,31 @@ function selectInput(
   for (const entry of entries) { byId.set(entry.id, entry); }
   const input = h('input', { type: 'text', spellcheck: 'false', placeholder: emptyLabel ?? '' });
   const list = h('div', { class: 'combo-list', hidden: true });
-  const wrapper = h('div', { class: 'combo field' }, input, list);
+  // The closed field reads as a list row: the input's own text is hidden under
+  // this, so the localised name is set apart there as well. Typing brings the
+  // real text back, since that is what the filter works on.
+  const display = h('span', { class: 'combo-display', hidden: true });
+  const wrapper = h('div', { class: 'combo field' }, input, display, list);
   let selected = '';
   let shown: ComboEntry[] = [];
   let activeIndex = -1;
+  let focused = false;
   function labelOf(id: string): string {
     const entry = byId.get(id);
     if (entry) { return entry.label; }
     return id === '' || freeText === true ? id : id + ' (not in the mod)';
   }
+  function paintDisplay(): void {
+    const entry = focused ? undefined : byId.get(selected);
+    const show = entry !== undefined && (entry.name ?? '') !== '';
+    if (entry && show) { display.replaceChildren(...comboItemContent(entry)); }
+    display.hidden = !show;
+    wrapper.classList.toggle('named', show);
+  }
   function setValue(id: string | undefined): void {
     selected = id ?? '';
     input.value = labelOf(selected);
+    paintDisplay();
   }
   function pick(id: string): void {
     setValue(id);
@@ -405,7 +446,7 @@ function selectInput(
       list.append(h('div', {
         class: 'combo-item' + (index === activeIndex ? ' active' : '') + (entry.empty ? ' empty' : ''),
         onmousedown: function (event) { event.preventDefault(); pick(entry.id); }
-      }, entry.label));
+      }, ...comboItemContent(entry)));
     });
     list.hidden = shown.length === 0;
     const active = list.querySelector('.active');
@@ -426,12 +467,12 @@ function selectInput(
     if (only && !only.empty) { pick(only.id); return; }
     setValue(selected);
   }
-  input.addEventListener('focus', function () { input.select(); activeIndex = -1; });
+  input.addEventListener('focus', function () { focused = true; paintDisplay(); input.select(); activeIndex = -1; });
   // A click opens the list, focus alone does not: a row added to a list lands on
   // an empty field with the rows under it still in view.
   input.addEventListener('click', function () { if (list.hidden) { activeIndex = -1; render(''); } });
   input.addEventListener('input', function () { activeIndex = -1; render(input.value.trim()); });
-  input.addEventListener('blur', function () { commit(); close(); });
+  input.addEventListener('blur', function () { focused = false; commit(); close(); paintDisplay(); });
   input.addEventListener('keydown', function (event) {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
@@ -1018,6 +1059,7 @@ const brushSizeValue = required('brushSizeValue');
 const brushRow = required('brushRow');
 const paintColorInput = requiredInput('paintColor');
 const paintColorText = required('paintColorText');
+const generateColorButton = requiredButton('generateColorButton');
 const savePaintButton = requiredButton('savePaintButton');
 const resetPaintButton = requiredButton('resetPaintButton');
 
@@ -1065,11 +1107,39 @@ function brushWidth(): number {
 function setBrushColor(color: number): void {
   brushColor = color & 0xffffff;
   paintColorInput.value = hexOf(brushColor);
-  paintColorText.textContent = hexOf(brushColor);
+  paintColorInput.title = 'Painting with ' + hexOf(brushColor);
+  paintColorText.textContent = rgbOf(brushColor);
+  // Whatever the brush holds can reach the map, so Generate must never offer it again.
+  usedColors?.add(brushColor);
 }
 
 function hexOf(color: number): string {
   return '#' + color.toString(16).padStart(6, '0');
+}
+
+function rgbOf(color: number): string {
+  return String((color >> 16) & 255) + ' ' + String((color >> 8) & 255) + ' ' + String(color & 255);
+}
+
+/**
+ * Every colour the map already uses: the table's rows, its lakes, and what the
+ * bitmap itself holds — a colour no row names is still a blob on the map, and
+ * handing it out would silently merge the two. The bitmap is walked once, on
+ * the first Generate, and kept: after it, the only colour that can reach the
+ * map is the brush's, and `setBrushColor` adds that one as it goes.
+ */
+let usedColors: Set<number> | null = null;
+
+function takenColors(): Set<number> {
+  const kept = usedColors;
+  if (kept) { return kept; }
+  const taken = new Set<number>();
+  for (const definition of map?.definitions ?? []) { taken.add(definition.color); }
+  for (const color of map?.lakeColors ?? []) { taken.add(color); }
+  for (const color of image?.packed ?? []) { taken.add(color); }
+  taken.add(brushColor);
+  usedColors = taken;
+  return taken;
 }
 
 function startPaint(event: MouseEvent): void {
@@ -1320,6 +1390,12 @@ for (const entry of toolButtons) {
 brushSize.addEventListener('input', function () {
   brush = Math.min(16, Math.max(1, Math.round(Number(brushSize.value) || 1)));
   brushSizeValue.textContent = String(brush);
+});
+generateColorButton.addEventListener('click', function () {
+  const color = unusedColor(takenColors());
+  if (color === undefined) { setStatus('Every colour is taken; nothing is left to generate.', 'error'); return; }
+  setBrushColor(color);
+  setStatus('Painting with ' + rgbOf(color) + ', which nothing on the map uses');
 });
 paintColorInput.addEventListener('input', function () {
   const color = Number.parseInt(paintColorInput.value.slice(1), 16);
@@ -1732,7 +1808,10 @@ function renderSide(id: number): void {
   // and a unit point, so only those two are editable and the rest is locked.
   const closed: Partial<Record<TabName, boolean>> = {};
   if (current.isSea) {
-    lock(history.definition);
+    // The tab's one Save writes the name, which a sea province does have, so
+    // only the history form under it is locked — not the Save itself.
+    const body = history.definition.querySelector('.body');
+    if (body instanceof HTMLElement) { lock(body); }
     for (const name of ['buildings', 'dates', 'pops'] as const) { lock(panes[name]); closed[name] = true; }
   }
   render();
@@ -1829,11 +1908,30 @@ function saveBar(onSave: () => void): SaveBar {
   } }, 'Cancel');
   return { node: h('div', { class: 'actions' }, button, cancel, status), status: status, button: button, cancel: cancel };
 }
+/**
+ * What a save writes, by the fields it carries: one tab's Save can stand for
+ * several files, and only what it writes may be read back from disk after it.
+ */
+function partsOf(payload: Record<string, unknown>): Set<string> {
+  const parts = new Set<string>();
+  const section = payload['section'];
+  if (typeof section === 'string') { parts.add(section); }
+  for (const key of ['climate', 'states', 'localisation']) {
+    if (payload[key] !== undefined) { parts.add(key); }
+  }
+  return parts;
+}
+
 /** One section's edit, addressed to the province the panel is about. */
 function postSave(payload: Record<string, unknown>): void {
   if (!details) { return; }
+  savingParts = partsOf(payload);
   const create = details.isNew && newColor !== null
-    ? { color: newColor, isSea: seaInput?.checked === true, name: nameInput?.value ?? '' }
+    ? {
+      color: newColor, isSea: seaInput?.checked === true, name: nameInput?.value ?? '',
+      // A land province is refused without both: the server writes them with the row.
+      climate: climateInput?.value ?? '', states: statesRead ? statesRead() : [],
+    }
     : undefined;
   vscode.postMessage({
     ...payload,
@@ -1855,18 +1953,19 @@ function localisationSection(current: ProvinceDetails): HTMLElement {
     ? h('label', { class: 'check' }, sea, 'Sea province (the id joins sea_starts in default.map)')
     : null;
   const rename = h('input', { type: 'checkbox' });
+  renameInput = rename;
   // A base-game province keeps the name vanilla gave its file, and other tools match
   // on it, so renaming there is opt-in. Above that id the province is the mod's own.
   const renamable = current.history.file !== undefined && !current.isSea;
   rename.checked = current.id > VANILLA_MAX_PROVINCES && renamable;
   const renameRow = h('label', { class: 'check' }, rename, 'Rename the history file to match');
   if (!renamable) { lock(renameRow); }
-  const bar = saveBar(function () { postSave({ section: 'localisation', text: input.value, renameHistoryFile: rename.checked }); });
-  input.addEventListener('keydown', function (event) { if (event.key === 'Enter') { bar.button.click(); } });
+  // The tab has one Save, at the bottom of the History section; Enter reaches it.
+  input.addEventListener('keydown', function (event) { if (event.key === 'Enter') { definitionSave?.click(); } });
   return h('div', { class: 'section' },
     sectionHeader('Localisation', loc, { text: loc.key + ' is not defined; saving adds it to the mod\'s province names file.', warning: true }),
     layerNote(loc),
-    h('div', { class: 'inline' }, h('label', null, loc.key), input, bar.button, bar.cancel, bar.status),
+    h('div', { class: 'inline' }, h('label', null, loc.key), input),
     seaRow,
     renameRow);
 }
@@ -1882,7 +1981,13 @@ interface HistoryPanes {
 
 function historySections(current: ProvinceDetails): HistoryPanes {
   const history = current.history;
-  const form = historyForm(current, history.data ?? emptyHistory(), true);
+  const data = carriedHistory ?? history.data ?? emptyHistory();
+  carriedHistory = null;
+  const form = historyForm(current, data, { climate: carriedClimate ?? current.climate.name, state: stateSection(current) });
+  carriedClimate = null;
+  historyRead = form.read;
+  historyRendered = JSON.stringify(data);
+  climateRendered = form.climate();
   // Where a new history file goes. The row stands whether it is needed or not,
   // greyed once the file exists, so the panel keeps its height from one province
   // to the next; a sea province has the whole pane locked over it.
@@ -1890,19 +1995,52 @@ function historySections(current: ProvinceDetails): HistoryPanes {
   const folder = h('select', null, folders.map(function (name) { return option(name, name || '(history/provinces)'); }));
   const folderRow = h('div', { class: 'grid lone' }, h('label', null, 'Folder'), folder);
   if (history.data) { lock(folderRow); }
-  function pane(title: string, body: Child): HTMLElement {
-    const bar = saveBar(function () { postSave({ section: 'history', data: form.read(), createInFolder: folder.value }); });
-    const missing: MissingNote = current.isSea
-      ? { text: 'Sea tiles don\'t need history files.', warning: false }
-      : { text: 'No history file; saving creates one', warning: true };
-    return h('div', { class: 'section' }, sectionHeader(title, history, missing), layerNote(history), body, bar.node);
+  // The Definition tab shows the name, the climate and the states as well, so
+  // its one Save carries them; the other two history tabs show none of them.
+  function pane(title: string, whole: boolean): (body: Child) => HTMLElement {
+    const bar = saveBar(function () {
+      postSave({
+        section: 'history', data: form.read(), climate: form.climate(), createInFolder: folder.value,
+        ...(whole
+          ? {
+            localisation: { text: nameInput?.value ?? '', renameHistoryFile: renameInput?.checked === true },
+            states: statesRead ? statesRead() : [],
+          }
+          : {}),
+      });
+    });
+    if (whole) { definitionSave = bar.button; }
+    return function (body: Child): HTMLElement {
+      const missing: MissingNote = current.isSea
+        ? { text: 'Sea tiles don\'t need history files.', warning: false }
+        : { text: 'No history file; saving creates one', warning: true };
+      return h('div', { class: 'section' }, sectionHeader(title, history, missing), layerNote(history), h('div', { class: 'body' }, body), bar.node);
+    };
   }
   return {
-    definition: pane('History', h('div', null, folderRow, form.node)),
-    buildings: pane('Buildings', form.buildings),
-    dates: pane('Extra Dates', form.dated),
+    definition: pane('History', true)(h('div', null, folderRow, form.node)),
+    buildings: pane('Buildings', false)(form.buildings),
+    dates: pane('Extra Dates', false)(form.dated),
   };
 }
+/**
+ * `map/region.txt`: the states the province belongs to. The engine puts it in
+ * the first one that claims it, and a land province in none of them is in no
+ * state at all, so a Save is refused until the list has one.
+ */
+function stateSection(current: ProvinceDetails): HTMLElement {
+  const state = current.state;
+  const names = carriedStates ?? state.names;
+  carriedStates = null;
+  const list = listEditor('States', names, state.options, 'state');
+  statesRead = list.read;
+  statesRendered = JSON.stringify([...names]);
+  return h('div', { class: 'section group' },
+    sectionHeader('State', state, { text: 'The picked mods have no map/region.txt.', warning: true }),
+    layerNote(state),
+    list.node);
+}
+
 function emptyHistory(): ProvinceHistory {
   return { owner: undefined, controller: undefined, cores: [], removeCores: [], tradeGoods: undefined, lifeRating: undefined, terrain: undefined, colonial: undefined, colony: undefined, isSlave: undefined, buildings: [], partyLoyalty: [], stateBuildings: [], setFlags: [], clrFlags: [], dated: [] };
 }
@@ -1910,7 +2048,7 @@ function emptyHistory(): ProvinceHistory {
 // Cores, Buildings and dated-block groups back separately, for their own tabs.
 // A dated block keeps every group inside its one node.
 /** The single-value fields of a history block, in the order the form shows them. */
-type HistoryField = 'owner' | 'controller' | 'tradeGoods' | 'lifeRating' | 'terrain' | 'colonial' | 'colony';
+type HistoryField = 'owner' | 'controller' | 'tradeGoods' | 'lifeRating' | 'terrain' | 'colonial';
 
 interface HistoryFieldSpec {
   readonly name: HistoryField;
@@ -1924,6 +2062,14 @@ interface HistoryFormHandle {
   readonly buildings: HTMLElement;
   readonly dated: HTMLElement | null;
   readonly read: () => ProvinceHistory;
+  /** The climate the form holds; a dated block has none, and answers ''. */
+  readonly climate: () => string;
+}
+
+/** What only the province's own form carries: its climate, and the State section under it. */
+interface HistoryExtras {
+  readonly climate: string | undefined;
+  readonly state: HTMLElement;
 }
 
 const LOYALTY_RANGE: SliderRange = { min: 1, max: 100 };
@@ -1982,7 +2128,8 @@ function capLoyalties(table: RowsHandle): void {
   apply();
 }
 
-function historyForm(current: ProvinceDetails, data: ProvinceHistory, topLevel: boolean): HistoryFormHandle {
+function historyForm(current: ProvinceDetails, data: ProvinceHistory, extras: HistoryExtras | null): HistoryFormHandle {
+  const topLevel = extras !== null;
   const vocabulary = current.vocabulary;
   const fields: readonly HistoryFieldSpec[] = [
     { name: 'owner', label: 'Owner', entries: vocabulary.countries },
@@ -1991,7 +2138,6 @@ function historyForm(current: ProvinceDetails, data: ProvinceHistory, topLevel: 
     { name: 'lifeRating', label: 'Life rating', entries: null },
     { name: 'terrain', label: 'Terrain', entries: vocabulary.terrains },
     { name: 'colonial', label: 'Colonial', entries: null, slider: COLONIAL_RANGE },
-    { name: 'colony', label: 'Colony', entries: null },
   ];
   const inputs = {} as Record<HistoryField, FieldElement>;
   const grid = h('div', { class: 'grid' });
@@ -2000,11 +2146,14 @@ function historyForm(current: ProvinceDetails, data: ProvinceHistory, topLevel: 
     inputs[spec.name] = field;
     grid.append(h('label', null, spec.label), field);
   }
-  // Ticked writes is_slave = yes; unticked drops the line (the game's default is no).
   if (topLevel) { inputs.terrain.addEventListener('input', function () { showTerrain(inputs.terrain.value); }); }
-  const isSlave = h('input', { type: 'checkbox' });
-  isSlave.checked = (data.isSlave ?? '').toLowerCase() === 'yes';
-  grid.append(h('label', null, 'Slave state'), h('div', null, isSlave));
+  // The climate is not in the history file, but it is the same province and the
+  // same Save: map/climate.txt is written with it.
+  const climate = extras ? selectInput(extras.climate, current.climate.options, '(none)') : null;
+  if (climate) {
+    climateInput = climate;
+    grid.append(h('label', null, 'Climate'), climate);
+  }
   const cores = listEditor('Cores', data.cores, vocabulary.countries, 'country');
   // Only a dated block edits remove_core: at the start date a core is simply
   // listed or not. A remove_core line already in the file rides along.
@@ -2018,23 +2167,26 @@ function historyForm(current: ProvinceDetails, data: ProvinceHistory, topLevel: 
   const buildingsGroup = h('div', { class: 'form' }, buildings.node, stateBuildings.node);
   // The province's own cores sit in the Definition tab, under Party loyalty;
   // a dated block keeps every group inside its one node.
-  const node = topLevel
-    ? h('div', { class: 'form' }, grid, partyLoyalty.node, cores.node)
+  const node = extras
+    ? h('div', { class: 'form' }, grid, extras.state, partyLoyalty.node, cores.node)
     : h('div', { class: 'form' }, grid, coresGroup, buildingsGroup, partyLoyalty.node);
   return {
     node: node,
     buildings: buildingsGroup,
     dated: dated ? dated.node : null,
+    climate: function (): string { return climate ? climate.value : ''; },
     read: function (): ProvinceHistory {
       return {
         owner: valueOf(inputs.owner), controller: valueOf(inputs.controller),
         cores: cores.read(), removeCores: removeCores ? removeCores.read() : data.removeCores,
         tradeGoods: valueOf(inputs.tradeGoods), lifeRating: valueOf(inputs.lifeRating), terrain: valueOf(inputs.terrain),
-        colonial: levelOf(inputs.colonial, data.colonial !== undefined), colony: valueOf(inputs.colony), isSlave: isSlave.checked ? 'yes' : undefined,
+        colonial: levelOf(inputs.colonial, data.colonial !== undefined),
+        // Not shown by the form: colony, is_slave and the province flags are
+        // written back exactly as the file has them.
+        colony: data.colony, isSlave: data.isSlave,
         buildings: buildings.read().map(function (row) { return { key: row['key'] ?? '', value: row['value'] ?? '' }; }),
         partyLoyalty: partyLoyalty.read().map(function (row) { return { ideology: row['ideology'] ?? '', loyaltyValue: row['loyaltyValue'] ?? '' }; }),
         stateBuildings: stateBuildings.read().map(function (row) { return { building: row['building'] ?? '', level: row['level'] ?? '', upgrade: row['upgrade'] ?? '' }; }),
-        // Province flags are not edited here; the ones in the file are kept as they are.
         setFlags: data.setFlags, clrFlags: data.clrFlags, dated: dated ? dated.read() : [],
       };
     },
@@ -2206,7 +2358,7 @@ function datedEditor(current: ProvinceDetails, blocks: readonly DatedHistory[]):
   const forms: { date: HTMLInputElement; form: HistoryFormHandle }[] = [];
   function addBlock(block: DatedHistory): HTMLDetailsElement {
     const date = textInput(block.date);
-    const form = historyForm(current, block.entries, false);
+    const form = historyForm(current, block.entries, null);
     const entry = { date: date, form: form };
     forms.push(entry);
     const node = h('details', { class: 'dated' },
@@ -2298,7 +2450,9 @@ function popsSection(current: ProvinceDetails): HTMLElement {
   if (pops.pops) { lock(fileRow); }
   parts.push(fileRow);
   const vocabulary = current.vocabulary;
-  const table = rowsEditor('Pops', pops.pops ?? [], [
+  const held = carriedPops ?? pops.pops ?? [];
+  carriedPops = null;
+  const table = rowsEditor('Pops', held, [
     { key: 'type', placeholder: 'type', entries: vocabulary.popTypes },
     { key: 'culture', placeholder: 'culture', entries: vocabulary.cultures },
     { key: 'religion', placeholder: 'religion', entries: vocabulary.religions },
@@ -2311,15 +2465,17 @@ function popsSection(current: ProvinceDetails): HTMLElement {
   }
   table.rows.addEventListener('input', updateTotal);
   updateTotal();
-  const bar = saveBar(function () {
-    const rows = table.read().map(function (pop): PopEntry {
+  function readPops(): PopEntry[] {
+    return table.read().map(function (pop): PopEntry {
       return {
         type: pop['type'] ?? '', culture: pop['culture'] ?? '', religion: pop['religion'] ?? '',
         size: pop['size'] ?? '', militancy: blankToUndefined(pop['militancy']), rebelType: blankToUndefined(pop['rebelType']),
       };
     });
-    postSave({ section: 'pops', pops: rows, createInFile: fileField.value });
-  });
+  }
+  popsRead = readPops;
+  popsRendered = JSON.stringify(held);
+  const bar = saveBar(function () { postSave({ section: 'pops', pops: readPops(), createInFile: fileField.value }); });
   parts.push(table.node, total, bar.node);
   return h('div', { class: 'section' }, parts);
 }
@@ -2345,6 +2501,7 @@ function loadFreshMap(message: Extract<HostMessage, { type: 'map' }>): void {
   pendingPositions.clear();
   draftBaseline = null; refreshPending();
   countryColors = null; tintedTiles = null; tintOfColor = null;
+  usedColors = null;
   resetPaint(); setTool('hand');
   riversUri = message.riversUri ?? null; riverTiles = null; riversLoading = false;
   showHint();
@@ -2448,6 +2605,25 @@ function asPositions(points: Draft): ProvincePositions {
   return out;
 }
 
+/** What the tabs the save did not write are holding, to be put back after the re-render. */
+function carryForms(): void {
+  if (!savingParts.has('history') && historyRead) {
+    const held = historyRead();
+    if (JSON.stringify(held) !== historyRendered) { carriedHistory = held; }
+  }
+  if (!savingParts.has('pops') && popsRead) {
+    const held = popsRead();
+    if (JSON.stringify(held) !== popsRendered) { carriedPops = held; }
+  }
+  if (!savingParts.has('climate') && climateInput && climateInput.value !== climateRendered) {
+    carriedClimate = climateInput.value;
+  }
+  if (!savingParts.has('states') && statesRead) {
+    const held = statesRead();
+    if (JSON.stringify(held) !== statesRendered) { carriedStates = held; }
+  }
+}
+
 function handleSaved(result: SaveResult): void {
   saving = false;
   if (!result.ok) {
@@ -2462,10 +2638,13 @@ function handleSaved(result: SaveResult): void {
     if (saved.isSea) { seaIds.add(saved.id); }
     newColor = null;
   }
-  pendingPositions.delete(saved.id);
+  // Only the section that was saved is read back from the file; the points and
+  // the forms of the other tabs are still the user's unsaved work.
+  if (savingParts.has('positions')) { pendingPositions.delete(saved.id); } else { capturePending(); }
   refreshPending();
   replaceMarkers(saved.id, saved.positions);
   if (selectedId !== saved.id) { setStatus('Saved province ' + String(saved.id), 'ok'); render(); return; }
+  carryForms();
   details = saved;
   renderSide(saved.id);
   setStatus(result.written.length > 0

@@ -86,7 +86,8 @@ function validateDefinitionCsv(text: string, index: ModIndex): Diagnostic[] {
       continue;
     }
     const max = index.maxProvinces;
-    if (max !== undefined && Number(id.text) >= max) {
+    const tooLarge = max !== undefined && Number(id.text) >= max;
+    if (tooLarge) {
       out.error(
         'province-id-too-large',
         `Province id ${id.text} is too large: default.map sets max_provinces = ${String(max)}, so ids must be below that.`,
@@ -94,8 +95,39 @@ function validateDefinitionCsv(text: string, index: ModIndex): Diagnostic[] {
       );
     }
     checkDefinitionColor(out, id, [red, green, blue], colorOwners);
+    if (!tooLarge) {
+      checkProvincePlacement(out, id, index);
+    }
   }
   return out.items;
+}
+
+/**
+ * A land province belongs to one climate and to a state: without the first it
+ * carries no climate modifier, and without the second the engine leaves it out
+ * of every state, so it can never be owned, developed or traded with. Sea
+ * provinces are in neither file. A stack that carries no climate.txt or no
+ * region.txt at all says nothing here — that is a missing file, not 3000 broken
+ * provinces.
+ */
+function checkProvincePlacement(out: CsvDiagnostics, id: CsvField, index: ModIndex): void {
+  if (index.seaProvinces.has(id.text)) {
+    return;
+  }
+  if (index.climateOfProvince.size > 0 && !index.climateOfProvince.has(id.text)) {
+    out.error(
+      'province-without-climate',
+      `Province ${id.text} is in no climate: add it to a block of map/climate.txt.`,
+      id.range,
+    );
+  }
+  if (index.stateOfProvince.size > 0 && !index.stateOfProvince.has(id.text)) {
+    out.error(
+      'province-without-state',
+      `Province ${id.text} is in no state: add it to a region of map/region.txt.`,
+      id.range,
+    );
+  }
 }
 
 function checkDefinitionColor(

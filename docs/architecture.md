@@ -216,8 +216,13 @@ and tints it by owner in the browser. Saves are text patches
 computed by `vscode`-free services (`provinceLocEdit.ts`, `provinceHistoryEdit.ts`,
 `provincePopsEdit.ts`, `provincePositionsEdit.ts` over `textPatch.ts`) and
 written only into the top mod of the stack. A province created from a painted colour goes the same
-route: `provinceDefinitionEdit.ts` appends the `definition.csv` row and `mapDefaultEdit.ts` patches
-`max_provinces` / `sea_starts`, both run from the save that creates it — which can also be asked to
+route: `provinceDefinitionEdit.ts` appends the `definition.csv` row, `mapDefaultEdit.ts` patches
+`max_provinces` / `sea_starts`, and `provinceGroupEdit.ts` puts the id in its `map/climate.txt` block
+and its `map/region.txt` blocks — the two a land province cannot exist without, which is why no save
+of one goes through while either is missing, and why `modIndex` carries `climateOfProvince` beside
+`stateOfProvince` for the full report to check every `definition.csv` row against — all run from the
+save that creates it — the one Save the Definition tab has, which is also the only one that writes
+the localisation and the states — which can also be asked to
 write nothing and answer with the files it would touch, which is what the confirmation modal lists.
 Painting works the same way one level down:
 `provincePaint.ts` holds the brush, the fill and the run encoding the page and the server share, and

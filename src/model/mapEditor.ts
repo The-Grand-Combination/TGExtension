@@ -211,6 +211,8 @@ export type MapPositionsResult =
 export interface NamedIdentifier {
   readonly id: string;
   readonly label: string;
+  /** The localised part of the label, when the label is `id - name`: the pick list shows it apart. */
+  readonly name?: string;
 }
 
 /** Identifier lists the form offers: pick lists with localised labels, plain suggestions for the rest. */
@@ -238,6 +240,26 @@ export interface TerrainSection {
   readonly pictureDataUri: string | undefined;
 }
 
+/**
+ * `map/climate.txt`: the one climate whose id list holds the province. Every
+ * land province has exactly one, and a sea province has none.
+ */
+export interface ClimateSection {
+  readonly name: string | undefined;
+  readonly file: FileRef | undefined;
+  readonly inTarget: boolean;
+  /** Every climate the file declares, with its localised name. */
+  readonly options: readonly NamedIdentifier[];
+}
+
+/** `map/region.txt`: the states holding the province. A land province needs at least one. */
+export interface StateSection {
+  readonly names: readonly string[];
+  readonly file: FileRef | undefined;
+  readonly inTarget: boolean;
+  readonly options: readonly NamedIdentifier[];
+}
+
 export interface ProvinceDetails {
   readonly id: number;
   readonly definitionName: string;
@@ -249,6 +271,8 @@ export interface ProvinceDetails {
   readonly pops: PopsSection;
   readonly positions: PositionsSection;
   readonly terrain: TerrainSection;
+  readonly climate: ClimateSection;
+  readonly state: StateSection;
   readonly vocabulary: Vocabulary;
 }
 
@@ -265,9 +289,27 @@ export type ProvinceResult =
   | { readonly kind: 'details'; readonly details: ProvinceDetails }
   | { readonly kind: 'unavailable'; readonly reason: string };
 
+/** The `PROV<id>` line, written by the Save of the tab that shows it. */
+export interface LocalisationEdit {
+  readonly text: string;
+  readonly renameHistoryFile: boolean;
+}
+
 export type SaveSection =
-  | { readonly section: 'localisation'; readonly text: string; readonly renameHistoryFile: boolean }
-  | { readonly section: 'history'; readonly data: ProvinceHistory; readonly createInFolder: string | undefined }
+  /**
+   * The history file, and with it everything the Definition tab shows: its one
+   * Save carries the localisation and the states as well, so the name, the
+   * climate, the states and the history are written together. The Buildings and
+   * Extra Dates tabs post the same section without them — they show neither.
+   */
+  | {
+      readonly section: 'history';
+      readonly data: ProvinceHistory;
+      readonly climate: string;
+      readonly createInFolder: string | undefined;
+      readonly localisation?: LocalisationEdit;
+      readonly states?: readonly string[];
+    }
   | { readonly section: 'pops'; readonly pops: readonly PopEntry[]; readonly createInFile: string | undefined }
   | { readonly section: 'positions'; readonly data: ProvincePositions };
 
@@ -278,6 +320,9 @@ export interface NewProvince {
   readonly isSea: boolean;
   /** The name the `definition.csv` row carries. */
   readonly name: string;
+  /** A land province cannot be created without one, nor without a state. */
+  readonly climate: string;
+  readonly states: readonly string[];
 }
 
 export interface NewProvinceParams extends MapEditorTargetParams {

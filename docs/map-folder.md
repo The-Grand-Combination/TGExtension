@@ -72,8 +72,9 @@ a nested block is `stray-block`. Empty blocks are legal (tooltip-only meta-regio
 - A sea zone inside a state, and a block that mixes already-assigned with unassigned provinces,
   are **not** reported. Both are deliberate: mods carve states that exist only to carry a
   localisation key, and those routinely hold sea ids or overlap existing states. The index still
-  replays NCE's state assignment (`stateOfProvince`, see [mod-index.md](mod-index.md)); no
-  diagnostic reads it today.
+  replays NCE's state assignment (`stateOfProvince`, see [mod-index.md](mod-index.md)). A land
+  province that replay leaves unassigned is `province-without-state`, reported on its row in
+  `definition.csv` — the file that declares the province, not the one that forgot it.
 - Same-file duplicate names are `duplicate-identifier`. The same name in `region.txt` **and**
   `super_region.txt` is not reported: mods mirror meta-regions into `region.txt` for the vanilla
   engine, and NCE keeps the last definition.
@@ -97,7 +98,9 @@ another); NCE merges them by name, so this is not a duplicate.
 
 - Assignments are modifier values (`unknown-modifier-key`); bare numbers are province ids.
 - A province in two climates → `province-already-assigned`; twice in one climate →
-  `duplicate-province`.
+  `duplicate-province`. A land province in **no** climate is `province-without-climate`, reported on
+  its `definition.csv` row. Both checks stay quiet when the stack has no `climate.txt` or no
+  `region.txt` at all: that is one missing file, not a broken province per row.
 
 ## `map/terrain.txt` → `mapTerrain`
 

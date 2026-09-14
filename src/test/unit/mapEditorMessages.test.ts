@@ -79,10 +79,46 @@ suite('mapEditorMessages', () => {
       data: {},
       provinceId: 9,
       popDate: '1836.1.1',
-      create: { color: 255, isSea: true, name: 'Nova' },
+      create: { color: 255, isSea: true, name: 'Nova', climate: 'arid_climate', states: ['ENG_1', 7] },
     });
     assert.ok(message?.type === 'save');
-    assert.deepStrictEqual(message.params.create, { color: 255, isSea: true, name: 'Nova' });
+    assert.deepStrictEqual(message.params.create, {
+      color: 255, isSea: true, name: 'Nova', climate: 'arid_climate', states: ['ENG_1'],
+    });
+  });
+
+  test('the states ride with the history section, and nothing that is not a name is kept', () => {
+    const message = asPageMessage({
+      type: 'save', section: 'history', data: {}, states: ['ENG_1', 3, null], provinceId: 9, popDate: '1836.1.1',
+    });
+    assert.ok(message?.type === 'save' && message.params.section === 'history');
+    assert.deepStrictEqual(message.params.states, ['ENG_1']);
+  });
+
+  test('a history save without states or a localisation carries neither, so neither is written', () => {
+    const message = asPageMessage({ type: 'save', section: 'history', data: {}, provinceId: 9, popDate: '1836.1.1' });
+    assert.ok(message?.type === 'save' && message.params.section === 'history');
+    assert.strictEqual(message.params.states, undefined);
+    assert.strictEqual(message.params.localisation, undefined);
+  });
+
+  test('the localisation the Definition Save carries is taken whole', () => {
+    const message = asPageMessage({
+      type: 'save', section: 'history', data: {}, provinceId: 9, popDate: '1836.1.1',
+      localisation: { text: 'Nova', renameHistoryFile: true },
+    });
+    assert.ok(message?.type === 'save' && message.params.section === 'history');
+    assert.deepStrictEqual(message.params.localisation, { text: 'Nova', renameHistoryFile: true });
+  });
+
+  test('a history save carries the climate, and a missing one counts as cleared', () => {
+    const base = { type: 'save', section: 'history', data: {}, provinceId: 9, popDate: '1836.1.1' };
+    const withClimate = asPageMessage({ ...base, climate: 'mild_climate' });
+    assert.ok(withClimate?.type === 'save' && withClimate.params.section === 'history');
+    assert.strictEqual(withClimate.params.climate, 'mild_climate');
+    const without = asPageMessage(base);
+    assert.ok(without?.type === 'save' && without.params.section === 'history');
+    assert.strictEqual(without.params.climate, '');
   });
 
   test('a creation without a whole colour is no creation: the save goes out on its own', () => {

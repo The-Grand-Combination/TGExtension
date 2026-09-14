@@ -61,8 +61,9 @@ ${PAGE_STYLE}
           </label>
           <div class="tint">
             <input id="paintColor" type="color" value="#ff0000" title="The colour the pencil and the bucket paint with">
-            <span id="paintColorText">#ff0000</span>
+            <span id="paintColorText">255 0 0</span>
           </div>
+          <button id="generateColorButton" class="secondary generate" title="Take a colour at random that no province and no pixel of the map is using">Generate Color</button>
           <div class="actions">
             <button id="savePaintButton" class="secondary" title="Write the painted pixels into map/provinces.bmp">Save</button>
             <button id="resetPaintButton" class="secondary" title="Put every painted pixel back the way the file has it">Reset</button>
@@ -123,22 +124,21 @@ const PAGE_STYLE = String.raw`
   /* The overlay controls sit bottom-left. Save all is a sibling of the options
      box rather than a child of it: its label carries a province count, and a
      child that wide would stretch the box every time the count changed. */
-  #mapControls { position: absolute; left: 10px; bottom: 10px; display: flex; align-items: flex-end; gap: 8px; max-width: calc(100% - 20px); user-select: none; }
-  /* The box is only as wide as its widest layer name: the buttons and the search
-     under it share that width rather than each asking for one of its own. */
-  #layers { flex: none; display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 6px 10px; background: rgba(30, 30, 30, 0.6); color: #eee; border-radius: 4px; font-size: 0.9em; }
-  #layers label { display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
-  #layers input { margin: 0; }
-  #layers .actions { display: flex; gap: 6px; margin-top: 4px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.15); }
-  #layers .actions button { flex: 1 1 0; min-width: 0; padding: 2px 4px; }
-  /* The tool box sits over the layers box and takes its width: the tools are a
-     2 x 2 pad, so the box below is always the wider of the two. */
-  #controlStack { flex: none; display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
-  /* Zero wide, then as wide as the stack: the box below decides the width, and
-     a long Save label can never push the two boxes apart. */
-  #tools { width: 0; min-width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 5px; padding: 6px 10px; background: rgba(30, 30, 30, 0.6); color: #eee; border-radius: 4px; font-size: 0.9em; }
-  #tools .pad { display: grid; grid-template-columns: repeat(3, 26px); gap: 3px; }
-  #tools .tool { width: 26px; height: 24px; padding: 0; display: inline-flex; background: transparent; border-radius: 3px; opacity: 0.75; }
+  #mapControls { position: absolute; left: 10px; bottom: 10px; display: flex; align-items: flex-end; gap: 8px; max-width: calc(100% - 20px); user-select: none; --tool: 26px; --tool-gap: 3px; --box-pad: 8px; }
+  /* Three tools wide and not a pixel more: the boxes sit over the map, and the
+     map is what is being looked at. Everything in both of them is measured
+     against that one width, so nothing inside can stretch a box on its own. */
+  #controlStack { flex: none; display: flex; flex-direction: column; align-items: stretch; gap: 8px; width: calc(3 * var(--tool) + 2 * var(--tool-gap) + 2 * var(--box-pad)); }
+  #layers, #tools { box-sizing: border-box; width: 100%; display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 6px var(--box-pad); background: rgba(30, 30, 30, 0.6); color: #eee; border-radius: 4px; font-size: 0.78em; }
+  /* A layer name stays on one line even when it runs into the padding: two
+     lines for one switch reads worse than a name that reaches the edge. */
+  #layers label { display: flex; align-items: center; gap: 5px; cursor: pointer; line-height: 1.3; white-space: nowrap; }
+  #layers input { margin: 0; flex: none; }
+  #layers .actions { display: flex; gap: 4px; margin-top: 2px; padding-top: 5px; border-top: 1px solid rgba(255, 255, 255, 0.15); }
+  #layers .actions button { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 1px 2px; }
+  #tools { gap: 5px; }
+  #tools .pad { display: grid; grid-template-columns: repeat(3, var(--tool)); gap: var(--tool-gap); }
+  #tools .tool { width: var(--tool); height: 24px; padding: 0; display: inline-flex; background: transparent; border-radius: 3px; opacity: 0.75; }
   /* The glyphs are VS Code's own codicons (grabber, edit-compact, share-window,
      paintcan, copy), drawn as masks so they take the box's colour. */
   #tools .tool::before { content: ''; margin: auto; width: 15px; height: 15px; background-color: #eee; }
@@ -149,18 +149,31 @@ const PAGE_STYLE = String.raw`
   #tools .draw::before { -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M14 1H6C4.9 1 4 1.9 4 3V5H2C0.9 5 0 5.9 0 7V13C0 14.1 0.9 15 2 15H10C11.1 15 12 14.1 12 13V11H14C15.1 11 16 10.1 16 9V3C16 1.9 15.1 1 14 1ZM11 13C11 13.55 10.55 14 10 14H2C1.45 14 1 13.55 1 13V7C1 6.45 1.45 6 2 6H4V9C4 10.1 4.9 11 6 11H11V13ZM15 9C15 9.55 14.55 10 14 10H12V7C12 5.9 11.1 5 10 5H5V3C5 2.45 5.45 2 6 2H14C14.55 2 15 2.45 15 3V9Z'/%3E%3C/svg%3E") center / 15px no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M14 1H6C4.9 1 4 1.9 4 3V5H2C0.9 5 0 5.9 0 7V13C0 14.1 0.9 15 2 15H10C11.1 15 12 14.1 12 13V11H14C15.1 11 16 10.1 16 9V3C16 1.9 15.1 1 14 1ZM11 13C11 13.55 10.55 14 10 14H2C1.45 14 1 13.55 1 13V7C1 6.45 1.45 6 2 6H4V9C4 10.1 4.9 11 6 11H11V13ZM15 9C15 9.55 14.55 10 14 10H12V7C12 5.9 11.1 5 10 5H5V3C5 2.45 5.45 2 6 2H14C14.55 2 15 2.45 15 3V9Z'/%3E%3C/svg%3E") center / 15px no-repeat; }
   #tools .bucket::before { -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M7.49998 1C7.77613 1 7.99998 1.22386 7.99998 1.5V2.42763C8.15702 2.4998 8.30415 2.60053 8.43355 2.72983L12.1458 6.43921C12.7319 7.02493 12.7321 7.97499 12.1462 8.56093L7.0781 13.629C6.48218 14.2249 5.51243 14.2131 4.93123 13.6028L1.31095 9.80152C0.749447 9.21194 0.760786 8.28209 1.3365 7.70638L6.31263 2.73023C6.50977 2.53309 6.74814 2.4023 6.99998 2.33785V1.5C6.99998 1.22386 7.22384 1 7.49998 1ZM6.99998 4.5V3.4571L2.45709 8H11.2929L11.4391 7.85383C11.6344 7.65851 11.6343 7.34182 11.4389 7.14658L7.99998 3.71027V4.5C7.99998 4.77614 7.77613 5 7.49998 5C7.22384 5 6.99998 4.77614 6.99998 4.5ZM1.95461 9C1.97565 9.03992 2.00247 9.07761 2.03509 9.11187L5.65537 12.9132C5.8491 13.1166 6.17235 13.1205 6.37099 12.9219L10.2929 9H1.95461ZM12.9211 10.222C12.6981 9.96719 12.3018 9.96719 12.0789 10.222L10.9285 11.5367C9.74705 12.8869 10.7059 15 12.5 15C14.2941 15 15.2529 12.8869 14.0715 11.5367L12.9211 10.222ZM11.681 12.1952L12.5 11.2593L13.3189 12.1952C13.9346 12.8989 13.4349 14 12.5 14C11.5651 14 11.0654 12.8989 11.681 12.1952Z'/%3E%3C/svg%3E") center / 15px no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M7.49998 1C7.77613 1 7.99998 1.22386 7.99998 1.5V2.42763C8.15702 2.4998 8.30415 2.60053 8.43355 2.72983L12.1458 6.43921C12.7319 7.02493 12.7321 7.97499 12.1462 8.56093L7.0781 13.629C6.48218 14.2249 5.51243 14.2131 4.93123 13.6028L1.31095 9.80152C0.749447 9.21194 0.760786 8.28209 1.3365 7.70638L6.31263 2.73023C6.50977 2.53309 6.74814 2.4023 6.99998 2.33785V1.5C6.99998 1.22386 7.22384 1 7.49998 1ZM6.99998 4.5V3.4571L2.45709 8H11.2929L11.4391 7.85383C11.6344 7.65851 11.6343 7.34182 11.4389 7.14658L7.99998 3.71027V4.5C7.99998 4.77614 7.77613 5 7.49998 5C7.22384 5 6.99998 4.77614 6.99998 4.5ZM1.95461 9C1.97565 9.03992 2.00247 9.07761 2.03509 9.11187L5.65537 12.9132C5.8491 13.1166 6.17235 13.1205 6.37099 12.9219L10.2929 9H1.95461ZM12.9211 10.222C12.6981 9.96719 12.3018 9.96719 12.0789 10.222L10.9285 11.5367C9.74705 12.8869 10.7059 15 12.5 15C14.2941 15 15.2529 12.8869 14.0715 11.5367L12.9211 10.222ZM11.681 12.1952L12.5 11.2593L13.3189 12.1952C13.9346 12.8989 13.4349 14 12.5 14C11.5651 14 11.0654 12.8989 11.681 12.1952Z'/%3E%3C/svg%3E") center / 15px no-repeat; }
   #tools .pick::before { -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 5V12.73C2.4 12.38 2 11.74 2 11V5C2 2.79 3.79 1 6 1H9C9.74 1 10.38 1.4 10.73 2H6C4.35 2 3 3.35 3 5ZM11 15H6C4.897 15 4 14.103 4 13V5C4 3.897 4.897 3 6 3H11C12.103 3 13 3.897 13 5V13C13 14.103 12.103 15 11 15ZM12 5C12 4.448 11.552 4 11 4H6C5.448 4 5 4.448 5 5V13C5 13.552 5.448 14 6 14H11C11.552 14 12 13.552 12 13V5Z'/%3E%3C/svg%3E") center / 15px no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 5V12.73C2.4 12.38 2 11.74 2 11V5C2 2.79 3.79 1 6 1H9C9.74 1 10.38 1.4 10.73 2H6C4.35 2 3 3.35 3 5ZM11 15H6C4.897 15 4 14.103 4 13V5C4 3.897 4.897 3 6 3H11C12.103 3 13 3.897 13 5V13C13 14.103 12.103 15 11 15ZM12 5C12 4.448 11.552 4 11 4H6C5.448 4 5 4.448 5 5V13C5 13.552 5.448 14 6 14H11C11.552 14 12 13.552 12 13V5Z'/%3E%3C/svg%3E") center / 15px no-repeat; }
-  #tools .size { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  #tools .size { display: flex; align-items: center; gap: 2px; white-space: nowrap; }
   /* The brush slider is the panel's own, narrowed and with no field behind it:
      the box it would draw is a black slab over the translucent controls. */
-  #tools .size .readout { flex: 0 0 14px; }
+  /* Left-aligned and hugging the track: right-aligned, a single digit would sit a
+     whole readout away from the slider it belongs to. */
+  #tools .size .readout { flex: 0 0 14px; text-align: left; }
   #tools .size input[type=range] { background: transparent; border-color: transparent; }
+  /* No ring around a slider being dragged; a keyboard focus still shows one. */
+  #tools .size input[type=range]:focus { outline: none; }
+  #tools .size input[type=range]:focus-visible { outline: 1px solid var(--vscode-focusBorder, #0e639c); outline-offset: 1px; }
   #tools .size.off { opacity: 0.4; }
-  /* The colour the brush writes: picked from the map with the eye drop, or chosen outright. */
-  #tools .tint { display: flex; align-items: center; gap: 6px; }
-  #tools .tint input { width: 36px; height: 20px; padding: 0 1px; }
-  #tools .tint span { font-family: var(--vscode-editor-font-family); opacity: 0.85; }
-  #tools .actions { display: flex; gap: 6px; }
-  #tools .actions button { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 2px 4px; }
+  /* The colour the brush writes: picked from the map with the eye drop, or chosen
+     outright. The swatch is the whole row — it says the colour better than its
+     hex did, and the hex is on the tooltip for when the number is what is wanted. */
+  #tools .tint { display: flex; align-items: center; gap: 4px; }
+  #tools .tint input { flex: 0 0 var(--tool); min-width: 0; height: 18px; padding: 0 1px; }
+  /* Red, green and blue as definition.csv writes them; the hex is on the swatch's tooltip. */
+  #tools .tint span { flex: 1 1 0; min-width: 0; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; opacity: 0.85; }
+  #tools .generate { padding: 1px 2px; }
+  /* The side panel's Save rows stand apart from the form above them; this one is
+     already the last row of a small box, so it drops that margin and its rule. */
+  #tools .actions { display: flex; gap: 4px; margin-top: 0; padding-top: 0; border-top: none; }
+  /* Grown from their own labels, not to equal halves: Reset and Reload are the
+     long ones, and two equal halves would clip them at this width. */
+  #tools .actions button { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 1px 2px; }
   #mapArea.painting { cursor: crosshair; }
   #mapArea.picking { cursor: copy; }
   /* The middle button pans under every tool, so it shows the hand it would with the hand. */
@@ -201,9 +214,9 @@ const PAGE_STYLE = String.raw`
   input:not([type=checkbox]), select { height: 24px; }
   input:focus, select:focus { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
   input[type=number] { width: 90px; }
-  #layers .find { display: flex; gap: 6px; margin-top: 4px; }
+  #layers .find { display: flex; gap: 4px; margin-top: 2px; }
   #layers .find input { flex: 1 1 0; width: 0; min-width: 0; }
-  #layers .find button { flex: none; padding: 2px 6px; }
+  #layers .find button { flex: none; padding: 1px 5px; }
   #saveAllButton { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
   #saveAllButton[hidden] { display: none; }
   button { padding: 3px 10px; background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius: 2px; cursor: pointer; font-family: inherit; font-size: inherit; white-space: nowrap; }
@@ -248,10 +261,15 @@ const PAGE_STYLE = String.raw`
   .combo { position: relative; min-width: 0; display: flex; }
   .combo input { width: 100%; padding-right: 22px; }
   .combo::after { content: ''; position: absolute; right: 4px; top: 0; bottom: 0; margin: auto; width: 16px; height: 16px; pointer-events: none; background-color: var(--vscode-foreground); -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M7.976 10.072l4.357-4.357.62.618L8.284 11h-.618L3 6.333l.619-.618 4.357 4.357z'/%3E%3C/svg%3E") center / 16px no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M7.976 10.072l4.357-4.357.62.618L8.284 11h-.618L3 6.333l.619-.618 4.357 4.357z'/%3E%3C/svg%3E") center / 16px no-repeat; }
+  /* The picked entry drawn over the input, lined up with the text it hides. */
+  .combo-display { position: absolute; top: 1px; bottom: 1px; left: 1px; right: 22px; padding: 0 6px; display: flex; align-items: center; pointer-events: none; white-space: nowrap; overflow: hidden; }
+  .combo.named > input { color: transparent; }
   .combo-list { position: absolute; top: 100%; left: 0; min-width: 100%; max-width: 380px; z-index: 10; max-height: 240px; overflow-y: auto; background: var(--vscode-editorSuggestWidget-background, var(--vscode-editorWidget-background, #252526)); color: var(--vscode-editorSuggestWidget-foreground, var(--vscode-foreground)); border: 1px solid var(--vscode-editorSuggestWidget-border, var(--vscode-widget-border, #454545)); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); }
   .combo-item { padding: 3px 8px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .combo-item.active, .combo-item:hover { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
   .combo-item.empty { opacity: 0.7; font-style: italic; }
+  /* The localised name after the identifier: there to read, not to pick out. */
+  .combo-item .combo-name, .combo-display .combo-name { font-style: italic; opacity: 0.7; }
   .row .remove { flex: none; }
   /* An empty list keeps one row to show what goes in it: dimmed until it is
      used, and its placeholders name the field rather than give a real value. */

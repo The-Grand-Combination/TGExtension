@@ -1,5 +1,6 @@
 import {
   POSITION_KINDS,
+  type LocalisationEdit,
   type NewProvince,
   type PopEntry,
   type PositionKind,
@@ -88,7 +89,21 @@ function asCreate(value: unknown): NewProvince | undefined {
   if (!record || typeof record['color'] !== 'number' || !Number.isInteger(record['color'])) {
     return undefined;
   }
-  return { color: record['color'], isSea: record['isSea'] === true, name: optionalString(record['name']) ?? '' };
+  return {
+    color: record['color'],
+    isSea: record['isSea'] === true,
+    name: optionalString(record['name']) ?? '',
+    climate: optionalString(record['climate']) ?? '',
+    states: stringList(record['states']),
+  };
+}
+
+/** Only the tab that shows the name carries it; a save without it leaves the localisation alone. */
+function asLocalisation(value: unknown): LocalisationEdit | undefined {
+  const record = asRecord(value);
+  return record && typeof record['text'] === 'string'
+    ? { text: record['text'], renameHistoryFile: record['renameHistoryFile'] === true }
+    : undefined;
 }
 
 /** A triple short of whole, or holding anything but whole numbers, is dropped: it would paint the wrong pixels. */
@@ -130,13 +145,19 @@ function asSave(record: UnknownRecord): PageMessage | undefined {
 
 function asSection(record: UnknownRecord): SaveSection | undefined {
   switch (record['section']) {
-    case 'localisation':
-      return typeof record['text'] === 'string'
-        ? { section: 'localisation', text: record['text'], renameHistoryFile: record['renameHistoryFile'] === true }
-        : undefined;
     case 'history': {
       const data = asHistory(record['data'], true);
-      return data ? { section: 'history', data, createInFolder: optionalString(record['createInFolder']) } : undefined;
+      const localisation = asLocalisation(record['localisation']);
+      return data
+        ? {
+            section: 'history',
+            data,
+            climate: optionalString(record['climate']) ?? '',
+            createInFolder: optionalString(record['createInFolder']),
+            ...(localisation ? { localisation } : {}),
+            ...(Array.isArray(record['states']) ? { states: stringList(record['states']) } : {}),
+          }
+        : undefined;
     }
     case 'pops': {
       const pops = asPops(record['pops']);

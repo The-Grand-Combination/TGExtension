@@ -2,22 +2,30 @@
 
 The side bar action **Map Editor** (`victorian-tools.openMapEditor`,
 `commands/openMapEditorCommand.ts`) opens a tab with `map/provinces.bmp` drawn on a canvas. Clicking
-a province shows and edits four things about it, each with its own **Save**:
+a province shows and edits five things about it:
 
 1. **Localisation** — the `PROV<id>` key: the ENGLISH column of the CSV row that defines it.
 2. **History** — the province history file, `history/provinces/<folder>/<id> - <name>.txt`, as a
-   form: owner, controller, cores, trade goods, life rating, terrain, colonial/colony, slave state,
+   form: owner, controller, cores, trade goods, life rating, terrain, colonial,
    buildings (`fort`, `naval_base`, `railroad`, and any other `key = number`),
    `party_loyalty` blocks, `state_building` blocks, and dated blocks (`1861.1.1 = { ... }`) with the
-   same fields inside.
-3. **Pops** — the `<id> = { ... }` block of `history/pops/<start date>/<file>.txt`: one row per pop
+   same fields inside. Its last field is **Climate**, which is not in the history file at all: it is
+   the `map/climate.txt` block the province is listed in, and this Save writes it.
+3. **State** — the `map/region.txt` blocks the province is listed in, as a list: a province needs at
+   least one, and may be in several.
+4. **Pops** — the `<id> = { ... }` block of `history/pops/<start date>/<file>.txt`: one row per pop
    with type, culture, religion and size. A pop's `militancy` / `rebel_type`, when the file has
    them, are kept as they are.
-4. **Positions** — the `<id> = { ... }` block of `map/positions.txt`: where the game draws the
+5. **Positions** — the `<id> = { ... }` block of `map/positions.txt`: where the game draws the
    province's `unit`, `city` and `factory`, and the `fort`, `railroad` and `naval_base` inside
    `building_position`. `y` counts from the bottom of the map. The other entries of the block
    (`text_position`, `text_rotation`, `text_scale`, construction points, `building_rotation`, ...)
    are kept as they are.
+
+The first three are one tab with **one Save** at the bottom of it: the name, the climate, the states
+and the history file are what a province *is*, and they are written together. Pops and Positions are
+their own tabs with their own Saves, and so are Buildings and Extra Dates, which write the same
+history file as the Definition tab.
 
 Positions are drawn over the map as one-pixel dots in the colour of their row in the **Positions**
 tab (the round swatch is the legend), once the view is zoomed to at least four screen pixels per map
@@ -27,6 +35,21 @@ coordinate moves the dot, dragging a dot fills in the coordinates, and the targe
 drops the point on the province's centre of mass (moved to the nearest pixel the province owns, so a
 crescent-shaped one does not send it to a neighbour). Nothing is written until **Save**; **Cancel**,
 next to every Save, puts the whole form back as the file has it.
+
+A **Save** reads back from disk only what it wrote: what the other tabs are holding — the history
+form, the pops table, the climate, the states, the points that were dragged — is kept exactly as it
+was typed. Only **Cancel** puts a tab back to the file. What each Save writes is what its own tab
+shows, which for the Definition tab is four files (the localisation CSV, `map/climate.txt`,
+`map/region.txt` and the history file) and for the Buildings and Extra Dates tabs is one: they show
+neither the name nor the climate nor the states, so they touch none of them.
+
+**Every land province has a climate and a state.** Without the first it carries no climate modifier;
+without the second the engine leaves it out of every state, so nothing can own, develop or trade with
+it. So no Save of a land province goes through while either is missing — the reason says which one
+and where to fill it in — and a province cannot be created without both. A **sea province** is in
+neither file and is saved without them, and never gets a history file created for it either; for one
+being created that is what the **Sea province** tick decides, so the reason says so. A mod stack with
+no `climate.txt` or no `region.txt` at all is not held to the rule: there would be nothing to pick.
 
 Moved points are kept when the next province is clicked, so a run of provinces can be fixed in one
 go: they stay drawn on the map, the province keeps them when it is clicked again, and a **Save N
@@ -80,6 +103,19 @@ three paint with the box's colour:
   neighbours at a time, so a region that only meets another through a corner stays where it is.
 
 The colour swatch is a colour picker: any colour can be painted, including one no province has yet.
+Beside it are its red, green and blue as `definition.csv` writes them, and its hex is on the swatch's
+own tooltip. **Generate Color**, under the row, takes a colour at random that **nothing on the map is
+using** — no `definition.csv` row, no lake row, and no pixel of `provinces.bmp`, because a colour no
+row names is still a blob on the map and painting with it would silently merge the two. The bitmap is
+walked once, on the first Generate; after that the only colour that can reach the map is the brush's,
+and that one is remembered as it is set.
+
+Both boxes are **three tool icons wide** and no wider, padding included: they sit over the map, which
+is what is being looked at. Everything in them is sized to that one width — the type is a notch
+smaller, the buttons grow from their own labels to share a row, and a layer name stays on one line
+even where it runs into the padding: two lines for one switch reads worse than a name reaching the
+edge.
+
 The middle mouse button moves the map under every tool — the pointer becomes the hand while it is
 held, as it is under the hand tool — and the wheel still zooms, so painting a border never means
 putting the brush down to reach the rest of the map. The **right button borrows the hand**: it ends
@@ -116,7 +152,8 @@ The panel works as it always does, and the **first Save is what creates the prov
 anything is written, a modal names every file the save will touch:
 
 > Create province 3531?
-> This writes: map/definition.csv, map/default.map, history/provinces/3531 - Nova.txt
+> This writes: map/definition.csv, map/default.map, map/climate.txt, map/region.txt,
+> history/provinces/3531 - Nova.txt
 
 **Create** writes them; **Cancel** writes nothing at all. What the save does, in order:
 
@@ -125,7 +162,9 @@ anything is written, a modal names every file the save will touch:
 2. `map/default.map` gets room for the id — `max_provinces` is a count, so it has to end up *over*
    the new id, and the engine ignores any province at or past it — and, with **Sea province** ticked,
    the id joins `sea_starts`;
-3. the section saves what it would have saved anyway (the history file of a new province is named
+3. the id joins its climate in `map/climate.txt` and its states in `map/region.txt` — a land
+   province with neither is refused before anything is written at all;
+4. the section saves what it would have saved anyway (the history file of a new province is named
    after the name being created).
 
 Everything lands in the **target mod**, copying the file from the layer below when the mod has none
@@ -147,9 +186,10 @@ another terrain's picture. A sea province shows the ocean instead: the stack's o
 `assets/`. Its `GFX_terrainimg_ocean` sprite is not used, because vanilla declares that one against
 the mountains texture.
 
-The side panel has five tabs: **Definition** (localisation, the history fields, party loyalty and
-cores), **Positions**, **Buildings**, **Extra Dates** and **Pops**. The three history tabs save the
-same history file, so a Save posts the whole form and the tabs never drift. Every identifier field is
+The side panel has five tabs: **Definition** (localisation, the history fields, the State section,
+party loyalty and cores, under one Save), **Positions**, **Buildings**, **Extra Dates** and **Pops**.
+The three history tabs save the same history file, so a Save posts the whole form and the tabs never
+drift. Every identifier field is
 the same pick list over the mod's identifiers: owner, controller, cores, trade goods, terrain,
 ideology, building, pop type, culture and religion. All but the last three are labelled `identifier -
 localised name` (`USA - United States of America`, `grain - Grain`, `urban_fez - Urban`,
@@ -157,6 +197,13 @@ localised name` (`USA - United States of America`, `grain - Grain`, `urban_fez -
 what the file holds and several of them can share one name; pop type, culture and religion carry the
 localised name alone. A value the mod does not define stays selectable so a save never drops it. The
 list opens on a click, not on focus, so a row added to a list does not open over the rows under it.
+
+**Climate** is one of the blocks of `map/climate.txt` — a climate names two blocks, its modifiers
+and its provinces, and only the second is a membership. Changing it takes the id out of the block it
+was in and puts it in the chosen one. **States** is the same list over `map/region.txt`, except that
+it takes several: the engine puts the province in the first block that claims it, and the others are
+the meta-regions built on top. A name the file does not have yet becomes a block of its own at the
+end of it, so a new state can be started from here.
 
 The two building lists are split by what the game lets each hold: **State buildings** offers the
 `type = factory` buildings of `common/buildings.txt`, **Buildings** every other one (fort, naval_base,
@@ -191,8 +238,9 @@ one holding it.
 
 A sea province (from `sea_starts`) opens like any other, under the ocean picture, but it can only have
 the two things the game gives it: its name and the `unit` point fleets are drawn at. The history
-sections, the other position kinds and the Buildings, Extra Dates and Pops tabs are greyed out and
-take no input, so a save never invents a history or a pops block for open water. The History and Pops
+form, the State list, the other position kinds and the Buildings, Extra Dates and Pops tabs are
+greyed out and take no input — the Definition tab's Save is not, because the name is still its to
+write, and the server creates no history file for open water whatever the locked form holds. The History and Pops
 headers say as much instead of naming a file that would be created, and the localisation's rename box
 is greyed with them.
 
@@ -252,7 +300,8 @@ Files are patched, not regenerated, so comments, blank lines and the file's own 
 (`services/textPatch.ts`). Line endings and indentation follow the file. Files are written in the
 mod's own code page — see [encoding.md](encoding.md).
 
-- **Localisation** (`services/provinceLocEdit.ts`): only the second field of the `PROV<id>` line is
+- **Localisation** (`services/provinceLocEdit.ts`), written by the Definition tab's Save after the
+  history file, so a rename finds the file that same Save may have just created: only the second field of the `PROV<id>` line is
   replaced; the other language columns and the `;x` terminator stay. `;` and line breaks in the new
   text become spaces. With **Rename the history file to match** ticked, a history file of the
   target whose name differs from `<id> - <new name>.txt` is renamed; characters Windows forbids in
@@ -264,12 +313,18 @@ mod's own code page — see [encoding.md](encoding.md).
   after the last entry of the same kind, or after the last plain field (before the first dated
   block) when there is none, dated blocks at the end. A `party_loyalty`, `state_building` or dated
   block is rewritten whole when anything inside it changed. `set_province_flag` /
-  `clr_province_flag` lines, the province's own `remove_core` (only a dated block edits that one)
-  and top-level entries the form does not know (a non-numeric unknown key, a stray token) are left
-  untouched. The **Folder** row offers the
+  `clr_province_flag` lines, `colony` and `is_slave`, the province's own `remove_core` (only a dated
+  block edits that one) and top-level entries the form does not know (a non-numeric unknown key, a
+  stray token) are left untouched: the form does not show them, so it never rewrites them. The **Folder** row offers the
   `history/provinces` subfolders and creates `<folder>/<id> - <name>.txt` (name from the
   localisation, else `definition.csv`) where the province has no file yet; it is greyed out, not
   taken away, once it has one.
+- **Climate and State** (`services/provinceGroupEdit.ts`): both files are named blocks of bare
+  province ids, and both are edited the same way — the id joins the blocks it should be in, after the
+  last id already there, and leaves the ones it should not, taking one separator with it (or its
+  whole line, when it was alone on one). A block a modifier assignment appears in is never touched:
+  that is a climate's values, not its provinces. A name neither file declares is appended as
+  `NAME = { <id> }`.
 - **Pops** (`services/provincePopsEdit.ts`): the province's block is rewritten whole, from the
   first `<type> = {` to the closing brace; comments inside it are lost, the rest of the file is
   untouched. Every pop keeps `culture`, `religion`, `size`, and `militancy` / `rebel_type` when set.
@@ -297,7 +352,8 @@ file, every pops block and every positions block and saving it back unchanged pr
   (the start-date owner of every province with a history file and the `color` of every owning tag,
   asked for after the positions and again after a history save), `victorianTools/mapEditor/province`
   (one province's four sections plus the identifier lists the form suggests),
-  `victorianTools/mapEditor/save` (one section; the answer carries the province re-read from disk).
+  `victorianTools/mapEditor/save` (one tab's Save, which may stand for several files; the answer
+  carries the province re-read from disk).
 - Server: [server/mapEditorHandlers.ts](../src/server/mapEditorHandlers.ts) resolves the target
   with the same rule as the reports, reads through `resolveLayeredFile`, and remembers which pops
   file holds which province per stack and date, the parsed `positions.txt` per stack, and the owners

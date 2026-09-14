@@ -1,6 +1,6 @@
 import * as assert from 'node:assert';
 import { decodeBmp, type BmpImage } from '../../services/bmpDecoder.js';
-import { applyRuns, enclosedPixels, floodFill, runsOf, strokePixels } from '../../services/provincePaint.js';
+import { applyRuns, enclosedPixels, floodFill, runsOf, strokePixels, unusedColor } from '../../services/provincePaint.js';
 import { encodeBmp24, packRgb } from './bmpFixtures.js';
 
 const RED = packRgb(255, 0, 0);
@@ -121,5 +121,25 @@ suite('provincePaint — what a drawn line closes off', () => {
     // The same arc over a map with no province at all shuts nothing: the wall is open at the left.
     const plain = new Uint32Array(W * H).fill(BLUE);
     assert.deepStrictEqual(enclosedPixels(plain, W, H, ARC, RED), []);
+  });
+});
+
+suite('provincePaint — a colour nothing is using', () => {
+  test('the draw decides it when the colour it lands on is free', () => {
+    assert.strictEqual(unusedColor(new Set([1, 2]), () => 0.5), 0x800000);
+  });
+
+  test('a taken colour is walked past, one at a time', () => {
+    assert.strictEqual(unusedColor(new Set([0, 1, 2]), () => 0), 3);
+  });
+
+  test('the walk wraps around the end of the space', () => {
+    const taken = new Set([0xffffff, 0, 1]);
+    assert.strictEqual(unusedColor(taken, () => 1), 2);
+  });
+
+  test('a draw outside the space is brought back inside it', () => {
+    assert.strictEqual(unusedColor(new Set(), () => -1), 0);
+    assert.strictEqual(unusedColor(new Set(), () => 2), 0xffffff);
   });
 });

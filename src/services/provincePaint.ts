@@ -234,3 +234,24 @@ export function applyRuns(image: BmpImage, runs: readonly number[]): PaintOutcom
   }
   return { ok: true, pixels: count };
 }
+
+/** Packed colours are 24 bits: `red << 16 | green << 8 | blue`. */
+const COLOR_SPACE = 0x1000000;
+
+/**
+ * A colour nothing on the map is using yet. The space is thousands of times
+ * larger than any province table, so the draw lands on a free colour almost
+ * every time; the walk from where it landed is what makes the answer certain
+ * rather than likely, and it is what finds the gaps in a table that has grown
+ * large. Undefined only when every colour is taken.
+ */
+export function unusedColor(taken: ReadonlySet<number>, random: () => number = Math.random): number | undefined {
+  const start = Math.min(COLOR_SPACE - 1, Math.max(0, Math.floor(random() * COLOR_SPACE)));
+  for (let step = 0; step < COLOR_SPACE; step++) {
+    const color = (start + step) % COLOR_SPACE;
+    if (!taken.has(color)) {
+      return color;
+    }
+  }
+  return undefined;
+}

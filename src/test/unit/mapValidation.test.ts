@@ -143,6 +143,28 @@ suite('mapCsvValidation — definition.csv', () => {
     assert.deepStrictEqual(csvCodes('h\n1;256;2;3;x;x\n', 'mapDefinition'), ['invalid-color']);
     assert.deepStrictEqual(csvCodes('h\n1;1;2;3;x;x\n2;1;2;3;y;x\n', 'mapDefinition'), ['duplicate-color']);
   });
+
+  test('a land province in no climate or no state is an error on its row', () => {
+    assert.deepStrictEqual(csvCodes('h\n3;1;2;3;Nova;x\n', 'mapDefinition'), [
+      'province-without-climate',
+      'province-without-state',
+    ]);
+  });
+
+  test('a sea province needs neither, and a lake row is not a province', () => {
+    const sea = buildTestIndex({ 'map/default.map': 'max_provinces = 1000\nsea_starts = { 3 }\n' });
+    assert.deepStrictEqual(validateMapCsv('h\n3;1;2;3;Ocean;x\n', 'mapDefinition', sea).map((item) => item.code), []);
+    assert.deepStrictEqual(csvCodes('h\n;1;2;3;Lake;x\n', 'mapDefinition'), []);
+  });
+
+  test('a stack with no climate.txt and no region.txt says nothing: that is a missing file, not 3000 provinces', () => {
+    const bare = buildTestIndex({ 'map/climate.txt': '', 'map/region.txt': '', 'map/super_region.txt': '' });
+    assert.deepStrictEqual(validateMapCsv('h\n3;1;2;3;Nova;x\n', 'mapDefinition', bare).map((item) => item.code), []);
+  });
+
+  test('an id past max_provinces is reported once: it is broken before it is misplaced', () => {
+    assert.deepStrictEqual(csvCodes('h\n1000;1;2;3;x;x\n', 'mapDefinition'), ['province-id-too-large']);
+  });
 });
 
 suite('mapCsvValidation — adjacencies.csv', () => {

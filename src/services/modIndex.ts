@@ -213,6 +213,23 @@ function assignProvincesToStates(provider: ModFileProvider): Map<string, string>
   return owner;
 }
 
+/**
+ * Province id → its climate. A climate names two blocks — its modifiers and its
+ * provinces — and only the second one is a membership; the last block to list a
+ * province is the one the engine keeps.
+ */
+function assignProvincesToClimates(provider: ModFileProvider): Map<string, string> {
+  const owner = new Map<string, string>();
+  const document = parseRelative(provider, 'map/climate.txt');
+  for (const climate of document ? blockKeysOf(document) : []) {
+    const block = asBlock(climate.value);
+    for (const id of block ? provinceIdsOf(block) : []) {
+      owner.set(id, climate.key.value.toLowerCase());
+    }
+  }
+  return owner;
+}
+
 function techSchoolOccurrences(provider: ModFileProvider): IdentifierOccurrence[] {
   const filePath = 'common/technology.txt';
   const document = parseRelative(provider, filePath);
@@ -500,6 +517,7 @@ class IndexBuild {
   private issues: IssueIndex = emptyIssueIndex();
   private defaultMap: DefaultMapData = { maxProvinces: undefined, seaProvinces: new Set() };
   private stateOfProvince = new Map<string, string>();
+  private climateOfProvince = new Map<string, string>();
   private techFolders: string[] = [];
 
   readonly steps: readonly (() => void)[] = [
@@ -529,6 +547,7 @@ class IndexBuild {
       maxProvinces: this.defaultMap.maxProvinces,
       seaProvinces: this.defaultMap.seaProvinces,
       stateOfProvince: this.stateOfProvince,
+      climateOfProvince: this.climateOfProvince,
       techFolders: this.techFolders,
       researchBonusKeys: new Set(this.techFolders.map(researchBonusKey)),
       minBuildKeys: this.minBuildKeys(),
@@ -632,6 +651,7 @@ class IndexBuild {
     this.put('terrain', terrainOccurrences(this.provider));
     this.defaultMap = readDefaultMap(this.provider);
     this.stateOfProvince = assignProvincesToStates(this.provider);
+    this.climateOfProvince = assignProvincesToClimates(this.provider);
   }
 
   private indexTechnology(): void {

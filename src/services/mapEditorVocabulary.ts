@@ -20,6 +20,11 @@ export function vocabularyOf(index: ModIndex): Vocabulary {
   };
 }
 
+/** Names read straight out of a map file, labelled the way the form labels everything else. */
+export function namedIdentifiersOf(index: ModIndex, ids: readonly string[]): NamedIdentifier[] {
+  return ids.map((id) => qualified(index, id));
+}
+
 /** A province builds what is not a factory; a state building is a factory. */
 function buildingsOf(index: ModIndex, factories: boolean): NamedIdentifier[] {
   return namesOf(index, 'building')
@@ -30,7 +35,7 @@ function buildingsOf(index: ModIndex, factories: boolean): NamedIdentifier[] {
 /** `identifier - localised name`: the identifier is what the file holds, and several of them can share one name. */
 function qualified(index: ModIndex, id: string): NamedIdentifier {
   const text = textOf(index, id);
-  return { id, label: text === '' ? id : `${id} - ${text}` };
+  return text === '' ? { id, label: id } : { id, label: `${id} - ${text}`, name: text };
 }
 
 function localised(index: ModIndex, id: string): NamedIdentifier {

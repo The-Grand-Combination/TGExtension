@@ -98,10 +98,8 @@ const EMPTY_POSITIONS: ProvincePositions = {
 function saveParams(section: SaveParams['section']): SaveParams {
   const base = { ...targetParams, provinceId: 1, popDate: '1836.1.1' };
   switch (section) {
-    case 'localisation':
-      return { ...base, section, text: 'Test', renameHistoryFile: false };
     case 'history':
-      return { ...base, section, data: EMPTY_HISTORY, createInFolder: undefined };
+      return { ...base, section, data: EMPTY_HISTORY, climate: '', createInFolder: undefined };
     case 'pops':
       return { ...base, section, pops: [], createInFile: undefined };
     case 'positions':
@@ -110,7 +108,7 @@ function saveParams(section: SaveParams['section']): SaveParams {
 }
 
 suite('MapEditorHandlers — no mod to edit', () => {
-  const sections: readonly SaveParams['section'][] = ['localisation', 'history', 'pops', 'positions'];
+  const sections: readonly SaveParams['section'][] = ['history', 'pops', 'positions'];
 
   for (const section of sections) {
     test(`save(${section}) fails with the pick-a-mod reason`, async () => {
@@ -144,9 +142,11 @@ suite('MapEditorHandlers — a name the code page cannot hold', () => {
     ...targetParams,
     provinceId: 1,
     popDate: '1836.1.1',
-    section: 'localisation',
-    text: 'Москва',
-    renameHistoryFile: false,
+    section: 'history',
+    data: EMPTY_HISTORY,
+    climate: '',
+    createInFolder: undefined,
+    localisation: { text: 'Москва', renameHistoryFile: false },
   };
 
   test('a Cyrillic name is refused under windows-1252 instead of written as rubbish', async () => {
@@ -210,7 +210,7 @@ suite('MapEditorHandlers — narrowing the province history folders', () => {
 suite('MapEditorHandlers — writing', () => {
   test('a character the code page cannot store is named, in a history save as in a name', async () => {
     const { host } = recordingHost([TARGET], 'windows-1252');
-    const flagged: SaveParams = { ...saveParams('history'), section: 'history', data: { ...EMPTY_HISTORY, setFlags: ['Москва'] }, createInFolder: undefined };
+    const flagged: SaveParams = { ...saveParams('history'), section: 'history', data: { ...EMPTY_HISTORY, setFlags: ['Москва'] }, climate: '', createInFolder: undefined };
     const result = await new MapEditorHandlers(host).save(flagged);
     assert.strictEqual(result.ok, false);
     assert.ok(result.reason.includes('М'), result.reason);
@@ -354,8 +354,9 @@ suite('MapEditorHandlers — creating a province from a painted colour', () => {
       popDate: '1836.1.1',
       section: 'history',
       data: EMPTY_HISTORY,
+      climate: '',
       createInFolder: '',
-      create: { color: COLOR, isSea, name: 'Nova' },
+      create: { color: COLOR, isSea, name: 'Nova', climate: '', states: [] },
     };
   }
 
@@ -405,6 +406,210 @@ suite('MapEditorHandlers — creating a province from a painted colour', () => {
     const table = written.get(path.join(ROOT, 'map/definition.csv'));
     assert.strictEqual((await handlers.save(createParams(false))).ok, true);
     assert.strictEqual(written.get(path.join(ROOT, 'map/definition.csv')), table);
+  });
+});
+
+suite('MapEditorHandlers — climate and state', () => {
+  const CLIMATE = 'harsh_climate = {\n\tmax_attrition = 5\n}\n\nharsh_climate = {\n\t1 2\n}\n\nmild_climate = {\n\t7\n}\n';
+  const REGION = 'ENG_1 = { 1 2 }\nUSA_3 = { 7 }\n';
+
+  interface Placed {
+    readonly host: MapEditorHost;
+    readonly written: Map<string, string>;
+  }
+
+  /** A mod whose map folder holds climate.txt and region.txt, both naming province 1. */
+  function placed(files: ReadonlyMap<string, string> = new Map()): Placed {
+    const all = new Map<string, string>([
+      [path.join(ROOT, 'map/climate.txt'), CLIMATE],
+      [path.join(ROOT, 'map/region.txt'), REGION],
+      ...files,
+    ]);
+    const written = new Map<string, string>();
+    const host: MapEditorHost = {
+      targets: (): readonly FileLocation[] => [TARGET],
+      modNameOf: (root: string): string => root,
+      ensureIndex: (): Promise<ReturnType<typeof buildTestIndex> | undefined> => Promise.resolve(buildTestIndex()),
+      fileSystem: {
+        fileExists: (absolutePath: string): boolean => all.has(absolutePath) || written.has(absolutePath),
+        listFiles: (): string[] => [],
+        listFilesRecursive: (): string[] => [],
+      },
+      readText: (absolutePath: string): Promise<string | undefined> =>
+        Promise.resolve(written.get(absolutePath) ?? all.get(absolutePath)),
+      readBytes: (): Promise<Uint8Array | undefined> => Promise.resolve(undefined),
+      assetsFolder: '/extension/assets',
+      writeText: (absolutePath: string, text: string): Promise<boolean> => {
+        written.set(absolutePath, text);
+        return Promise.resolve(true);
+      },
+      writeBytes: (): Promise<boolean> => Promise.resolve(true),
+      rename: (): Promise<boolean> => Promise.resolve(true),
+      codepage: (): Codepage => DEFAULT_CODEPAGE,
+      historyFolderPattern: (): RegExp | undefined => undefined,
+    };
+    return { host, written };
+  }
+
+  const base = { ...targetParams, provinceId: 1, popDate: '1836.1.1' };
+  const climateFile = path.join(ROOT, 'map/climate.txt');
+  const regionFile = path.join(ROOT, 'map/region.txt');
+
+  test('the province reads back the climate and the states it is listed in', async () => {
+    const result = await new MapEditorHandlers(placed().host).province(base);
+    assert.ok(result.kind === 'details', result.kind === 'unavailable' ? result.reason : '');
+    assert.strictEqual(result.details.climate.name, 'harsh_climate');
+    assert.deepStrictEqual(result.details.climate.options, [
+      { id: 'harsh_climate', label: 'harsh_climate' },
+      { id: 'mild_climate', label: 'mild_climate' },
+    ]);
+    assert.deepStrictEqual(result.details.state.names, ['ENG_1']);
+    assert.deepStrictEqual(result.details.state.options.map((item) => item.id), ['ENG_1', 'USA_3']);
+  });
+
+  test('a history save moves the province to the climate it carries', async () => {
+    const { host, written } = placed();
+    const result = await new MapEditorHandlers(host).save({
+      ...base, section: 'history', data: EMPTY_HISTORY, climate: 'mild_climate', createInFolder: '',
+    });
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+    assert.ok(written.get(climateFile)?.includes('\t2\n'), written.get(climateFile));
+    assert.ok(written.get(climateFile)?.includes('\t7 1\n'), written.get(climateFile));
+    assert.ok(result.written.includes(climateFile), result.written.join(', '));
+  });
+
+  test('the Definition tab writes the states its one Save carries', async () => {
+    const { host, written } = placed();
+    const result = await new MapEditorHandlers(host).save({
+      ...base, section: 'history', data: EMPTY_HISTORY, climate: 'harsh_climate', createInFolder: '',
+      states: ['ENG_1', 'USA_3'],
+    });
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+    assert.ok(result.written.includes(regionFile), result.written.join(', '));
+    assert.strictEqual(written.get(regionFile), 'ENG_1 = { 1 2 }\nUSA_3 = { 7 1 }\n');
+  });
+
+  test('a Save that shows neither leaves both files alone', async () => {
+    const { host, written } = placed();
+    const result = await new MapEditorHandlers(host).save({
+      ...base, section: 'history', data: EMPTY_HISTORY, climate: 'harsh_climate', createInFolder: '',
+    });
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+    assert.strictEqual(written.get(regionFile), undefined);
+    assert.strictEqual(written.get(climateFile), undefined);
+  });
+
+  test('the localisation the Definition Save carries is written with the history', async () => {
+    const { host, written } = placed();
+    const result = await new MapEditorHandlers(host).save({
+      ...base, section: 'history', data: EMPTY_HISTORY, climate: 'harsh_climate', createInFolder: '',
+      states: ['ENG_1'], localisation: { text: 'Nova', renameHistoryFile: false },
+    });
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+    assert.ok([...written.keys()].some((file) => file.includes('localisation')), [...written.keys()].join(', '));
+  });
+
+  test('a save that would leave the province with no climate is refused, and writes nothing', async () => {
+    const { host, written } = placed();
+    const result = await new MapEditorHandlers(host).save({
+      ...base, section: 'history', data: EMPTY_HISTORY, climate: '', createInFolder: '',
+    });
+    assert.ok(!result.ok);
+    assert.ok(result.reason.includes('no climate'), result.reason);
+    assert.strictEqual(written.size, 0);
+  });
+
+  test('a save that would leave the province in no state is refused', async () => {
+    const result = await new MapEditorHandlers(placed().host).save({
+      ...base, section: 'history', data: EMPTY_HISTORY, climate: 'harsh_climate', createInFolder: '', states: ['  '],
+    });
+    assert.ok(!result.ok);
+    assert.ok(result.reason.includes('no state'), result.reason);
+  });
+
+  test('a new province is told the Sea province box is the other way out', async () => {
+    const result = await new MapEditorHandlers(placed(NEW).host).save(createParams('', ['USA_3']));
+    assert.ok(!result.ok);
+    assert.ok(result.reason.includes('tick Sea province'), result.reason);
+  });
+
+  test('a sea province being created needs neither, and gets no history file', async () => {
+    const { host, written } = placed(NEW);
+    const params = createParams('', []);
+    const create = params.create;
+    assert.ok(create);
+    const result = await new MapEditorHandlers(host).save({ ...params, create: { ...create, isSea: true } });
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+    assert.ok(![...written.keys()].some((file) => file.includes('history')), [...written.keys()].join(', '));
+  });
+
+  test('a province already placed is saved by every other section without carrying either', async () => {
+    const result = await new MapEditorHandlers(placed().host).save({
+      ...base, section: 'positions', data: EMPTY_POSITIONS,
+    });
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+  });
+
+  test('a province in neither file cannot be saved at all', async () => {
+    const result = await new MapEditorHandlers(placed().host).save({
+      ...base, provinceId: 9, section: 'positions', data: EMPTY_POSITIONS,
+    });
+    assert.ok(!result.ok);
+    assert.ok(result.reason.includes('no climate'), result.reason);
+  });
+
+  test('a sea province is in neither file and is saved all the same', async () => {
+    const result = await new MapEditorHandlers(placed().host).save({
+      ...base, provinceId: 900, section: 'positions', data: EMPTY_POSITIONS,
+    });
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+  });
+
+  const NEW = new Map<string, string>([
+    [path.join(ROOT, 'map/definition.csv'), ';red;green;blue;x;x\n1;1;1;1;One;x\n'],
+    [path.join(ROOT, 'map/default.map'), 'max_provinces = 3\nsea_starts = {\n\t900\n}\n'],
+  ]);
+
+  function createParams(climate: string, states: readonly string[]): SaveParams {
+    return {
+      ...targetParams, provinceId: 3, popDate: '1836.1.1',
+      section: 'history', data: EMPTY_HISTORY, climate, createInFolder: '',
+      create: { color: 7, isSea: false, name: 'Nova', climate, states },
+    };
+  }
+
+  test('creating a province writes its climate and its state with the row', async () => {
+    const { host, written } = placed(NEW);
+    const result = await new MapEditorHandlers(host).save(createParams('mild_climate', ['USA_3']));
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+    assert.ok(written.get(climateFile)?.includes('7 3'), written.get(climateFile));
+    assert.strictEqual(written.get(regionFile), 'ENG_1 = { 1 2 }\nUSA_3 = { 7 3 }\n');
+    assert.ok(result.written.includes(climateFile) && result.written.includes(regionFile), result.written.join(', '));
+  });
+
+  test('the confirmation lists exactly what the creation writes, and the dry run writes none of it', async () => {
+    const { host, written } = placed(NEW);
+    const plan = await new MapEditorHandlers(host).save({ ...createParams('mild_climate', ['USA_3']), dryRun: true });
+    assert.ok(plan.ok, plan.ok ? '' : plan.reason);
+    assert.strictEqual(written.size, 0, 'a dry run must not touch a file');
+    const { host: other } = placed(NEW);
+    const real = await new MapEditorHandlers(other).save(createParams('mild_climate', ['USA_3']));
+    assert.ok(real.ok, real.ok ? '' : real.reason);
+    assert.deepStrictEqual(plan.written, real.written);
+  });
+
+  test('a province cannot be created without a climate, and nothing is written trying', async () => {
+    const { host, written } = placed(NEW);
+    const result = await new MapEditorHandlers(host).save(createParams('', ['USA_3']));
+    assert.ok(!result.ok);
+    assert.ok(result.reason.includes('no climate'), result.reason);
+    assert.strictEqual(written.size, 0);
+  });
+
+  test('a province cannot be created without a state either', async () => {
+    const result = await new MapEditorHandlers(placed(NEW).host).save(createParams('mild_climate', []));
+    assert.ok(!result.ok);
+    assert.ok(result.reason.includes('no state'), result.reason);
   });
 });
 
