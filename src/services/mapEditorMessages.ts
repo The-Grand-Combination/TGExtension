@@ -24,6 +24,10 @@ export type PageMessage =
   | { readonly type: 'openFile'; readonly absolutePath: string; readonly line: number }
   | { readonly type: 'save'; readonly params: SaveParams }
   | { readonly type: 'pending'; readonly edits: readonly PendingPositions[] }
+  /** Painted pixels as `index, length, colour` triples; see `provincePaint.runsOf`. */
+  | { readonly type: 'paint'; readonly runs: readonly number[] }
+  /** How many painted pixels the page is holding, so closing the tab can say so. */
+  | { readonly type: 'paintPending'; readonly pixels: number }
   | { readonly type: 'saveAll' };
 
 type UnknownRecord = Record<string, unknown>;
@@ -43,6 +47,8 @@ export function asPageMessage(message: unknown): PageMessage | undefined {
       return asSave(record);
     case 'pending':
       return { type: 'pending', edits: asArray(record['edits'], asPending) };
+    case 'paint':
+      return asPaint(record);
     default:
       return asFieldMessage(record);
   }
@@ -54,6 +60,8 @@ function asFieldMessage(record: UnknownRecord): PageMessage | undefined {
       return typeof record['message'] === 'string' ? { type: 'log', message: record['message'] } : undefined;
     case 'terrainPicture':
       return typeof record['terrain'] === 'string' ? { type: 'terrainPicture', terrain: record['terrain'] } : undefined;
+    case 'paintPending':
+      return typeof record['pixels'] === 'number' ? { type: 'paintPending', pixels: record['pixels'] } : undefined;
     case 'select':
       return typeof record['provinceId'] === 'number' && typeof record['popDate'] === 'string'
         ? { type: 'select', provinceId: record['provinceId'], popDate: record['popDate'] }
@@ -65,6 +73,16 @@ function asFieldMessage(record: UnknownRecord): PageMessage | undefined {
     default:
       return undefined;
   }
+}
+
+/** A triple short of whole, or holding anything but whole numbers, is dropped: it would paint the wrong pixels. */
+function asPaint(record: UnknownRecord): PageMessage | undefined {
+  const value: unknown = record['runs'];
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const runs = numberList(value);
+  return runs.length === value.length && runs.length % 3 === 0 ? { type: 'paint', runs } : undefined;
 }
 
 function asPending(value: unknown): PendingPositions | undefined {
@@ -192,6 +210,10 @@ function asArray<T>(value: unknown, item: (element: unknown) => T | undefined): 
     const converted = item(element);
     return converted === undefined ? [] : [converted];
   }) : [];
+}
+
+function numberList(value: unknown): number[] {
+  return Array.isArray(value) ? value.filter((item): item is number => typeof item === 'number' && Number.isInteger(item)) : [];
 }
 
 function stringList(value: unknown): string[] {

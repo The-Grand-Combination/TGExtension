@@ -38,13 +38,13 @@ export function encodeBmp8(width: number, height: number, indices: readonly numb
 }
 
 /** A 24-bit BMP; `colors` is `width * height` packed `r << 16 | g << 8 | b` values, top-down. */
-export function encodeBmp24(width: number, height: number, colors: readonly number[]): Uint8Array {
+export function encodeBmp24(width: number, height: number, colors: readonly number[], options: Bmp8Options = {}): Uint8Array {
   const stride = Math.ceil((width * 3) / 4) * 4;
   const pixelOffset = FILE_HEADER_SIZE + INFO_HEADER_SIZE;
   const bytes = new Uint8Array(pixelOffset + stride * height);
-  writeHeaders(bytes, width, height, 24, pixelOffset, INFO_HEADER_SIZE, {});
+  writeHeaders(bytes, width, height, 24, pixelOffset, INFO_HEADER_SIZE, options);
   for (let y = 0; y < height; y++) {
-    const fileRow = height - 1 - y;
+    const fileRow = options.topDown === true ? y : height - 1 - y;
     for (let x = 0; x < width; x++) {
       const color = colors[y * width + x] ?? 0;
       const at = pixelOffset + fileRow * stride + x * 3;

@@ -12,9 +12,13 @@ export const MAP_EDITOR_SAVE_REQUEST = requestDescriptor<SaveParams, SaveResult>
 export const MAP_EDITOR_TERRAIN_PICTURE_REQUEST = requestDescriptor<TerrainPictureParams, TerrainPictureResult>('victorianTools/mapEditor/terrainPicture');
 export const MAP_EDITOR_POSITIONS_REQUEST = requestDescriptor<MapEditorTargetParams, MapPositionsResult>('victorianTools/mapEditor/positions');
 export const MAP_EDITOR_COUNTRY_COLORS_REQUEST = requestDescriptor<MapEditorTargetParams, MapCountryColorsResult>('victorianTools/mapEditor/countryColors');
+export const MAP_EDITOR_PAINT_REQUEST = requestDescriptor<PaintParams, PaintResult>('victorianTools/mapEditor/paint');
 
 /** `victorianTools.mapEditor.countryColorsTint`: percent of the owner's colour in the Country Colors layer. */
 export const DEFAULT_COUNTRY_COLORS_TINT = 82;
+
+/** `victorianTools.mapEditor.paintUndoSteps`: how many brush strokes the page can take back. */
+export const DEFAULT_PAINT_UNDO_STEPS = 20;
 
 /** `victorianTools.mapEditor.provinceFolderPattern`: empty, so every subfolder counts. */
 export const DEFAULT_PROVINCE_FOLDER_PATTERN = '';
@@ -284,6 +288,15 @@ export interface MapCountryColors {
 
 export type MapCountryColorsResult = MapCountryColors | { readonly kind: 'unavailable'; readonly reason: string };
 
+export interface PaintParams extends MapEditorTargetParams {
+  /** Painted pixels as `index, length, colour` triples; see `provincePaint.runsOf`. */
+  readonly runs: readonly number[];
+}
+
+export type PaintResult =
+  | { readonly ok: true; readonly path: string; readonly pixels: number }
+  | { readonly ok: false; readonly reason: string };
+
 /**
  * What the extension posts to the Map Editor page. The page validates nothing:
  * both sides read this one declaration, so a payload that drifts fails to
@@ -294,9 +307,10 @@ export type HostMessage =
   | ({ readonly type: 'revealPixel' } & MapEditorReveal)
   | { readonly type: 'details'; readonly details: ProvinceDetails }
   | { readonly type: 'positions'; readonly markers: readonly PositionMarker[] }
-  | { readonly type: 'settings'; readonly countryColorsTint: number }
+  | { readonly type: 'settings'; readonly countryColorsTint: number; readonly paintUndoSteps: number }
   | { readonly type: 'countryColors'; readonly owners: Readonly<Record<string, string>>; readonly colors: Readonly<Record<string, Rgb>> }
   | { readonly type: 'saved'; readonly result: SaveResult }
+  | { readonly type: 'painted'; readonly result: PaintResult }
   | { readonly type: 'savedAll'; readonly written: readonly number[]; readonly failed: readonly { readonly provinceId: number; readonly reason: string }[] }
   | { readonly type: 'error'; readonly message: string }
   | ({ readonly type: 'terrainPicture' } & TerrainPictureResult);

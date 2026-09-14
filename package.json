@@ -234,6 +234,13 @@
           "maximum": 100,
           "markdownDescription": "Map Editor, **Country Colors** layer: how much of each province's colour comes from its owner's `color`, in percent. The rest is the province's own `definition.csv` colour, which keeps neighbours apart. `100` paints every province of a country the same; `0` shows the plain map. Set from **Settings** in the Victorian Tools side bar."
         },
+        "victorianTools.mapEditor.paintUndoSteps": {
+          "type": "number",
+          "default": 20,
+          "minimum": 1,
+          "maximum": 200,
+          "markdownDescription": "Map Editor, painting: how many brush strokes `Ctrl+Z` can take back. Each step holds the pixels of one stroke, so a high number on a big map costs memory. Set from **Settings** in the Victorian Tools side bar."
+        },
         "victorianTools.mapEditor.provinceFolderPattern": {
           "type": "string",
           "default": "",

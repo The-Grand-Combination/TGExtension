@@ -4,6 +4,7 @@ import type { LanguageClient } from 'vscode-languageclient/node';
 import {
   MAP_EDITOR_COUNTRY_COLORS_REQUEST,
   MAP_EDITOR_MAP_REQUEST,
+  MAP_EDITOR_PAINT_REQUEST,
   MAP_EDITOR_POSITIONS_REQUEST,
   MAP_EDITOR_PROVINCE_REQUEST,
   MAP_EDITOR_SAVE_REQUEST,
@@ -14,7 +15,7 @@ import {
   type MapEditorTargetParams,
   type SaveParams,
 } from '../model/mapEditor.js';
-import { affectsCountryColorsTint, readCountryColorsTint } from '../config.js';
+import { affectsMapEditorView, readCountryColorsTint, readPaintUndoSteps } from '../config.js';
 import { asPageMessage, type PageMessage, type PendingPositions } from '../services/mapEditorMessages.js';
 import { mapEditorHtml, mapEditorNoticeHtml } from './mapEditorHtml.js';
 import { request } from './request.js';
@@ -32,6 +33,8 @@ export class MapEditorPanel implements vscode.Disposable {
   /** Provinces the page has edited and not written; kept here so closing the tab can still offer to save them. */
   private pending: readonly PendingPositions[] = [];
   private popDate = '';
+  /** Painted pixels the page is holding, so a Reload or a close can say they are there. */
+  private paintPixels = 0;
   private readonly subscriptions: vscode.Disposable[] = [];
 
   constructor(
@@ -41,7 +44,7 @@ export class MapEditorPanel implements vscode.Disposable {
   ) {
     this.subscriptions.push(
       vscode.workspace.onDidChangeConfiguration((event) => {
-        if (affectsCountryColorsTint(event) && this.panel) {
+        if (affectsMapEditorView(event) && this.panel) {
           this.sendSettings(this.panel);
         }
       }),
@@ -80,6 +83,7 @@ export class MapEditorPanel implements vscode.Disposable {
     panel.onDidDispose(() => {
       this.panel = undefined;
       this.map = undefined;
+      this.warnPainted();
       void this.offerPending();
     });
     this.panel = panel;
@@ -94,6 +98,7 @@ export class MapEditorPanel implements vscode.Disposable {
     }
     // The page starts over, so whatever it was holding starts over with it.
     this.pending = [];
+    this.paintPixels = 0;
     panel.webview.html = mapEditorNoticeHtml('Reading the map…');
     const result = await request(client, MAP_EDITOR_MAP_REQUEST, this.params);
     if (result.kind === 'unavailable') {
@@ -118,6 +123,9 @@ export class MapEditorPanel implements vscode.Disposable {
     if (!panel || !client || !message) {
       return;
     }
+    if (this.note(client, message)) {
+      return;
+    }
     switch (message.type) {
       case 'ready':
         this.sendSettings(panel);
@@ -126,17 +134,17 @@ export class MapEditorPanel implements vscode.Disposable {
         await this.sendCountryColors(panel, client);
         return;
       case 'reload':
+        if (await this.keepPainted()) {
+          return;
+        }
         await this.load(panel);
-        return;
-      case 'log':
-        client.outputChannel.appendLine(`Map editor page: ${message.message}`);
         return;
       case 'select':
         this.popDate = message.popDate;
         await this.select(panel, client, message.provinceId, message.popDate);
         return;
-      case 'pending':
-        this.pending = message.edits;
+      case 'paint':
+        await this.paint(panel, client, message.runs);
         return;
       case 'saveAll':
         await this.saveAll(panel, client);
@@ -150,6 +158,23 @@ export class MapEditorPanel implements vscode.Disposable {
       case 'terrainPicture':
         await this.terrainPicture(panel, client, message.terrain);
         return;
+    }
+  }
+
+  /** What the page only tells the extension about: its log, and what it is holding. */
+  private note(client: LanguageClient, message: PageMessage): boolean {
+    switch (message.type) {
+      case 'log':
+        client.outputChannel.appendLine(`Map editor page: ${message.message}`);
+        return true;
+      case 'pending':
+        this.pending = message.edits;
+        return true;
+      case 'paintPending':
+        this.paintPixels = message.pixels;
+        return true;
+      default:
+        return false;
     }
   }
 
@@ -190,9 +215,47 @@ export class MapEditorPanel implements vscode.Disposable {
     }
   }
 
-  /** The viewing preferences the page applies: the Country Colors tint, sent before the map and whenever it changes. */
+  /** The viewing preferences the page applies, sent before the map and whenever they change. */
   private sendSettings(panel: vscode.WebviewPanel): void {
-    post(panel, { type: 'settings', countryColorsTint: readCountryColorsTint() });
+    post(panel, { type: 'settings', countryColorsTint: readCountryColorsTint(), paintUndoSteps: readPaintUndoSteps() });
+  }
+
+  /** Write the painted pixels into the target mod's map/provinces.bmp. */
+  private async paint(panel: vscode.WebviewPanel, client: LanguageClient, runs: readonly number[]): Promise<void> {
+    if (!this.params) {
+      return;
+    }
+    const result = await request(client, MAP_EDITOR_PAINT_REQUEST, { ...this.params, runs });
+    if (result.ok) {
+      this.paintPixels = 0;
+    } else {
+      void vscode.window.showErrorMessage(`Victorian Tools: ${result.reason}`);
+    }
+    post(panel, { type: 'painted', result });
+  }
+
+  /** True when the user calls a reload off rather than lose the pixels the page is holding. */
+  private async keepPainted(): Promise<boolean> {
+    if (this.paintPixels === 0) {
+      return false;
+    }
+    const reload = 'Reload anyway';
+    const answer = await vscode.window.showWarningMessage(
+      `${String(this.paintPixels)} painted pixel(s) have not been written to map/provinces.bmp. Reloading drops them.`,
+      { modal: true },
+      reload,
+    );
+    return answer !== reload;
+  }
+
+  /** A closed tab takes its painted pixels with it: there is nothing left to write them from. */
+  private warnPainted(): void {
+    if (this.paintPixels > 0) {
+      void vscode.window.showWarningMessage(
+        `Victorian Tools: the Map Editor closed with ${String(this.paintPixels)} painted pixel(s) that were never written to map/provinces.bmp.`,
+      );
+      this.paintPixels = 0;
+    }
   }
 
   private sendMap(panel: vscode.WebviewPanel): void {

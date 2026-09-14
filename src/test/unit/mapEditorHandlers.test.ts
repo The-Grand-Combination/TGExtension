@@ -1,4 +1,5 @@
 import * as assert from 'node:assert';
+import * as path from 'node:path';
 import { DEFAULT_CODEPAGE, type Codepage } from '../../io/textCodec.js';
 import type {
   MapEditorTargetParams,
@@ -6,8 +7,10 @@ import type {
   ProvincePositions,
   SaveParams,
 } from '../../model/mapEditor.js';
+import { decodeBmp } from '../../services/bmpDecoder.js';
 import { MapEditorHandlers, type MapEditorHost } from '../../services/mapEditorHandlers.js';
 import { singleRootLayers, type ModLayers } from '../../services/modLayers.js';
+import { encodeBmp24, packRgb } from './bmpFixtures.js';
 import type { FileLocation } from '../../services/modLayout.js';
 import { buildTestIndex } from './testIndex.js';
 
@@ -54,6 +57,7 @@ function recordingHost(
     readBytes: (): Promise<Uint8Array | undefined> => Promise.resolve(undefined),
     assetsFolder: '/extension/assets',
     writeText: (): Promise<boolean> => Promise.resolve(true),
+    writeBytes: (): Promise<boolean> => Promise.resolve(true),
     rename: (): Promise<boolean> => Promise.resolve(true),
     codepage: (): Codepage => codepage,
     historyFolderPattern: (): RegExp | undefined => provinces.pattern,
@@ -226,6 +230,79 @@ suite('MapEditorHandlers — writing', () => {
     assert.strictEqual((await handlers.save(saveParams('history'))).ok, true);
     await handlers.province(province);
     assert.ok(provinceWalks() > 1, 'the file the save created must be found');
+  });
+});
+
+suite('MapEditorHandlers — painting the map', () => {
+  const RED = packRgb(255, 0, 0);
+  const BLUE = packRgb(0, 0, 255);
+  const GAME = '/game';
+
+  interface Painter {
+    readonly host: MapEditorHost;
+    readonly written: { path: string; bytes: Uint8Array }[];
+  }
+
+  /** A host whose only file is provinces.bmp, in the root the last argument names. */
+  function paintHost(holder: string, layers: ModLayers = LAYERS): Painter {
+    const bitmap = path.join(holder, 'map/provinces.bmp');
+    const bytes = encodeBmp24(2, 1, [RED, BLUE]);
+    const written: { path: string; bytes: Uint8Array }[] = [];
+    const host: MapEditorHost = {
+      targets: (): readonly FileLocation[] => [{ root: ROOT, layers }],
+      modNameOf: (root: string): string => root,
+      ensureIndex: (): Promise<ReturnType<typeof buildTestIndex> | undefined> => Promise.resolve(buildTestIndex()),
+      fileSystem: {
+        fileExists: (absolutePath: string): boolean => absolutePath === bitmap,
+        listFiles: (): string[] => [],
+        listFilesRecursive: (): string[] => [],
+      },
+      readText: (): Promise<string | undefined> => Promise.resolve(undefined),
+      readBytes: (absolutePath: string): Promise<Uint8Array | undefined> =>
+        Promise.resolve(absolutePath === bitmap ? bytes : undefined),
+      assetsFolder: '/extension/assets',
+      writeText: (): Promise<boolean> => Promise.resolve(true),
+      writeBytes: (absolutePath: string, content: Uint8Array): Promise<boolean> => {
+        written.push({ path: absolutePath, bytes: content });
+        return Promise.resolve(true);
+      },
+      rename: (): Promise<boolean> => Promise.resolve(true),
+      codepage: (): Codepage => DEFAULT_CODEPAGE,
+      historyFolderPattern: (): RegExp | undefined => undefined,
+    };
+    return { host, written };
+  }
+
+  test('writes the painted pixels into the target mod', async () => {
+    const { host, written } = paintHost(ROOT);
+    const result = await new MapEditorHandlers(host).paint({ ...targetParams, runs: [0, 1, BLUE] });
+    assert.deepStrictEqual(result, { ok: true, path: path.join(ROOT, 'map/provinces.bmp'), pixels: 1 });
+    assert.strictEqual(written.length, 1);
+    const painted = decodeBmp(written[0]?.bytes ?? new Uint8Array());
+    assert.ok(painted.kind === 'image');
+    assert.strictEqual(painted.image.rgbAt(0, 0), BLUE);
+  });
+
+  test('a bitmap that comes from a layer below is written into the target as its own copy', async () => {
+    const layers: ModLayers = { key: 'game+mod', gameRoot: GAME, roots: [GAME, ROOT], hiddenFolders: [], caseInsensitivePaths: false };
+    const { host, written } = paintHost(GAME, layers);
+    const result = await new MapEditorHandlers(host).paint({ ...targetParams, runs: [0, 1, BLUE] });
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(written[0]?.path, path.join(ROOT, 'map/provinces.bmp'));
+  });
+
+  test('says so when the picked mods have no provinces.bmp', async () => {
+    const { host, written } = paintHost('/elsewhere');
+    const result = await new MapEditorHandlers(host).paint({ ...targetParams, runs: [0, 1, BLUE] });
+    assert.deepStrictEqual(result, { ok: false, reason: 'The picked mods have no map/provinces.bmp.' });
+    assert.strictEqual(written.length, 0);
+  });
+
+  test('pixels outside the map are refused, and nothing is written', async () => {
+    const { host, written } = paintHost(ROOT);
+    const result = await new MapEditorHandlers(host).paint({ ...targetParams, runs: [5, 1, BLUE] });
+    assert.deepStrictEqual(result, { ok: false, reason: 'painted pixels fall outside the map' });
+    assert.strictEqual(written.length, 0);
   });
 });
 

@@ -30,7 +30,11 @@ import type {
   Rgb,
 } from '../model/mapEditor.js';
 
-import { VANILLA_MAX_PROVINCES } from '../model/mapEditor.js';
+import type { PaintResult } from '../model/mapEditor.js';
+
+import { DEFAULT_PAINT_UNDO_STEPS, VANILLA_MAX_PROVINCES } from '../model/mapEditor.js';
+
+import { enclosedPixels, floodFill, runsOf, strokePixels } from '../services/provincePaint.js';
 
 import { decodeBmp as decodeBmpFile, type BmpImage } from '../services/bmpDecoder.js';
 
@@ -129,6 +133,8 @@ let showCountryColors = false;
 let countryColors: MapCountryColors | null = null;
 /** Tiles of the tinted bitmap, built the first time the layer is shown. */
 let tintedTiles: Tile[] | null = null;
+/** Province colour -> its tint, kept from that build so a painted pixel can be tinted on its own. */
+let tintOfColor: Map<number, number> | null = null;
 const SEA_TINT: Rgb = [150, 190, 230];
 const UNOWNED_TINT: Rgb = [150, 150, 150];
 /** Share of the owner's colour (victorianTools.mapEditor.countryColorsTint / 100). */
@@ -695,6 +701,7 @@ function buildTintedTiles(): void {
   const count = packed.length;
   const rgba = new Uint8ClampedArray(count * 4);
   const tints = tintByPacked(map.definitions, countryColors);
+  tintOfColor = tints;
   let lastColor = -1;
   let lastTint = -1;
   for (let index = 0, out = 0; index < count; index++, out += 4) {
@@ -879,7 +886,7 @@ function draftPoint(kind: PositionKind): { x: number; y: number } | null {
 /** The kind of the selected province's point under the pointer, when close enough to grab. */
 function markerAt(clientX: number, clientY: number): PositionKind | null {
   const currentImage = image;
-  if (!showPositions || !currentImage || !draft || view.scale < MARKER_MIN_SCALE) { return null; }
+  if (!showPositions || !currentImage || !draft || view.scale < MARKER_MIN_SCALE || tool !== 'hand') { return null; }
   const rect = mapArea.getBoundingClientRect();
   const px = clientX - rect.left;
   const py = clientY - rect.top;
@@ -986,6 +993,371 @@ function zoomAt(clientX: number, clientY: number, factor: number): void {
   render();
 }
 
+// --- Painting provinces -------------------------------------------------------
+// The pencil and the bucket write into the decoded bitmap and into the tiles it
+// is drawn from. Nothing reaches provinces.bmp until Save map, and every stroke
+// can be taken back until then.
+
+type Tool = 'hand' | 'pencil' | 'draw' | 'bucket' | 'pick';
+
+const TOOLS: readonly { readonly tool: Tool; readonly id: string }[] = [
+  { tool: 'hand', id: 'toolHand' },
+  { tool: 'pencil', id: 'toolPencil' },
+  { tool: 'draw', id: 'toolDraw' },
+  { tool: 'bucket', id: 'toolBucket' },
+  { tool: 'pick', id: 'toolPick' },
+];
+const toolButtons = TOOLS.map(function (spec) { return { tool: spec.tool, button: requiredButton(spec.id) }; });
+const brushSize = requiredInput('brushSize');
+const brushSizeValue = required('brushSizeValue');
+const brushRow = required('brushRow');
+const paintColorInput = requiredInput('paintColor');
+const paintColorText = required('paintColorText');
+const savePaintButton = requiredButton('savePaintButton');
+const resetPaintButton = requiredButton('resetPaintButton');
+
+let tool: Tool = 'hand';
+/** What the brush writes. A colour of its own, not a province: the map is pixels. */
+let brushColor = 0xff0000;
+let brush = 1;
+let undoLimit = DEFAULT_PAINT_UNDO_STEPS;
+/** Pixel -> the colour provinces.bmp has for it, kept from the first time it was painted. */
+const paintedFrom = new Map<number, number>();
+/** Pixels that no longer hold their file colour: what a Save writes. */
+const painted = new Set<number>();
+/** One stroke, as pixel -> the colour it had before it: undo writes that straight back. */
+const undoSteps: Map<number, number>[] = [];
+const redoSteps: Map<number, number>[] = [];
+let stroke: Map<number, number> | null = null;
+/** Where the pencil last was, so a fast mouse draws a line and not a dotted one. */
+let brushAt: Point | null = null;
+/** Draw and paint: the line being drawn, kept until the button comes up and it is closed off. */
+let drawLine: number[] | null = null;
+let paintTimer: number | null = null;
+
+function setTool(next: Tool): void {
+  tool = next;
+  for (const entry of toolButtons) { entry.button.classList.toggle('active', entry.tool === next); }
+  brushSize.disabled = !paints(next);
+  brushRow.classList.toggle('off', !paints(next));
+  mapArea.classList.toggle('painting', next !== 'hand' && next !== 'pick');
+  mapArea.classList.toggle('picking', next === 'pick');
+}
+
+/** The tools the brush width is for. */
+function paints(which: Tool): boolean {
+  return which === 'pencil' || which === 'draw';
+}
+
+/**
+ * A drawn line is a wall the fill must not leak through, and a one-pixel line
+ * drawn at an angle leaks through its own corners: it is never thinner than two.
+ */
+function brushWidth(): number {
+  return tool === 'draw' ? Math.max(2, brush) : brush;
+}
+
+function setBrushColor(color: number): void {
+  brushColor = color & 0xffffff;
+  paintColorInput.value = hexOf(brushColor);
+  paintColorText.textContent = hexOf(brushColor);
+}
+
+function hexOf(color: number): string {
+  return '#' + color.toString(16).padStart(6, '0');
+}
+
+function startPaint(event: MouseEvent): void {
+  const currentImage = image;
+  if (!currentImage) { return; }
+  const point = toImage(event.clientX, event.clientY);
+  if (point.x < 0 || point.y < 0 || point.x >= currentImage.width || point.y >= currentImage.height) { return; }
+  if (tool === 'pick') { pickAt(point); return; }
+  const color = brushColor;
+  stroke = new Map();
+  if (tool === 'bucket') {
+    paintIndices(floodFill(currentImage.packed, currentImage.width, currentImage.height, point.y * currentImage.width + point.x, color), color);
+    endStroke();
+    return;
+  }
+  brushAt = point;
+  if (tool === 'draw') { drawLine = []; }
+  drawInto(strokePixels(point, point, brushWidth(), currentImage.width, currentImage.height), color);
+}
+
+function continueStroke(event: MouseEvent): void {
+  const currentImage = image;
+  const from = brushAt;
+  if (!currentImage || !from) { return; }
+  const to = toImage(event.clientX, event.clientY);
+  drawInto(strokePixels(from, to, brushWidth(), currentImage.width, currentImage.height), brushColor);
+  brushAt = to;
+}
+
+/** Paint the line, and remember it when it is one the Draw and paint tool will close off. */
+function drawInto(indices: readonly number[], color: number): void {
+  // One at a time: a long segment spread into push() is enough arguments to overflow the stack.
+  if (drawLine) { for (const index of indices) { drawLine.push(index); } }
+  paintIndices(indices, color);
+}
+
+/** What the line shut away from the rest of the map becomes part of the province. */
+function closeLine(line: readonly number[]): void {
+  const currentImage = image;
+  if (!currentImage || line.length === 0) { return; }
+  const inside = enclosedPixels(currentImage.packed, currentImage.width, currentImage.height, line, brushColor);
+  if (inside.length === 0) {
+    setStatus('The line closed nothing off: draw out of the colour and back into it.', 'warning');
+    return;
+  }
+  paintIndices(inside, brushColor);
+  setStatus('Filled ' + String(inside.length) + ' pixel(s)');
+}
+
+/** The eye drop takes the colour the pixel holds, whether or not a province owns it. */
+function pickAt(point: Point): void {
+  const currentImage = image;
+  if (!currentImage) { return; }
+  const color = currentImage.packed[point.y * currentImage.width + point.x];
+  if (color === undefined) { return; }
+  setBrushColor(color);
+  const id = provinceAt(point);
+  setStatus('Painting with ' + hexOf(color) + (id === undefined ? '' : ' (province ' + String(id) + ')'));
+}
+
+function paintIndices(indices: readonly number[], color: number): void {
+  const currentImage = image;
+  if (!currentImage) { return; }
+  const pixels = new Map<number, number>();
+  for (const index of indices) {
+    const before = currentImage.packed[index];
+    if (before === undefined || before === color) { continue; }
+    pixels.set(index, color);
+    if (stroke && !stroke.has(index)) { stroke.set(index, before); }
+  }
+  paintPixels(pixels);
+}
+
+/** Put the colours on the map: the pixels the clicks read, and the tiles the eye reads. */
+function paintPixels(pixels: ReadonlyMap<number, number>): void {
+  const currentImage = image;
+  if (!currentImage || pixels.size === 0) { return; }
+  for (const [index, color] of pixels) {
+    if (!paintedFrom.has(index)) { paintedFrom.set(index, currentImage.packed[index] ?? color); }
+    currentImage.packed[index] = color;
+    if (paintedFrom.get(index) === color) { painted.delete(index); } else { painted.add(index); }
+  }
+  patchTiles(currentImage, pixels);
+  render();
+}
+
+function patchTiles(currentImage: DecodedImage, pixels: ReadonlyMap<number, number>): void {
+  const columns = Math.ceil(currentImage.width / TILE);
+  const byTile = new Map<number, number[]>();
+  for (const index of pixels.keys()) {
+    const x = index % currentImage.width;
+    const y = (index - x) / currentImage.width;
+    const at = Math.floor(y / TILE) * columns + Math.floor(x / TILE);
+    const held = byTile.get(at);
+    if (held) { held.push(index); } else { byTile.set(at, [index]); }
+  }
+  for (const [at, indices] of byTile) {
+    patchTile(currentImage.tiles[at], indices, pixels, currentImage.width, false);
+    if (tintedTiles) { patchTile(tintedTiles[at], indices, pixels, currentImage.width, true); }
+  }
+}
+
+/** One tile's painted pixels, written through the one box that holds them all. */
+function patchTile(
+  tile: Tile | undefined,
+  indices: readonly number[],
+  pixels: ReadonlyMap<number, number>,
+  width: number,
+  tinted: boolean,
+): void {
+  const context = tile?.canvas.getContext('2d');
+  if (!tile || !context) { return; }
+  let minX = tile.canvas.width;
+  let minY = tile.canvas.height;
+  let maxX = -1;
+  let maxY = -1;
+  for (const index of indices) {
+    const x = (index % width) - tile.x;
+    const y = (index - (index % width)) / width - tile.y;
+    if (x < minX) { minX = x; }
+    if (x > maxX) { maxX = x; }
+    if (y < minY) { minY = y; }
+    if (y > maxY) { maxY = y; }
+  }
+  const boxWidth = maxX - minX + 1;
+  const boxHeight = maxY - minY + 1;
+  const box = context.getImageData(minX, minY, boxWidth, boxHeight);
+  for (const index of indices) {
+    const own = pixels.get(index) ?? 0;
+    const color = tinted ? (tintOfColor?.get(own) ?? own) : own;
+    const x = (index % width) - tile.x - minX;
+    const y = (index - (index % width)) / width - tile.y - minY;
+    const out = (y * boxWidth + x) * 4;
+    box.data[out] = (color >> 16) & 255;
+    box.data[out + 1] = (color >> 8) & 255;
+    box.data[out + 2] = color & 255;
+    box.data[out + 3] = 255;
+  }
+  context.putImageData(box, minX, minY);
+}
+
+function endStroke(): void {
+  if (drawLine) {
+    closeLine(drawLine);
+    drawLine = null;
+  }
+  const step = stroke;
+  stroke = null;
+  brushAt = null;
+  if (!step || step.size === 0) { return; }
+  undoSteps.push(step);
+  while (undoSteps.length > undoLimit) { undoSteps.shift(); }
+  redoSteps.length = 0;
+  refreshPainted();
+  refreshOutline(step);
+}
+
+function stepBack(): void {
+  const step = undoSteps.pop();
+  if (!step) { return; }
+  redoSteps.push(colorsNow(step));
+  applyStep(step);
+}
+
+function stepForward(): void {
+  const step = redoSteps.pop();
+  if (!step) { return; }
+  undoSteps.push(colorsNow(step));
+  applyStep(step);
+}
+
+/** The colours those pixels hold right now: the way back from the step about to be applied. */
+function colorsNow(step: ReadonlyMap<number, number>): Map<number, number> {
+  const out = new Map<number, number>();
+  for (const index of step.keys()) { out.set(index, image?.packed[index] ?? 0); }
+  return out;
+}
+
+function applyStep(step: ReadonlyMap<number, number>): void {
+  // What the pixels held before the step is what says whether the outline moved:
+  // a step that takes the selected province's colour away leaves nothing of it behind.
+  const before = colorsNow(step);
+  paintPixels(step);
+  refreshPainted();
+  refreshOutline(before);
+}
+
+/**
+ * The selected province may have gained or lost pixels, and its outline is a
+ * walk of the whole bitmap: it is drawn again at the end of a stroke, never
+ * during one.
+ */
+/** `was` is the colour of each pixel before the change; the map already holds the new one. */
+function refreshOutline(was: ReadonlyMap<number, number>): void {
+  const currentImage = image;
+  const id = selectedId;
+  const color = id === null ? undefined : definitionById.get(id)?.color;
+  if (id === null || !currentImage || color === undefined) { return; }
+  for (const [index, before] of was) {
+    if (before === color || currentImage.packed[index] === color) {
+      selection = highlightOf(id);
+      render();
+      return;
+    }
+  }
+}
+
+/** Both buttons stand whether there is anything to write or not, greyed until there is. */
+function refreshPainted(): void {
+  const held = painted.size;
+  savePaintButton.disabled = held === 0;
+  resetPaintButton.disabled = held === 0;
+  savePaintButton.title = held === 0
+    ? 'Nothing painted to write'
+    : 'Write ' + String(held) + ' painted pixel(s) into map/provinces.bmp';
+  resetPaintButton.title = held === 0
+    ? 'Nothing painted to put back'
+    : 'Put ' + String(held) + ' painted pixel(s) back the way the file has them';
+  if (paintTimer !== null) { clearTimeout(paintTimer); }
+  paintTimer = window.setTimeout(function () {
+    paintTimer = null;
+    vscode.postMessage({ type: 'paintPending', pixels: painted.size });
+  }, 400);
+}
+
+/** A new map, or one written back: nothing is held any more. */
+function resetPaint(): void {
+  painted.clear();
+  paintedFrom.clear();
+  undoSteps.length = 0;
+  redoSteps.length = 0;
+  stroke = null;
+  brushAt = null;
+  drawLine = null;
+  refreshPainted();
+}
+
+function handlePainted(result: PaintResult): void {
+  if (!result.ok) { refreshPainted(); setStatus(result.reason, 'error'); return; }
+  const pixels = result.pixels;
+  resetPaint();
+  setStatus('Wrote ' + String(pixels) + ' pixel(s) to ' + (result.path.split(/[\\/]/).pop() ?? result.path), 'ok');
+}
+
+for (const entry of toolButtons) {
+  entry.button.addEventListener('click', function () { setTool(entry.tool); });
+}
+brushSize.addEventListener('input', function () {
+  brush = Math.min(16, Math.max(1, Math.round(Number(brushSize.value) || 1)));
+  brushSizeValue.textContent = String(brush);
+});
+paintColorInput.addEventListener('input', function () {
+  const color = Number.parseInt(paintColorInput.value.slice(1), 16);
+  setBrushColor(Number.isNaN(color) ? 0 : color);
+});
+resetPaintButton.addEventListener('click', function () {
+  const currentImage = image;
+  if (!currentImage || painted.size === 0) { return; }
+  const before = new Map<number, number>();
+  const back = new Map<number, number>();
+  for (const index of painted) {
+    before.set(index, currentImage.packed[index] ?? 0);
+    back.set(index, paintedFrom.get(index) ?? currentImage.packed[index] ?? 0);
+  }
+  paintPixels(back);
+  resetPaint();
+  refreshOutline(before);
+  setStatus('The map is back the way the file has it');
+});
+savePaintButton.addEventListener('click', function () {
+  const currentImage = image;
+  if (!currentImage || painted.size === 0) { return; }
+  const pixels = new Map<number, number>();
+  for (const index of painted) { pixels.set(index, currentImage.packed[index] ?? 0); }
+  savePaintButton.disabled = true;
+  setStatus('Writing ' + String(painted.size) + ' pixel(s) to provinces.bmp…');
+  vscode.postMessage({ type: 'paint', runs: runsOf(pixels) });
+});
+window.addEventListener('keydown', function (event) {
+  const target = event.target;
+  if (!(event.ctrlKey || event.metaKey) || target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement) { return; }
+  const key = event.key.toLowerCase();
+  if (key === 'z' && !event.shiftKey) {
+    event.preventDefault();
+    stepBack();
+  } else if (key === 'y' || (key === 'z' && event.shiftKey)) {
+    event.preventDefault();
+    stepForward();
+  }
+});
+setTool('hand');
+refreshPainted();
+
 /** A press that is either panning the map or moving one of the selected province's points. */
 interface Drag {
   readonly startX: number;
@@ -994,17 +1366,36 @@ interface Drag {
   readonly viewY: number;
   moved: boolean;
   readonly marker: PositionKind | null;
+  /** Only the left button opens a province: the others are here to move the map. */
+  readonly select: boolean;
+  /** The tool the right button borrowed the hand from, given back when it comes up. */
+  readonly restore: Tool | null;
 }
 
 let drag: Drag | null = null;
 mapArea.addEventListener('mousedown', function (event) {
-  if (event.button !== 0) { return; }
+  // The middle button pans under every tool: painting a border is no reason to
+  // have to put the brush down to reach the rest of the map.
+  if (event.button === 0 && tool !== 'hand') {
+    if (event.target === canvas) { startPaint(event); }
+    return;
+  }
+  if (event.button !== 0 && event.button !== 1 && event.button !== 2) { return; }
+  // The right button is the hand while it is held: it ends whatever was being
+  // drawn, moves the map, and gives the tool back on the way up.
+  let restore: Tool | null = null;
+  if (event.button === 2 && tool !== 'hand') {
+    if (brushAt) { endStroke(); }
+    restore = tool;
+    setTool('hand');
+  }
   // A press on one of the selected province's points moves that point instead of the map.
-  const marker = event.target === canvas ? markerAt(event.clientX, event.clientY) : null;
-  drag = { startX: event.clientX, startY: event.clientY, viewX: view.x, viewY: view.y, moved: false, marker: marker };
+  const marker = event.button === 0 && event.target === canvas ? markerAt(event.clientX, event.clientY) : null;
+  drag = { startX: event.clientX, startY: event.clientY, viewX: view.x, viewY: view.y, moved: false, marker: marker, select: event.button === 0, restore: restore };
   mapArea.classList.add(marker ? 'moving' : 'dragging');
 });
 window.addEventListener('mousemove', function (event) {
+  if (brushAt) { continueStroke(event); return; }
   const current = drag;
   if (current?.marker && image) {
     current.moved = true;
@@ -1023,15 +1414,20 @@ window.addEventListener('mousemove', function (event) {
   showTooltip(event);
 });
 window.addEventListener('mouseup', function (event) {
+  if (brushAt) { endStroke(); return; }
   if (!drag) { return; }
-  const wasClick = !drag.moved && !drag.marker;
+  const wasClick = !drag.moved && !drag.marker && drag.select;
+  const restore = drag.restore;
   drag = null;
   mapArea.classList.remove('dragging');
+  if (restore) { setTool(restore); }
   if (wasClick && event.target === canvas) {
     const id = provinceAt(toImage(event.clientX, event.clientY));
-    if (id !== undefined) { selectProvince(id); }
+    if (id !== undefined) { toggleProvince(id); }
   }
 });
+// The right button is the page's own: no menu over the map.
+mapArea.addEventListener('contextmenu', function (event) { event.preventDefault(); });
 mapArea.addEventListener('mouseleave', function () { tooltip.hidden = true; });
 mapArea.addEventListener('wheel', function (event) {
   event.preventDefault();
@@ -1041,7 +1437,7 @@ new ResizeObserver(function () { render(); }).observe(mapArea);
 
 function showTooltip(event: MouseEvent): void {
   if (!image || event.target !== canvas) { tooltip.hidden = true; mapArea.classList.remove('moving'); return; }
-  const kind = markerAt(event.clientX, event.clientY);
+  const kind = tool === 'hand' ? markerAt(event.clientX, event.clientY) : null;
   mapArea.classList.toggle('moving', kind !== null);
   const id = kind ? selectedId : provinceAt(toImage(event.clientX, event.clientY));
   if (id === undefined || id === null) { tooltip.hidden = true; return; }
@@ -1095,6 +1491,13 @@ function highlightOf(id: number): Highlight | null {
   overlayContext.putImageData(new ImageData(mask, boxWidth, boxHeight), 0, 0);
   return { id: id, color: color, canvas: overlay, x: minX, y: minY, width: boxWidth, height: boxHeight };
 }
+/** A click on the map: the province opens, or closes when it is the one already open. */
+function toggleProvince(id: number): void {
+  if (id !== selectedId) { selectProvince(id); return; }
+  capturePending();
+  clearSelection();
+}
+
 function selectProvince(id: number): void {
   capturePending();
   selection = highlightOf(id);
@@ -1106,6 +1509,25 @@ function selectProvince(id: number): void {
   setStatus('Reading province ' + String(id) + '…');
   vscode.postMessage({ type: 'select', provinceId: id, popDate: popDate });
 }
+function clearSelection(): void {
+  selection = null;
+  selectedId = null;
+  details = null;
+  draft = null;
+  draftBaseline = null;
+  positionInputs = {};
+  headerBox = null;
+  headerTerrainLabel = null;
+  previewTerrain = '';
+  showHint();
+  setStatus('');
+  render();
+}
+
+function showHint(): void {
+  side.replaceChildren(h('p', { class: 'hint' }, 'Click a province on the map to edit it.'));
+}
+
 function centerOn(id: number): void {
   const found = highlightOf(id);
   if (!found) { setStatus('Province ' + String(id) + ' is not on the map.', 'warning'); return; }
@@ -1851,9 +2273,10 @@ function loadFreshMap(message: Extract<HostMessage, { type: 'map' }>): void {
   selection = null; selectedId = null; details = null; draft = null; markers = [];
   pendingPositions.clear();
   draftBaseline = null; refreshPending();
-  countryColors = null; tintedTiles = null;
+  countryColors = null; tintedTiles = null; tintOfColor = null;
+  resetPaint(); setTool('hand');
   riversUri = message.riversUri ?? null; riverTiles = null; riversLoading = false;
-  side.replaceChildren(h('p', { class: 'hint' }, 'Click a province on the map to edit it.'));
+  showHint();
   loadMap(message.bmpUri);
 }
 
@@ -1883,12 +2306,15 @@ function handleUpdate(message: Exclude<HostMessage, { type: 'map' | 'revealPixel
     render();
   } else if (message.type === 'settings') {
     applyTint(message.countryColorsTint);
+    applyUndoLimit(message.paintUndoSteps);
   } else if (message.type === 'countryColors') {
     countryColors = { kind: 'ready', owners: message.owners, colors: message.colors };
     tintedTiles = null;
     if (showCountryColors) { buildTintedTiles(); }
   } else if (message.type === 'saved') {
     handleSaved(message.result);
+  } else if (message.type === 'painted') {
+    handlePainted(message.result);
   } else if (message.type === 'savedAll') {
     handleSavedAll(message.written, message.failed.length);
   } else if (message.type === 'error') {
@@ -1898,6 +2324,12 @@ function handleUpdate(message: Exclude<HostMessage, { type: 'map' | 'revealPixel
     terrainPictures.set(message.terrain, message.pictureDataUri ?? null);
     if (message.terrain === previewTerrain) { applyHeaderPicture(message.pictureDataUri ?? null); }
   }
+}
+
+/** How many strokes can be taken back; the ones over the new limit are dropped. */
+function applyUndoLimit(steps: number): void {
+  undoLimit = Math.max(1, Math.round(steps));
+  while (undoSteps.length > undoLimit) { undoSteps.shift(); }
 }
 
 /** A new Country Colors tint: the tinted bitmap has to be built again. */

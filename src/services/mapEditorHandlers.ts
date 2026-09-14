@@ -9,6 +9,8 @@ import {
   type MapEditorMapResult,
   type MapEditorTargetParams,
   type MapPositionsResult,
+  type PaintParams,
+  type PaintResult,
   type PopEntry,
   type PopsSection,
   type PositionsSection,
@@ -74,6 +76,7 @@ import {
   positionMarkersOf,
   renderPositionsFile,
 } from './provincePositionsEdit.js';
+import { applyRuns } from './provincePaint.js';
 import { parseProvinceDefinitions, parseProvinceRows } from './provinceTable.js';
 import { parseDocument } from './syntaxValidation.js';
 import {
@@ -97,6 +100,7 @@ export interface MapEditorHost {
   /** Folder of the files shipped with the extension, for a default a mod does not carry. */
   readonly assetsFolder: string;
   readonly writeText: (absolutePath: string, text: string) => Promise<boolean>;
+  readonly writeBytes: (absolutePath: string, bytes: Uint8Array) => Promise<boolean>;
   readonly rename: (fromPath: string, toPath: string) => Promise<boolean>;
   /** The mod's code page, asked at save time so the setting can change meanwhile. */
   readonly codepage: () => Codepage;
@@ -105,6 +109,7 @@ export interface MapEditorHost {
 }
 
 const PROVINCES_FOLDER = 'history/provinces';
+const PROVINCES_BMP = 'map/provinces.bmp';
 const COUNTRIES_FILE = 'common/countries.txt';
 /** History files read at once while collecting owners. */
 const OWNER_BATCH = 64;
@@ -219,6 +224,36 @@ export class MapEditorHandlers {
       case 'positions':
         return this.savePositions(target, params, params.data);
     }
+  }
+
+  /**
+   * Write the painted pixels into `map/provinces.bmp`. A bitmap the stack
+   * resolves to a layer below the target is patched and written into the target
+   * as its own copy, the same rule every other save follows.
+   */
+  async paint(params: PaintParams): Promise<PaintResult> {
+    const target = await this.resolveTarget(params);
+    if (typeof target === 'string') {
+      return { ok: false, reason: target };
+    }
+    const source = this.resolve(target.layers, PROVINCES_BMP);
+    const bytes = source === undefined ? undefined : await this.host.readBytes(source);
+    if (bytes === undefined) {
+      return { ok: false, reason: 'The picked mods have no map/provinces.bmp.' };
+    }
+    const decoded = decodeBmp(bytes);
+    if (decoded.kind === 'error') {
+      return { ok: false, reason: `map/provinces.bmp could not be read: ${decoded.reason}.` };
+    }
+    const outcome = applyRuns(decoded.image, params.runs);
+    if (!outcome.ok) {
+      return outcome;
+    }
+    const destination = isInsideRoot(target.root, source ?? '') ? (source ?? '') : path.join(target.root, PROVINCES_BMP);
+    if (!(await this.host.writeBytes(destination, bytes))) {
+      return { ok: false, reason: 'map/provinces.bmp could not be written.' };
+    }
+    return { ok: true, path: destination, pixels: outcome.pixels };
   }
 
   /** Every editable point of `map/positions.txt`, for the page to draw over the map. */

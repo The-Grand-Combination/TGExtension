@@ -52,6 +52,61 @@ A translucent box in the map's bottom-left corner holds the **map layers** and, 
   blue, and provinces with no owner, `owner = ---`, or an owner without a definition file get grey.
   The layer is only paint: clicks, the tooltip, selection and drags keep reading the original pixels.
 
+## Painting provinces
+
+A second box sits over the layers one, holding the five tools as a pad, the brush-width slider, and
+the colour being painted with. What the brush writes is a **colour**, not a province: the bitmap is
+pixels, and which province a pixel belongs to is `definition.csv`'s business, read back from the
+colour. So a colour can be picked off the map or chosen outright, and painting never waits for a
+province to be selected.
+
+The **hand** is what the editor has always done — drag to move the map, click a province to open it
+in the side panel (clicking the one already open closes it again), drag a position dot to move it —
+and it is the tool the page starts on. The other
+three paint with the box's colour:
+
+- the **eye drop** takes the colour of the pixel clicked, whether or not a province owns it, and the
+  status line names the province when one does.
+- the **pencil** paints the pixels it is dragged over, as a square of the brush slider's map pixels
+  (1 by default, up to 16; the slider is greyed under the tools that do not draw a line). A fast drag
+  still draws a line, not a dotted one.
+- **Draw and paint** grows a province in one gesture: draw a line that leaves a province of the
+  chosen colour and comes back into it somewhere else, and everything the line shut in is filled.
+  The line and the pixels already holding the colour are one wall; whatever the edge of the map can
+  no longer reach around that wall, next to the line, becomes part of the province. A line that never
+  comes back closes nothing off and says so, leaving only the line itself painted. Its line is never
+  thinner than two pixels, because a one-pixel line drawn at an angle leaks through its own corners.
+- the **bucket** gives everything that touches the pixel clicked and shares its colour — four
+  neighbours at a time, so a region that only meets another through a corner stays where it is.
+
+The colour swatch is a colour picker: any colour can be painted, including one no province has yet.
+The middle mouse button moves the map under every tool — the pointer becomes the hand while it is
+held, as it is under the hand tool — and the wheel still zooms, so painting a border never means
+putting the brush down to reach the rest of the map. The **right button borrows the hand**: it ends
+whatever was being drawn and moves the map while it is held, then gives the tool back the moment it
+comes up. No context menu opens over the map, and only the left button opens a province in the side
+panel.
+
+Nothing reaches `map/provinces.bmp` while painting: the pixels change on the page, and the two
+buttons under the colour decide what becomes of them. **Save** writes them all in one go; **Reset**
+puts every one of them back the way the file has it. Both stand there always, greyed while there is
+nothing painted, and their tooltip carries the count. `Ctrl+Z` takes back a stroke and
+`Ctrl+Shift+Z` (or `Ctrl+Y`) puts it back, as many as
+`victorianTools.mapEditor.paintUndoSteps` allows — 20 by default, a number in the **Victorian Tools
+Settings** tab. Undoing back to the start greys the buttons again: a pixel that holds its file
+colour is no longer an edit.
+
+The write follows the rule every other save follows: the bitmap is read wherever the mod stack
+resolves it and written into the **target mod**, so a mod without a `provinces.bmp` of its own gets
+one, with only the painted pixels differing from the layer below. Everything else about the file —
+its size, its header, its bit depth — is left exactly as it was. A **Reload** with pixels still held
+asks first, and closing the tab with pixels still held says so: a webview cannot refuse to close, and
+the page is the only place those pixels exist.
+
+`map/definition.csv` is not touched: painting writes colours, and the table is what says which
+province a colour is. A province left with no pixels at all, or a colour the table does not name, is
+what the [map report](map-images.md) checks for.
+
 The panel header shows the province view's terrain picture behind the name: the sprite
 `GFX_terrainimg_<terrain>` of `interface/*.gfx` (the `.dds` twin of a declared `.tga` is accepted,
 as the game does), where the terrain is the history file's `terrain = x` or, failing that, the

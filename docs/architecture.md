@@ -205,16 +205,20 @@ closes. A finding with no pixel gets no link.
 
 The side bar action **Map Editor** (`victorian-tools.openMapEditor`,
 `commands/openMapEditorCommand.ts`) uses the same mod dialog and target resolution, then opens a
-webview tab (`providers/mapEditorPanel.ts` + `mapEditorHtml.ts`). Five requests
+webview tab (`providers/mapEditorPanel.ts` + `mapEditorHtml.ts`). Six requests
 ([model/mapEditor.ts](../src/model/mapEditor.ts), handled by
 [server/mapEditorHandlers.ts](../src/server/mapEditorHandlers.ts)) carry the map description, the
 `map/positions.txt` points drawn over it, the start-date owners and country colours behind the
-Country Colors layer, one province's localisation/history/pops/positions, and one section's save;
+Country Colors layer, one province's localisation/history/pops/positions, one section's save, and
+the pixels painted on the map;
 the page fetches and decodes `provinces.bmp` (and, for the Show Rivers layer, `rivers.bmp`) itself
 and tints it by owner in the browser. Saves are text patches
 computed by `vscode`-free services (`provinceLocEdit.ts`, `provinceHistoryEdit.ts`,
 `provincePopsEdit.ts`, `provincePositionsEdit.ts` over `textPatch.ts`) and
-written only into the top mod of the stack. Behaviour and rules in [map-editor.md](map-editor.md).
+written only into the top mod of the stack. Painting works the same way one level down:
+`provincePaint.ts` holds the brush, the fill and the run encoding the page and the server share, and
+writes the pixels back into the bitmap's own bytes. Behaviour and rules in
+[map-editor.md](map-editor.md).
 
 ## Mod root discovery and file classification
 
@@ -303,5 +307,6 @@ asserts the manifest defaults and `DEFAULT_CONFIG` agree.
 | `victorianTools.nullTags.pattern` | `^(QQQ\|---\|null)$` | Regex matching the tags meaning "no country". A country value that matches warns instead of erroring; matched case-insensitively. Empty allows no exception. Editable from the **Victorian Tools Settings** tab. |
 | `victorianTools.nullTags.suppressWarnings` | `true` | Report nothing at all for a tag `nullTags.pattern` matches: `null-country-tag`, `null-tag-exploit` and the `uncolonize-province` of `secede_province = QQQ` all go quiet, because a script that writes a null tag wrote it on purpose. A tag the pattern misses is untouched, and an empty pattern makes this setting a no-op. Editable from the **Regex Patterns** tab (a checkbox). |
 | `victorianTools.mapEditor.countryColorsTint` | `82` | Percent of the owner's colour in the Map Editor's **Country Colors** layer; the rest is the province's own colour. Client-side only. Editable from the **Victorian Tools Settings** tab (a slider). |
+| `victorianTools.mapEditor.paintUndoSteps` | `20` | How many brush strokes `Ctrl+Z` takes back while painting provinces in the Map Editor; each step holds the pixels of one stroke. Client-side only. Editable from the **Victorian Tools Settings** tab. |
 | `victorianTools.mapEditor.provinceFolderPattern` | `` (empty) | Regex narrowing which subfolders of `history/provinces` the Map Editor reads, matched against the subfolder alone, case-insensitively. Empty uses every folder. It exists for a total conversion that declares the whole vanilla province set as empty placeholders; see [map-editor.md](map-editor.md). A change re-reads the mod stack, so the cached province owners go with it. Editable from the **Regex Patterns** tab of the **Victorian Tools Settings** page. |
 | `victorianTools.trace.server` | `off` | `vscode-languageclient` trace verbosity (client-side).

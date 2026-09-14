@@ -47,6 +47,21 @@ suite('mapEditorMessages', () => {
     assert.strictEqual(asPageMessage(undefined), undefined);
   });
 
+  test('paint carries whole triples, and anything else is refused outright', () => {
+    assert.deepStrictEqual(asPageMessage({ type: 'paint', runs: [4, 2, 255] }), { type: 'paint', runs: [4, 2, 255] });
+    assert.deepStrictEqual(asPageMessage({ type: 'paint', runs: [] }), { type: 'paint', runs: [] });
+    // A dropped number would shift every run after it onto the wrong pixels.
+    assert.strictEqual(asPageMessage({ type: 'paint', runs: [4, 2] }), undefined);
+    assert.strictEqual(asPageMessage({ type: 'paint', runs: [4, 2, '255'] }), undefined);
+    assert.strictEqual(asPageMessage({ type: 'paint', runs: [4, 1.5, 255] }), undefined);
+    assert.strictEqual(asPageMessage({ type: 'paint' }), undefined);
+  });
+
+  test('paintPending carries the count the close warning uses', () => {
+    assert.deepStrictEqual(asPageMessage({ type: 'paintPending', pixels: 12 }), { type: 'paintPending', pixels: 12 });
+    assert.strictEqual(asPageMessage({ type: 'paintPending', pixels: 'many' }), undefined);
+  });
+
   test('the messages that carry plain fields still parse', () => {
     assert.deepStrictEqual(asPageMessage({ type: 'select', provinceId: 3, popDate: '1836.1.1' }), {
       type: 'select',

@@ -21,6 +21,7 @@ function current(
   countryColorsTint = 82,
   provinceFolderPattern = '',
   nullTagSuppress = true,
+  paintUndoSteps = 20,
 ): CurrentSettings {
   return {
     gamePathSetting,
@@ -32,6 +33,7 @@ function current(
     ignoreMarker,
     provinceFolderPattern,
     countryColorsTint,
+    paintUndoSteps,
   };
 }
 

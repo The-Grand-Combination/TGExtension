@@ -46,17 +46,40 @@ ${PAGE_STYLE}
     <canvas id="canvas"></canvas>
     <div id="tooltip" hidden></div>
     <div id="mapControls">
-      <div id="layers">
-        <label><input type="checkbox" id="layerCountry"> Country Colors</label>
-        <label><input type="checkbox" id="layerRivers"> Show Rivers</label>
-        <label><input type="checkbox" id="layerPositions" checked> Positions</label>
-        <div class="actions">
-          <button id="fitButton" class="secondary" title="Fit the whole map in the view">Fit</button>
-          <button id="reloadButton" class="secondary" title="Re-read the map and the mod files">Reload</button>
+      <div id="controlStack">
+        <div id="tools">
+          <div class="pad">
+            <button id="toolHand" class="tool hand" title="Move the map, and click a province to edit it"></button>
+            <button id="toolPencil" class="tool pencil" title="Paint the chosen colour over what you draw on"></button>
+            <button id="toolDraw" class="tool draw" title="Draw a line out of a province of the chosen colour and back into it: what the line closes off is filled"></button>
+            <button id="toolBucket" class="tool bucket" title="Give the chosen colour to everything that touches the pixel you click"></button>
+            <button id="toolPick" class="tool pick" title="Take the colour of the pixel you click"></button>
+          </div>
+          <label id="brushRow" class="size slider" title="Brush width, in map pixels">
+            <span class="range"><input id="brushSize" type="range" min="1" max="16" step="1" value="1"></span>
+            <span id="brushSizeValue" class="readout">1</span>
+          </label>
+          <div class="tint">
+            <input id="paintColor" type="color" value="#ff0000" title="The colour the pencil and the bucket paint with">
+            <span id="paintColorText">#ff0000</span>
+          </div>
+          <div class="actions">
+            <button id="savePaintButton" class="secondary" title="Write the painted pixels into map/provinces.bmp">Save</button>
+            <button id="resetPaintButton" class="secondary" title="Put every painted pixel back the way the file has it">Reset</button>
+          </div>
         </div>
-        <div class="find">
-          <input id="goto" type="text" spellcheck="false" placeholder="ID or Name" title="Center the map on a province: its id, or a name from definition.csv">
-          <button id="gotoButton" class="secondary">Go</button>
+        <div id="layers">
+          <label><input type="checkbox" id="layerCountry"> Country Colors</label>
+          <label><input type="checkbox" id="layerRivers"> Show Rivers</label>
+          <label><input type="checkbox" id="layerPositions" checked> Positions</label>
+          <div class="actions">
+            <button id="fitButton" class="secondary" title="Fit the whole map in the view">Fit</button>
+            <button id="reloadButton" class="secondary" title="Re-read the map and the mod files">Reload</button>
+          </div>
+          <div class="find">
+            <input id="goto" type="text" spellcheck="false" placeholder="ID / Name" title="Center the map on a province: its id, or a name from definition.csv">
+            <button id="gotoButton" class="secondary">Go</button>
+          </div>
         </div>
       </div>
       <button id="saveAllButton" title="Write every province whose positions were moved and not saved" hidden></button>
@@ -101,15 +124,51 @@ const PAGE_STYLE = String.raw`
      box rather than a child of it: its label carries a province count, and a
      child that wide would stretch the box every time the count changed. */
   #mapControls { position: absolute; left: 10px; bottom: 10px; display: flex; align-items: flex-end; gap: 8px; max-width: calc(100% - 20px); user-select: none; }
-  #layers { flex: none; display: flex; flex-direction: column; gap: 4px; padding: 6px 10px; background: rgba(30, 30, 30, 0.6); color: #eee; border-radius: 4px; font-size: 0.9em; }
+  /* The box is only as wide as its widest layer name: the buttons and the search
+     under it share that width rather than each asking for one of its own. */
+  #layers { flex: none; display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 6px 10px; background: rgba(30, 30, 30, 0.6); color: #eee; border-radius: 4px; font-size: 0.9em; }
   #layers label { display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
   #layers input { margin: 0; }
   #layers .actions { display: flex; gap: 6px; margin-top: 4px; padding-top: 6px; border-top: 1px solid rgba(255, 255, 255, 0.15); }
-  #layers .actions button { flex: 1; padding: 2px 8px; }
-  /* The scrollbar gutter is always reserved, so a list growing past the window
-     never reflows the panel; the 15px it takes are added to the panel's width
-     and come off the map, which is elastic, so the fields keep their size. */
-  #side { width: 435px; flex: none; overflow-y: auto; scrollbar-gutter: stable; border-left: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, #444)); padding: 14px 14px 24px; box-sizing: border-box; }
+  #layers .actions button { flex: 1 1 0; min-width: 0; padding: 2px 4px; }
+  /* The tool box sits over the layers box and takes its width: the tools are a
+     2 x 2 pad, so the box below is always the wider of the two. */
+  #controlStack { flex: none; display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+  /* Zero wide, then as wide as the stack: the box below decides the width, and
+     a long Save label can never push the two boxes apart. */
+  #tools { width: 0; min-width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 5px; padding: 6px 10px; background: rgba(30, 30, 30, 0.6); color: #eee; border-radius: 4px; font-size: 0.9em; }
+  #tools .pad { display: grid; grid-template-columns: repeat(3, 26px); gap: 3px; }
+  #tools .tool { width: 26px; height: 24px; padding: 0; display: inline-flex; background: transparent; border-radius: 3px; opacity: 0.75; }
+  /* The glyphs are VS Code's own codicons (grabber, edit-compact, share-window,
+     paintcan, copy), drawn as masks so they take the box's colour. */
+  #tools .tool::before { content: ''; margin: auto; width: 15px; height: 15px; background-color: #eee; }
+  #tools .tool:hover { opacity: 1; background: rgba(255, 255, 255, 0.14); }
+  #tools .tool.active { opacity: 1; background: var(--vscode-button-background, #0e639c); }
+  #tools .hand::before { -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2.5 9H13.5C13.7761 9 14 9.22386 14 9.5C14 9.74546 13.8231 9.94961 13.5899 9.99194L13.5 10H2.5C2.22386 10 2 9.77614 2 9.5C2 9.25454 2.17688 9.05039 2.41012 9.00806L2.5 9H13.5H2.5ZM2.5 6H13.5C13.7761 6 14 6.22386 14 6.5C14 6.74546 13.8231 6.94961 13.5899 6.99194L13.5 7H2.5C2.22386 7 2 6.77614 2 6.5C2 6.25454 2.17688 6.05039 2.41012 6.00806L2.5 6H13.5H2.5Z'/%3E%3C/svg%3E") center / 15px no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2.5 9H13.5C13.7761 9 14 9.22386 14 9.5C14 9.74546 13.8231 9.94961 13.5899 9.99194L13.5 10H2.5C2.22386 10 2 9.77614 2 9.5C2 9.25454 2.17688 9.05039 2.41012 9.00806L2.5 9H13.5H2.5ZM2.5 6H13.5C13.7761 6 14 6.22386 14 6.5C14 6.74546 13.8231 6.94961 13.5899 6.99194L13.5 7H2.5C2.22386 7 2 6.77614 2 6.5C2 6.25454 2.17688 6.05039 2.41012 6.00806L2.5 6H13.5H2.5Z'/%3E%3C/svg%3E") center / 15px no-repeat; }
+  #tools .pencil::before { -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M9.62999 0C10.9399 9.73611e-05 12.0098 1.07 12.0099 2.37988C12.0099 3.00987 11.7594 3.60957 11.3194 4.05957L10.6896 4.67969L4.50988 10.8604C4.2899 11.0803 3.99948 11.2396 3.68956 11.3096L0.620227 11.9902C0.620227 11.9902 0.549888 12 0.509876 12H0.50011C0.37011 12 0.239524 11.9496 0.149524 11.8496C0.0297368 11.7296 -0.0203258 11.5595 0.0196415 11.3896L0.699329 8.32031C0.769311 8.01039 0.919624 7.72997 1.14952 7.5L7.94933 0.700195C8.39933 0.250195 8.99999 0 9.62999 0ZM1.83995 8.20996C1.74995 8.29996 1.69027 8.41004 1.66027 8.54004L1.14952 10.8398L3.44933 10.3301C3.56914 10.3001 3.68946 10.2402 3.77941 10.1504L9.60949 4.32031L7.67003 2.37988L1.83995 8.20996ZM9.62023 1C9.25023 1 8.90952 1.14039 8.64952 1.40039L8.38488 1.66504L10.3341 3.61426L10.5997 3.34961C10.8596 3.08962 11.0001 2.73981 11.0001 2.37988C11 1.62007 10.38 1.00022 9.62023 1Z'/%3E%3C/svg%3E") center / 12px no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M9.62999 0C10.9399 9.73611e-05 12.0098 1.07 12.0099 2.37988C12.0099 3.00987 11.7594 3.60957 11.3194 4.05957L10.6896 4.67969L4.50988 10.8604C4.2899 11.0803 3.99948 11.2396 3.68956 11.3096L0.620227 11.9902C0.620227 11.9902 0.549888 12 0.509876 12H0.50011C0.37011 12 0.239524 11.9496 0.149524 11.8496C0.0297368 11.7296 -0.0203258 11.5595 0.0196415 11.3896L0.699329 8.32031C0.769311 8.01039 0.919624 7.72997 1.14952 7.5L7.94933 0.700195C8.39933 0.250195 8.99999 0 9.62999 0ZM1.83995 8.20996C1.74995 8.29996 1.69027 8.41004 1.66027 8.54004L1.14952 10.8398L3.44933 10.3301C3.56914 10.3001 3.68946 10.2402 3.77941 10.1504L9.60949 4.32031L7.67003 2.37988L1.83995 8.20996ZM9.62023 1C9.25023 1 8.90952 1.14039 8.64952 1.40039L8.38488 1.66504L10.3341 3.61426L10.5997 3.34961C10.8596 3.08962 11.0001 2.73981 11.0001 2.37988C11 1.62007 10.38 1.00022 9.62023 1Z'/%3E%3C/svg%3E") center / 12px no-repeat; }
+  #tools .draw::before { -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M14 1H6C4.9 1 4 1.9 4 3V5H2C0.9 5 0 5.9 0 7V13C0 14.1 0.9 15 2 15H10C11.1 15 12 14.1 12 13V11H14C15.1 11 16 10.1 16 9V3C16 1.9 15.1 1 14 1ZM11 13C11 13.55 10.55 14 10 14H2C1.45 14 1 13.55 1 13V7C1 6.45 1.45 6 2 6H4V9C4 10.1 4.9 11 6 11H11V13ZM15 9C15 9.55 14.55 10 14 10H12V7C12 5.9 11.1 5 10 5H5V3C5 2.45 5.45 2 6 2H14C14.55 2 15 2.45 15 3V9Z'/%3E%3C/svg%3E") center / 15px no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M14 1H6C4.9 1 4 1.9 4 3V5H2C0.9 5 0 5.9 0 7V13C0 14.1 0.9 15 2 15H10C11.1 15 12 14.1 12 13V11H14C15.1 11 16 10.1 16 9V3C16 1.9 15.1 1 14 1ZM11 13C11 13.55 10.55 14 10 14H2C1.45 14 1 13.55 1 13V7C1 6.45 1.45 6 2 6H4V9C4 10.1 4.9 11 6 11H11V13ZM15 9C15 9.55 14.55 10 14 10H12V7C12 5.9 11.1 5 10 5H5V3C5 2.45 5.45 2 6 2H14C14.55 2 15 2.45 15 3V9Z'/%3E%3C/svg%3E") center / 15px no-repeat; }
+  #tools .bucket::before { -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M7.49998 1C7.77613 1 7.99998 1.22386 7.99998 1.5V2.42763C8.15702 2.4998 8.30415 2.60053 8.43355 2.72983L12.1458 6.43921C12.7319 7.02493 12.7321 7.97499 12.1462 8.56093L7.0781 13.629C6.48218 14.2249 5.51243 14.2131 4.93123 13.6028L1.31095 9.80152C0.749447 9.21194 0.760786 8.28209 1.3365 7.70638L6.31263 2.73023C6.50977 2.53309 6.74814 2.4023 6.99998 2.33785V1.5C6.99998 1.22386 7.22384 1 7.49998 1ZM6.99998 4.5V3.4571L2.45709 8H11.2929L11.4391 7.85383C11.6344 7.65851 11.6343 7.34182 11.4389 7.14658L7.99998 3.71027V4.5C7.99998 4.77614 7.77613 5 7.49998 5C7.22384 5 6.99998 4.77614 6.99998 4.5ZM1.95461 9C1.97565 9.03992 2.00247 9.07761 2.03509 9.11187L5.65537 12.9132C5.8491 13.1166 6.17235 13.1205 6.37099 12.9219L10.2929 9H1.95461ZM12.9211 10.222C12.6981 9.96719 12.3018 9.96719 12.0789 10.222L10.9285 11.5367C9.74705 12.8869 10.7059 15 12.5 15C14.2941 15 15.2529 12.8869 14.0715 11.5367L12.9211 10.222ZM11.681 12.1952L12.5 11.2593L13.3189 12.1952C13.9346 12.8989 13.4349 14 12.5 14C11.5651 14 11.0654 12.8989 11.681 12.1952Z'/%3E%3C/svg%3E") center / 15px no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M7.49998 1C7.77613 1 7.99998 1.22386 7.99998 1.5V2.42763C8.15702 2.4998 8.30415 2.60053 8.43355 2.72983L12.1458 6.43921C12.7319 7.02493 12.7321 7.97499 12.1462 8.56093L7.0781 13.629C6.48218 14.2249 5.51243 14.2131 4.93123 13.6028L1.31095 9.80152C0.749447 9.21194 0.760786 8.28209 1.3365 7.70638L6.31263 2.73023C6.50977 2.53309 6.74814 2.4023 6.99998 2.33785V1.5C6.99998 1.22386 7.22384 1 7.49998 1ZM6.99998 4.5V3.4571L2.45709 8H11.2929L11.4391 7.85383C11.6344 7.65851 11.6343 7.34182 11.4389 7.14658L7.99998 3.71027V4.5C7.99998 4.77614 7.77613 5 7.49998 5C7.22384 5 6.99998 4.77614 6.99998 4.5ZM1.95461 9C1.97565 9.03992 2.00247 9.07761 2.03509 9.11187L5.65537 12.9132C5.8491 13.1166 6.17235 13.1205 6.37099 12.9219L10.2929 9H1.95461ZM12.9211 10.222C12.6981 9.96719 12.3018 9.96719 12.0789 10.222L10.9285 11.5367C9.74705 12.8869 10.7059 15 12.5 15C14.2941 15 15.2529 12.8869 14.0715 11.5367L12.9211 10.222ZM11.681 12.1952L12.5 11.2593L13.3189 12.1952C13.9346 12.8989 13.4349 14 12.5 14C11.5651 14 11.0654 12.8989 11.681 12.1952Z'/%3E%3C/svg%3E") center / 15px no-repeat; }
+  #tools .pick::before { -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 5V12.73C2.4 12.38 2 11.74 2 11V5C2 2.79 3.79 1 6 1H9C9.74 1 10.38 1.4 10.73 2H6C4.35 2 3 3.35 3 5ZM11 15H6C4.897 15 4 14.103 4 13V5C4 3.897 4.897 3 6 3H11C12.103 3 13 3.897 13 5V13C13 14.103 12.103 15 11 15ZM12 5C12 4.448 11.552 4 11 4H6C5.448 4 5 4.448 5 5V13C5 13.552 5.448 14 6 14H11C11.552 14 12 13.552 12 13V5Z'/%3E%3C/svg%3E") center / 15px no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3 5V12.73C2.4 12.38 2 11.74 2 11V5C2 2.79 3.79 1 6 1H9C9.74 1 10.38 1.4 10.73 2H6C4.35 2 3 3.35 3 5ZM11 15H6C4.897 15 4 14.103 4 13V5C4 3.897 4.897 3 6 3H11C12.103 3 13 3.897 13 5V13C13 14.103 12.103 15 11 15ZM12 5C12 4.448 11.552 4 11 4H6C5.448 4 5 4.448 5 5V13C5 13.552 5.448 14 6 14H11C11.552 14 12 13.552 12 13V5Z'/%3E%3C/svg%3E") center / 15px no-repeat; }
+  #tools .size { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  /* The brush slider is the panel's own, narrowed and with no field behind it:
+     the box it would draw is a black slab over the translucent controls. */
+  #tools .size .readout { flex: 0 0 14px; }
+  #tools .size input[type=range] { background: transparent; border-color: transparent; }
+  #tools .size.off { opacity: 0.4; }
+  /* The colour the brush writes: picked from the map with the eye drop, or chosen outright. */
+  #tools .tint { display: flex; align-items: center; gap: 6px; }
+  #tools .tint input { width: 36px; height: 20px; padding: 0 1px; }
+  #tools .tint span { font-family: var(--vscode-editor-font-family); opacity: 0.85; }
+  #tools .actions { display: flex; gap: 6px; }
+  #tools .actions button { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 2px 4px; }
+  #mapArea.painting { cursor: crosshair; }
+  #mapArea.picking { cursor: copy; }
+  /* The middle button pans under every tool, so it shows the hand it would with the hand. */
+  #mapArea.dragging.painting, #mapArea.dragging.picking { cursor: grabbing; }
+  /* The scrollbar gutter is always reserved and stands in for the right padding:
+     a list growing past the window gets its bar where the margin already was, so
+     nothing under it moves and no empty strip is left when there is no bar. */
+  #side { width: 420px; flex: none; overflow-y: auto; scrollbar-gutter: stable; border-left: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, #444)); padding: 14px 0 24px 14px; box-sizing: border-box; }
   /* The picture keeps the panel's own margin on every side, so it lines up with
      the text under it and stands the same distance off the top. */
   .header { margin: 0; padding: 0; background-size: cover; background-position: center; }
@@ -143,8 +202,8 @@ const PAGE_STYLE = String.raw`
   input:focus, select:focus { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
   input[type=number] { width: 90px; }
   #layers .find { display: flex; gap: 6px; margin-top: 4px; }
-  #layers .find input { flex: 1; width: 92px; min-width: 0; }
-  #layers .find button { flex: none; padding: 2px 8px; }
+  #layers .find input { flex: 1 1 0; width: 0; min-width: 0; }
+  #layers .find button { flex: none; padding: 2px 6px; }
   #saveAllButton { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; }
   #saveAllButton[hidden] { display: none; }
   button { padding: 3px 10px; background: var(--vscode-button-background); color: var(--vscode-button-foreground); border: none; border-radius: 2px; cursor: pointer; font-family: inherit; font-size: inherit; white-space: nowrap; }

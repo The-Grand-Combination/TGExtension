@@ -51,6 +51,7 @@ import {
 import {
   MAP_EDITOR_COUNTRY_COLORS_REQUEST,
   MAP_EDITOR_MAP_REQUEST,
+  MAP_EDITOR_PAINT_REQUEST,
   MAP_EDITOR_POSITIONS_REQUEST,
   MAP_EDITOR_PROVINCE_REQUEST,
   MAP_EDITOR_SAVE_REQUEST,
@@ -59,6 +60,8 @@ import {
   type MapCountryColorsResult,
   type MapEditorMapResult,
   type MapEditorTargetParams,
+  type PaintParams,
+  type PaintResult,
   type MapPositionsResult,
   type ProvinceRequestParams,
   type ProvinceResult,
@@ -855,6 +858,7 @@ const mapEditor = new MapEditorHandlers({
   // dist/server.js sits one folder below the extension root, next to assets/.
   assetsFolder: path.join(__dirname, '..', 'assets'),
   writeText: writeText,
+  writeBytes: writeModFileBytes,
   rename: renameModFile,
   codepage: (): Codepage => config.encoding,
   historyFolderPattern: provinceFolderPattern,
@@ -865,6 +869,16 @@ onRequest(MAP_EDITOR_PROVINCE_REQUEST, (params: ProvinceRequestParams): Promise<
 onRequest(MAP_EDITOR_POSITIONS_REQUEST, (params: MapEditorTargetParams): Promise<MapPositionsResult> => mapEditor.positions(params));
 onRequest(MAP_EDITOR_COUNTRY_COLORS_REQUEST, (params: MapEditorTargetParams): Promise<MapCountryColorsResult> => mapEditor.countryColors(params));
 onRequest(MAP_EDITOR_TERRAIN_PICTURE_REQUEST, (params: TerrainPictureParams): Promise<TerrainPictureResult> => mapEditor.terrainPictureFor(params));
+onRequest(MAP_EDITOR_PAINT_REQUEST, async (params: PaintParams): Promise<PaintResult> => {
+  const result = await mapEditor.paint(params);
+  connection.console.log(
+    result.ok
+      ? `Map editor: ${String(result.pixels)} pixel(s) painted into ${result.path}`
+      : `Map editor: the map was not painted: ${result.reason}`,
+  );
+  return result;
+});
+
 onRequest(MAP_EDITOR_SAVE_REQUEST, async (params: SaveParams): Promise<SaveResult> => {
   const result = await mapEditor.save(params);
   connection.console.log(
