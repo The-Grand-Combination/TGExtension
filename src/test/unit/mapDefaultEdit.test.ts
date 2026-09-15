@@ -1,5 +1,5 @@
 import * as assert from 'node:assert';
-import { planDefaultMapEdit } from '../../services/mapDefaultEdit.js';
+import { planDefaultMapEdit, seaStartsOf } from '../../services/mapDefaultEdit.js';
 import { applyPatches } from '../../services/textPatch.js';
 import { parseDocument } from '../../services/syntaxValidation.js';
 
@@ -42,5 +42,10 @@ suite('mapDefaultEdit', () => {
 
   test('a file without the keys is not invented', () => {
     assert.deepStrictEqual(planDefaultMapEdit(parseDocument('#nothing\n').document, { provinceId: 3, isSea: true }), []);
+  });
+
+  test('sea_starts reads back as the ids it lists, and nothing without the block', () => {
+    assert.deepStrictEqual([...seaStartsOf(parseDocument(DEFAULT_MAP).document)], ['7', '8', '9']);
+    assert.deepStrictEqual([...seaStartsOf(parseDocument('max_provinces = 3\n').document)], []);
   });
 });

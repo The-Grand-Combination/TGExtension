@@ -71,6 +71,8 @@ export interface MapEditorMap {
   readonly historyFolders: readonly string[];
   /** File names under `history/pops/<date>`, per date. */
   readonly popFiles: Readonly<Record<string, readonly string[]>>;
+  /** The pick lists of every form, sent once with the map rather than with every province. */
+  readonly vocabulary: Vocabulary;
 }
 
 export type MapEditorMapResult = MapEditorMap | { readonly kind: 'unavailable'; readonly reason: string };
@@ -278,7 +280,6 @@ export interface ProvinceDetails {
   readonly terrain: TerrainSection;
   readonly climate: ClimateSection;
   readonly state: StateSection;
-  readonly vocabulary: Vocabulary;
 }
 
 export interface TerrainPictureParams extends MapEditorTargetParams {
@@ -335,16 +336,22 @@ export interface NewProvinceParams extends MapEditorTargetParams {
   readonly popDate: string;
 }
 
-export type SaveParams = ProvinceRequestParams & SaveSection & {
+export interface SaveOptions {
   /** Set while the province is new: the save creates it before writing its own section. */
   readonly create?: NewProvince;
   /** Answer with the files the save would write, and write none of them. */
   readonly dryRun?: boolean;
-};
+}
+
+export type SaveParams = ProvinceRequestParams & SaveSection & SaveOptions;
+
+/** A save as the page posts it: the extension adds the target, which the page never knows. */
+export type PageSaveParams = Pick<ProvinceRequestParams, 'provinceId' | 'popDate'> & SaveSection & SaveOptions;
 
 export type SaveResult =
   | { readonly ok: true; readonly written: readonly string[]; readonly details: ProvinceDetails }
-  | { readonly ok: false; readonly reason: string };
+  /** `written`: what a save that failed half-way had already put on disk — a province created with no section. */
+  | { readonly ok: false; readonly reason: string; readonly written?: readonly string[] };
 
 /** A colour as `common/countries/<file>.txt` writes it: three 0-255 components. */
 export type Rgb = readonly [number, number, number];

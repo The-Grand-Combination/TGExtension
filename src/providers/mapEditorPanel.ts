@@ -15,6 +15,7 @@ import {
   type MapEditorMap,
   type MapEditorReveal,
   type MapEditorTargetParams,
+  type PageSaveParams,
   type SaveParams,
 } from '../model/mapEditor.js';
 import { affectsMapEditorView, readCountryColorsTint, readPaintUndoSteps } from '../config.js';
@@ -23,6 +24,12 @@ import type { ReferenceLayer } from '../services/referenceLayers.js';
 import { mapEditorHtml, mapEditorNoticeHtml } from './mapEditorHtml.js';
 import { ReferenceStore } from './referenceStore.js';
 import { request } from './request.js';
+
+/** The messages that touch the reference pictures, and so the one manifest. */
+type ReferenceMessage = Extract<
+  PageMessage,
+  { type: 'addReference' | 'addReferencePath' | 'pickReference' | 'references' | 'removeReference' }
+>;
 
 /**
  * The **Map Editor** tab: `provinces.bmp` drawn on a canvas, and a side panel
@@ -41,6 +48,14 @@ export class MapEditorPanel implements vscode.Disposable {
   private paintPixels = 0;
   /** The target mod's reference pictures; set with the map. */
   private references: ReferenceStore | undefined;
+  /**
+   * The reference messages run one after another: each one reads the manifest,
+   * changes it and writes it back, and two of those at once lose one's change.
+   * Nothing else waits on this — the picker's dialog must not hold up a click.
+   */
+  private referenceQueue: Promise<unknown> = Promise.resolve();
+  /** Counts the loads, so a load that another one overtook does not install its map. */
+  private loads = 0;
   private readonly subscriptions: vscode.Disposable[] = [];
 
   constructor(
@@ -67,8 +82,13 @@ export class MapEditorPanel implements vscode.Disposable {
   /**
    * Show the tab and load the map of these mods, replacing whatever it showed.
    * With a `reveal`, the page centers on that pixel once the bitmap is decoded.
+   * A tab holding unsaved work asks first; called off, it stays as it is.
    */
   async open(params: MapEditorTargetParams, reveal?: MapEditorReveal): Promise<void> {
+    if (this.panel && (await this.keepUnsaved())) {
+      this.panel.reveal();
+      return;
+    }
     this.params = params;
     this.reveal = reveal;
     const panel = this.panel ?? this.createPanel();
@@ -84,7 +104,14 @@ export class MapEditorPanel implements vscode.Disposable {
       { enableScripts: true, retainContextWhenHidden: true },
     );
     panel.webview.onDidReceiveMessage((message: unknown) => {
-      void this.handle(asPageMessage(message));
+      // A request that throws would otherwise leave the page waiting on an answer that never comes.
+      this.handle(asPageMessage(message)).catch((error: unknown) => {
+        const text = error instanceof Error ? error.message : String(error);
+        this.getClient()?.outputChannel.appendLine(`Map editor: ${text}`);
+        if (this.panel === panel) {
+          post(panel, { type: 'error', message: text });
+        }
+      });
     });
     panel.onDidDispose(() => {
       this.panel = undefined;
@@ -102,11 +129,15 @@ export class MapEditorPanel implements vscode.Disposable {
       panel.webview.html = mapEditorNoticeHtml('The language server is not running.');
       return;
     }
+    const load = ++this.loads;
     // The page starts over, so whatever it was holding starts over with it.
     this.pending = [];
     this.paintPixels = 0;
     panel.webview.html = mapEditorNoticeHtml('Reading the map…');
     const result = await request(client, MAP_EDITOR_MAP_REQUEST, this.params);
+    if (load !== this.loads || this.panel !== panel) {
+      return;
+    }
     if (result.kind === 'unavailable') {
       panel.webview.html = mapEditorNoticeHtml(result.reason);
       return;
@@ -130,23 +161,42 @@ export class MapEditorPanel implements vscode.Disposable {
     if (!panel || !client || !message) {
       return;
     }
-    if (await this.aside(panel, client, message)) {
-      return;
+    switch (message.type) {
+      case 'log':
+        client.outputChannel.appendLine(`Map editor page: ${message.message}`);
+        return;
+      case 'pending':
+        this.pending = message.edits;
+        return;
+      case 'paintPending':
+        this.paintPixels = message.pixels;
+        return;
+      case 'addReference':
+      case 'addReferencePath':
+      case 'pickReference':
+      case 'references':
+      case 'removeReference':
+        await this.queueReference(panel, message);
+        return;
+      default:
+        await this.handleRequest(panel, client, message);
     }
+  }
+
+  /** The messages that reach the server, or the disk, and answer the page. */
+  private async handleRequest(
+    panel: vscode.WebviewPanel,
+    client: LanguageClient,
+    message: Exclude<PageMessage, ReferenceMessage | { type: 'log' | 'pending' | 'paintPending' }>,
+  ): Promise<void> {
     switch (message.type) {
       case 'ready':
-        this.sendSettings(panel);
-        this.sendMap(panel);
-        await this.sendPositions(panel, client);
-        await this.sendCountryColors(panel, client);
-        await this.sendReferences(panel);
-        await this.sendThumbnails(panel, client);
+        await this.sendAll(panel, client);
         return;
       case 'reload':
-        if (await this.keepPainted()) {
-          return;
+        if (!(await this.keepUnsaved())) {
+          await this.load(panel);
         }
-        await this.load(panel);
         return;
       case 'select':
         this.popDate = message.popDate;
@@ -171,44 +221,43 @@ export class MapEditorPanel implements vscode.Disposable {
       case 'terrainPicture':
         await this.terrainPicture(panel, client, message.terrain);
         return;
-    }
-  }
-
-  /** Everything that is not a request to the server: notes the page leaves, and the reference pictures. */
-  private async aside(panel: vscode.WebviewPanel, client: LanguageClient, message: PageMessage): Promise<boolean> {
-    return this.note(client, message) || this.handleReferences(panel, message);
-  }
-
-  /** What the page only tells the extension about: its log, and what it is holding. */
-  private note(client: LanguageClient, message: PageMessage): boolean {
-    switch (message.type) {
-      case 'log':
-        client.outputChannel.appendLine(`Map editor page: ${message.message}`);
-        return true;
-      case 'pending':
-        this.pending = message.edits;
-        return true;
-      case 'paintPending':
-        this.paintPixels = message.pixels;
-        return true;
       default:
-        return false;
+        assertNever(message);
     }
+  }
+
+  /** Everything the page needs once it is up; the four reads are independent, so they go out together. */
+  private async sendAll(panel: vscode.WebviewPanel, client: LanguageClient): Promise<void> {
+    this.sendSettings(panel);
+    this.sendMap(panel);
+    await Promise.all([
+      this.sendPositions(panel, client),
+      this.sendCountryColors(panel, client),
+      this.sendReferences(panel),
+      this.sendThumbnails(panel, client),
+    ]);
+  }
+
+  private queueReference(panel: vscode.WebviewPanel, message: ReferenceMessage): Promise<void> {
+    const store = this.references;
+    if (!store) {
+      return Promise.resolve();
+    }
+    const run = this.referenceQueue.then(() => this.handleReference(panel, store, message));
+    // The queue itself never rejects: one failure must not stall every message after it.
+    this.referenceQueue = run.catch(() => undefined);
+    return run;
   }
 
   /** The reference pictures: dropped in, moved, removed. Each answer is the whole list, which the page redraws from. */
-  private async handleReferences(panel: vscode.WebviewPanel, message: PageMessage): Promise<boolean> {
-    const store = this.references;
-    if (!store) {
-      return false;
-    }
+  private async handleReference(panel: vscode.WebviewPanel, store: ReferenceStore, message: ReferenceMessage): Promise<void> {
     switch (message.type) {
       case 'addReference':
         this.postReferences(panel, await store.add(message.name, Buffer.from(message.bytes, 'base64'), message.x, message.y));
-        return true;
+        return;
       case 'addReferencePath':
         await this.addReferenceFiles(panel, store, [vscode.Uri.parse(message.uri)], message.x, message.y);
-        return true;
+        return;
       case 'pickReference': {
         // Dropping a file on the tab is taken by VS Code itself, which opens the
         // file in an editor before the page ever sees it: the picker is the way in.
@@ -218,16 +267,16 @@ export class MapEditorPanel implements vscode.Disposable {
           filters: { Pictures: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'] },
         });
         await this.addReferenceFiles(panel, store, picked ?? [], message.x, message.y);
-        return true;
+        return;
       }
       case 'references':
         await store.write(message.layers);
-        return true;
+        return;
       case 'removeReference':
         this.postReferences(panel, await store.remove(message.file));
-        return true;
+        return;
       default:
-        return false;
+        assertNever(message);
     }
   }
 
@@ -255,7 +304,7 @@ export class MapEditorPanel implements vscode.Disposable {
     }
   }
 
-  /** The Layers box pictures, asked last: the three bitmaps are read whole on the server, and the map is already up. */
+  /** The Layers box pictures: the three bitmaps are read whole on the server, and the map is already up. */
   private async sendThumbnails(panel: vscode.WebviewPanel, client: LanguageClient): Promise<void> {
     if (!this.params || !this.map) {
       return;
@@ -288,7 +337,7 @@ export class MapEditorPanel implements vscode.Disposable {
     }
   }
 
-  /** Owners and country colours for the Country Colors layer; asked after the markers, and again after a history save. */
+  /** Owners and country colours for the Country Colors layer; asked with the markers, and again after a history save. */
   private async sendCountryColors(panel: vscode.WebviewPanel, client: LanguageClient): Promise<void> {
     if (!this.params || !this.map) {
       return;
@@ -320,18 +369,25 @@ export class MapEditorPanel implements vscode.Disposable {
     post(panel, { type: 'painted', result });
   }
 
-  /** True when the user calls a reload off rather than lose the pixels the page is holding. */
-  private async keepPainted(): Promise<boolean> {
-    if (this.paintPixels === 0) {
+  /**
+   * True when the user calls the reload (or the other map) off rather than lose
+   * what the page is holding: painted pixels, points moved, or both.
+   */
+  private async keepUnsaved(): Promise<boolean> {
+    const held = [
+      ...(this.paintPixels > 0 ? [`${String(this.paintPixels)} painted pixel(s) not written to map/provinces.bmp`] : []),
+      ...(this.pending.length > 0 ? [`points moved in ${String(this.pending.length)} province(s) and not saved`] : []),
+    ];
+    if (held.length === 0) {
       return false;
     }
-    const reload = 'Reload anyway';
+    const discard = 'Discard and continue';
     const answer = await vscode.window.showWarningMessage(
-      `${String(this.paintPixels)} painted pixel(s) have not been written to map/provinces.bmp. Reloading drops them.`,
+      `The Map Editor is holding ${held.join(', and ')}. Loading the map again drops them.`,
       { modal: true },
-      reload,
+      discard,
     );
-    return answer !== reload;
+    return answer !== discard;
   }
 
   /** A closed tab takes its painted pixels with it: there is nothing left to write them from. */
@@ -483,15 +539,16 @@ export class MapEditorPanel implements vscode.Disposable {
     return { written, failed };
   }
 
-  private async save(panel: vscode.WebviewPanel, client: LanguageClient, params: SaveParams): Promise<void> {
+  private async save(panel: vscode.WebviewPanel, client: LanguageClient, page: PageSaveParams): Promise<void> {
     if (!this.params) {
       return;
     }
-    if (params.create && !(await this.confirmCreate(client, { ...params, ...this.params }))) {
+    const params: SaveParams = { ...page, ...this.params };
+    if (params.create && !(await this.confirmCreate(client, params))) {
       post(panel, { type: 'saved', result: { ok: false, reason: 'Nothing was written.' } });
       return;
     }
-    const result = await request(client, MAP_EDITOR_SAVE_REQUEST, { ...params, ...this.params });
+    const result = await request(client, MAP_EDITOR_SAVE_REQUEST, params);
     post(panel, { type: 'saved', result });
     if (!result.ok) {
       void vscode.window.showErrorMessage(`Victorian Tools: ${result.reason}`);
@@ -499,6 +556,11 @@ export class MapEditorPanel implements vscode.Disposable {
       await this.sendCountryColors(panel, client);
     }
   }
+}
+
+/** A message type the switch above forgot fails to compile here instead of falling through. */
+function assertNever(value: never): never {
+  throw new Error(`Unhandled page message: ${JSON.stringify(value)}`);
 }
 
 /** The files a save would write, as the modal lists them: inside the target mod, by their path there. */

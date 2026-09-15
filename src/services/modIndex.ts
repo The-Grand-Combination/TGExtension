@@ -12,6 +12,7 @@ import type {
 import type { IdentifierCategory } from '../model/symbols.js';
 import { csvRows } from '../parser/csv.js';
 import { yieldToEventLoop } from './scheduling.js';
+import { seaStartsOf } from './mapDefaultEdit.js';
 import { parseDocument } from './syntaxValidation.js';
 
 /** File access needed to build the index; injected so the service stays testable. */
@@ -166,17 +167,10 @@ interface DefaultMapData {
 
 function readDefaultMap(provider: ModFileProvider): DefaultMapData {
   const document = parseRelative(provider, 'map/default.map');
-  const seaProvinces = new Set<string>();
   if (!document) {
-    return { maxProvinces: undefined, seaProvinces };
+    return { maxProvinces: undefined, seaProvinces: new Set() };
   }
-  const seaStarts = firstByKey(document.entries, 'sea_starts');
-  const seaBlock = seaStarts ? asBlock(seaStarts.value) : undefined;
-  for (const entry of seaBlock?.entries ?? []) {
-    if (entry.kind === 'scalar' && entry.type === 'number') {
-      seaProvinces.add(entry.value);
-    }
-  }
+  const seaProvinces = seaStartsOf(document);
   const maxText = scalarValueOf(document.entries, 'max_provinces');
   const maxProvinces = maxText !== undefined && /^\d+$/.test(maxText) ? Number(maxText) : undefined;
   return { maxProvinces, seaProvinces };

@@ -1,4 +1,5 @@
 import { indicesOf, type BmpImage } from './bmpDecoder.js';
+import { isRiverIndex, RIVER_SEA_INDEX, storedRow } from './mapBitmaps.js';
 import { encodePng } from './pngEncoder.js';
 
 /**
@@ -32,9 +33,6 @@ export function sampledThumbnail(image: BmpImage, width: number, height: number)
   return rgba;
 }
 
-/** The palette index that starts the sea in rivers.bmp; below it, every index is river. */
-const RIVER_SEA_INDEX = 254;
-
 /**
  * The file as an image editor shows it — its own palette, sea and land included —
  * except that rivers are one pixel wide and a sample misses nearly all of them: a
@@ -47,7 +45,7 @@ export function riversThumbnail(image: BmpImage, width: number, height: number):
     const row = Math.min(height - 1, Math.floor((storedRow(image, y) * height) / image.height));
     const start = y * image.width;
     for (let x = 0; x < image.width; x++) {
-      if ((indices[start + x] ?? RIVER_SEA_INDEX) >= RIVER_SEA_INDEX) {
+      if (!isRiverIndex(indices[start + x] ?? RIVER_SEA_INDEX)) {
         continue;
       }
       const column = Math.min(width - 1, Math.floor((x * width) / image.width));
@@ -64,9 +62,4 @@ export function riversThumbnail(image: BmpImage, width: number, height: number):
 
 export function thumbnailDataUri(width: number, height: number, rgba: Uint8Array): string {
   return `data:image/png;base64,${Buffer.from(encodePng(width, height, rgba)).toString('base64')}`;
-}
-
-/** The decoder hands rows back top-down; the editor shows a bottom-up file in storage order. */
-function storedRow(image: BmpImage, y: number): number {
-  return image.topDown ? y : image.height - 1 - y;
 }

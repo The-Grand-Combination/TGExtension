@@ -16,6 +16,19 @@ export interface DefaultMapChange {
   readonly isSea: boolean;
 }
 
+/** The ids `sea_starts` lists, as the file writes them. */
+export function seaStartsOf(document: Document): Set<string> {
+  const entry = firstByKey(document.entries, 'sea_starts');
+  const block = entry ? asBlock(entry.value) : undefined;
+  const ids = new Set<string>();
+  for (const item of block?.entries ?? []) {
+    if (item.kind === 'scalar' && item.type === 'number') {
+      ids.add(item.value);
+    }
+  }
+  return ids;
+}
+
 export function planDefaultMapEdit(document: Document, change: DefaultMapChange): TextPatch[] {
   const patches: TextPatch[] = [];
   const room = roomPatch(document, change.provinceId);

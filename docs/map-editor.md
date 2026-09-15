@@ -193,8 +193,10 @@ The write follows the rule every other save follows: the bitmap is read wherever
 resolves it and written into the **target mod**, so a mod without a `provinces.bmp` of its own gets
 one, with only the painted pixels differing from the layer below. Everything else about the file —
 its size, its header, its bit depth — is left exactly as it was. A **Reload** with pixels still held
-asks first, and closing the tab with pixels still held says so: a webview cannot refuse to close, and
-the page is the only place those pixels exist.
+asks first — and so does opening the Map Editor again, from the side bar or from a map report link,
+while it is holding painted pixels or points moved and not saved: **Discard and continue** loads the
+map, anything else leaves the tab as it is. Closing the tab with pixels still held says so: a webview
+cannot refuse to close, and the page is the only place those pixels exist.
 
 ## Creating a province
 
@@ -225,7 +227,11 @@ anything is written, a modal names every file the save will touch:
    after the name being created).
 
 Everything lands in the **target mod**, copying the file from the layer below when the mod has none
-of its own, exactly as the other saves do. From then on the colour is a province like any other:
+of its own, exactly as the other saves do. Should a later step fail — the history file refused, say —
+the status line says what was already written (`already written: definition.csv, default.map`): the
+province exists from that point, and the next Save carries on from the row without adding a second.
+A sea province created this way reads as sea at once, from `default.map` on disk, without waiting for
+the mod index to catch up. From then on the colour is a province like any other:
 clicking it opens it, and the per-section Saves take over. The new pixels still have to be written to
 `provinces.bmp` with **Save** in the tool box — the two are separate files and separate saves.
 
@@ -417,19 +423,23 @@ file, every pops block and every positions block and saving it back unchanged pr
   point of `map/positions.txt`, asked for once the map is shown), `victorianTools/mapEditor/countryColors`
   (the start-date owner of every province with a history file and the `color` of every owning tag,
   asked for after the positions and again after a history save), `victorianTools/mapEditor/province`
-  (one province's four sections plus the identifier lists the form suggests),
+  (one province's four sections; the identifier lists the form suggests come once, with the map),
   `victorianTools/mapEditor/save` (one tab's Save, which may stand for several files; the answer
   carries the province re-read from disk).
-- Server: [server/mapEditorHandlers.ts](../src/server/mapEditorHandlers.ts) resolves the target
-  with the same rule as the reports, reads through `resolveLayeredFile`, and remembers which pops
-  file holds which province per stack and date, the parsed `positions.txt` per stack, and the owners
-  and country colours per stack (all dropped when watched files change; the positions after a
-  positions save and the colours after a history save, too).
+- Server: [services/mapEditorHandlers.ts](../src/services/mapEditorHandlers.ts) resolves the target
+  with the same rule as the reports, reads through `resolveLayeredFile`, and remembers per stack the
+  decoded bitmaps, the parsed `definition.csv`, the map script files, which pops file holds which
+  province per date, the `history/provinces` walk, the owners and country colours, the terrain
+  pictures and the thumbnails — each dropped by the files it was read from when they change on
+  disk, and by the save that changes them (the positions after a positions save, the colours after
+  a history save, the bitmap after a paint). A read that fails is not remembered.
 - Loading progress and page errors are shown in the map area and logged to the **Victorian Tools
   Language Server** output channel (`Map editor page: ...` lines).
 - Client: [providers/mapEditorPanel.ts](../src/providers/mapEditorPanel.ts) owns the webview and
-  forwards messages ([providers/mapEditorMessages.ts](../src/providers/mapEditorMessages.ts) checks
-  every field); [providers/mapEditorHtml.ts](../src/providers/mapEditorHtml.ts) is the page. The
+  forwards messages ([services/mapEditorMessages.ts](../src/services/mapEditorMessages.ts) checks
+  every field; a message that throws is logged and answered with an error, never left hanging);
+  [providers/mapEditorHtml.ts](../src/providers/mapEditorHtml.ts) is the page's markup and style,
+  and its script is the modules of [src/webview/](../src/webview/), bundled into one file. The
   page fetches `provinces.bmp` itself (the map folder is allowed as a local resource), decodes the
   24/32-bit BMP in the browser, and maps a clicked pixel's color to a province through the
   `definition.csv` rows it received. Nothing pixel-sized crosses the language server connection.

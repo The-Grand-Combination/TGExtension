@@ -205,9 +205,9 @@ closes. A finding with no pixel gets no link.
 
 The side bar action **Map Editor** (`victorian-tools.openMapEditor`,
 `commands/openMapEditorCommand.ts`) uses the same mod dialog and target resolution, then opens a
-webview tab (`providers/mapEditorPanel.ts` + `mapEditorHtml.ts`). Six requests
+webview tab (`providers/mapEditorPanel.ts` + `mapEditorHtml.ts`). Nine requests
 ([model/mapEditor.ts](../src/model/mapEditor.ts), handled by
-[server/mapEditorHandlers.ts](../src/server/mapEditorHandlers.ts)) carry the map description, the
+[services/mapEditorHandlers.ts](../src/services/mapEditorHandlers.ts)) carry the map description, the
 `map/positions.txt` points drawn over it, the start-date owners and country colours behind the
 Country Colors layer, one province's localisation/history/pops/positions, one section's save, and
 the pixels painted on the map;
@@ -229,10 +229,32 @@ The reference pictures of the Layers box are the one exception to "everything th
 keeps `references.json` there with `vscode.workspace.fs` — editor data, UTF-8 and raw bytes, that the
 server never reads; `services/referenceLayers.ts` holds the manifest and the frame geometry both
 sides use, and `services/mapThumbnails.ts` samples the three bitmaps for the box's pictures on the
-`victorianTools/mapEditor/thumbnails` request. Painting works the same way one level down:
-`provincePaint.ts` holds the brush, the fill and the run encoding the page and the server share, and
-writes the pixels back into the bitmap's own bytes. Behaviour and rules in
-[map-editor.md](map-editor.md).
+`victorianTools/mapEditor/thumbnails` request. Those reference messages run through one queue in the
+panel — each reads, changes and writes the same manifest, and two at once would lose one's change —
+while every other message runs as it arrives; and every message runs under one `catch`, which logs
+the error and posts it to the page, so a request that throws never leaves a Save waiting. Painting
+works the same way one level down: `provincePaint.ts` holds the brush, the fill and the run encoding
+the page and the server share, and writes the pixels back into the bitmap's own bytes; what both
+sides know about the bitmaps themselves — storage order, the river palette — is `mapBitmaps.ts`.
+
+The server keeps, per stack, the decoded bitmaps, the parsed `definition.csv`, the three script files
+(`positions`, `climate`, `region`, `default.map`), the terrain sprites and dominant terrains, the
+pops-file index, the `history/provinces` walk, the owners and country colours, and the thumbnails.
+Each is dropped by the files it was read from: the watcher hands `invalidate` the changed paths and a
+`.bmp` under `map/` drops bitmaps, thumbnails and terrain, `definition.csv` the table and the terrain,
+a `map/*.txt` the scripts, `history/provinces/` the walk and the colours, `history/pops/` the pops
+index, `common/countries*` the colours, an `interface/*.gfx` the terrain — and a path none of them
+read drops nothing. A layout change drops everything. The pick lists of every form (`vocabulary`)
+travel once with the map, not with each province.
+
+The page is one esbuild bundle from `src/webview/`, split by what it owns: `state.ts` (what more than
+one module reads — the map, the view, the selection, the layers), `dom.ts` and `fields.ts` (the
+`h` builder and the form controls, each a `Field` found again through `fieldOf`), `bitmaps.ts`
+(decoding and tiles), `canvas.ts` (render, zoom, the selection glow), `layers.ts`, `references.ts`,
+`paint.ts`, `positions.ts`, `input.ts` (mouse and keyboard), `panel/` (the side panel and its
+tabs) and `messages.ts` (what each host message changes). `mapEditorPage.ts` only wires them up.
+Every message out goes through `host.ts`, typed against the same union the extension validates.
+Behaviour and rules in [map-editor.md](map-editor.md).
 
 ## Mod root discovery and file classification
 

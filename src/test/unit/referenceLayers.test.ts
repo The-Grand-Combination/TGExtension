@@ -11,6 +11,7 @@ import {
   handleAt,
   insideQuad,
   isAffine,
+  mergeReferenceLists,
   moveQuad,
   parseReferences,
   quadOfBox,
@@ -73,6 +74,14 @@ suite('referenceLayers — the manifest', () => {
   test('opacity is clamped to 0-100 on the way in', () => {
     const text = JSON.stringify({ references: [{ file: 'a.png', corners: [[0, 0], [1, 0], [1, 1], [0, 1]], opacity: 140 }] });
     assert.strictEqual(parseReferences(text)[0]?.opacity, 100);
+  });
+
+  test('the list the extension sends decides which files and in what order; the page keeps the geometry of the ones it holds', () => {
+    const held = { file: 'a.png', corners: moveQuad(SQUARE, 40, 40), opacity: 30 };
+    const stale = { file: 'a.png', corners: SQUARE, opacity: 60 };
+    const added = { file: 'b.png', corners: quadOfBox(5, 5, 0, 0), opacity: 60 };
+    assert.deepStrictEqual(mergeReferenceLists([held], [added, stale]), [added, held]);
+    assert.deepStrictEqual(mergeReferenceLists([held], []), []);
   });
 
   test('a dropped name is made safe, and a name already there gets a number before its extension', () => {

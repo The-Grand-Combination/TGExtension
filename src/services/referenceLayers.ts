@@ -11,8 +11,6 @@ import type { Point } from './provincePaint.js';
 
 export const REFERENCES_FOLDER = 'map/references';
 export const REFERENCES_MANIFEST = 'references.json';
-/** Rows the Layers box shows before it scrolls. */
-export const MAX_REFERENCE_ROWS = 3;
 export const DEFAULT_REFERENCE_OPACITY = 60;
 
 /** Top-left, top-right, bottom-right, bottom-left, in map pixels. */
@@ -95,6 +93,18 @@ function asPoint(value: unknown): Point | undefined {
     return undefined;
   }
   return typeof x === 'number' && typeof y === 'number' && Number.isFinite(x) && Number.isFinite(y) ? { x, y } : undefined;
+}
+
+/**
+ * The list the extension sent, merged with the one the page holds. The
+ * extension only adds and removes pictures, so it decides which files are in
+ * the list and in what order; the page owns where each picture sits and how
+ * see-through it is, so a file both lists hold keeps the page's geometry — a
+ * drag the manifest has not caught up with is not undone by the answer.
+ */
+export function mergeReferenceLists(current: readonly ReferenceLayer[], incoming: readonly ReferenceLayer[]): ReferenceLayer[] {
+  const held = new Map(current.map((layer) => [layer.file, layer] as const));
+  return incoming.map((layer) => held.get(layer.file) ?? layer);
 }
 
 /** Corners as `[x, y]` pairs, rounded to a hundredth: a file a diff can read. */

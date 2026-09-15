@@ -537,7 +537,7 @@ function rebuildChangedIndexes(): void {
   for (const fsPath of changed) {
     pictureCache.delete(fsPath);
   }
-  mapEditor.invalidate();
+  mapEditor.invalidate(changed);
   if (changed.some((fsPath) => fsPath.toLowerCase().endsWith('.mod'))) {
     applyLayout();
     return;

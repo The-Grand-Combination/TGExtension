@@ -2,12 +2,12 @@ import {
   POSITION_KINDS,
   type LocalisationEdit,
   type NewProvince,
+  type PageSaveParams,
   type PopEntry,
   type PositionKind,
   type PositionPoint,
   type ProvinceHistory,
   type ProvincePositions,
-  type SaveParams,
   type SaveSection,
 } from '../model/mapEditor.js';
 import { asReference, type ReferenceLayer } from './referenceLayers.js';
@@ -27,7 +27,7 @@ export type PageMessage =
   /** A colour with no province: the page asks for a province that does not exist yet. */
   | { readonly type: 'newProvince'; readonly color: number; readonly popDate: string }
   | { readonly type: 'openFile'; readonly absolutePath: string; readonly line: number }
-  | { readonly type: 'save'; readonly params: SaveParams }
+  | { readonly type: 'save'; readonly params: PageSaveParams }
   | { readonly type: 'pending'; readonly edits: readonly PendingPositions[] }
   /** Painted pixels as `index, length, colour` triples; see `provincePaint.runsOf`. */
   | { readonly type: 'paint'; readonly runs: readonly number[] }
@@ -168,8 +168,6 @@ function asSave(record: UnknownRecord): PageMessage | undefined {
   return {
     type: 'save',
     params: {
-      workspaceFolders: [],
-      mods: [],
       provinceId: record['provinceId'],
       popDate: record['popDate'],
       ...section,

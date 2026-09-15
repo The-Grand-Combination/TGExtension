@@ -6,19 +6,13 @@
  */
 
 import type { BmpImage } from './bmpDecoder.js';
+import { decodeRowOffset } from './mapBitmaps.js';
+
+export { decodeRowOffset };
 
 export interface Point {
   readonly x: number;
   readonly y: number;
-}
-
-/**
- * Byte offset of the row the page's decoder puts at `y`. The page reads the
- * rows in the order the file stores them, so a bottom-up bitmap — every
- * Paradox map is one — counts its rows the other way round from `rowOffset`.
- */
-export function decodeRowOffset(image: BmpImage, y: number): number {
-  return image.rowOffset(image.topDown ? y : image.height - 1 - y);
 }
 
 /** The pixels a square brush of side `size` covers along the segment, clipped to the map. */

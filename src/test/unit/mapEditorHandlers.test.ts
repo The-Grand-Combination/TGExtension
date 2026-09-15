@@ -448,6 +448,33 @@ suite('MapEditorHandlers — creating a province from a painted colour', () => {
     );
   });
 
+  test('a sea province just created reads back as sea before any index has caught up', async () => {
+    const { host } = maker();
+    const handlers = new MapEditorHandlers(host);
+    const result = await handlers.save(createParams(true));
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+    assert.strictEqual(result.details.isSea, true);
+    const again = await handlers.province({ ...targetParams, provinceId: 3, popDate: '1836.1.1' });
+    assert.ok(again.kind === 'details' && again.details.isSea);
+    // No create any more: the disk says it is sea, so neither climate nor state is asked for.
+    assert.strictEqual((await handlers.save({ ...targetParams, provinceId: 3, popDate: '1836.1.1', section: 'positions', data: EMPTY_POSITIONS })).ok, true);
+  });
+
+  test('a save that fails after the row is written says what is already on disk', async () => {
+    const { host, written } = maker();
+    const failing: MapEditorHost = {
+      ...host,
+      writeText: (absolutePath: string, text: string): Promise<boolean> => {
+        if (absolutePath.includes('history')) { return Promise.resolve(false); }
+        written.set(absolutePath, text);
+        return Promise.resolve(true);
+      },
+    };
+    const result = await new MapEditorHandlers(failing).save(createParams(false));
+    assert.ok(!result.ok);
+    assert.deepStrictEqual(result.written, [path.join(ROOT, 'map/definition.csv'), path.join(ROOT, 'map/default.map')]);
+  });
+
   test('a second save of a province already created adds no second row', async () => {
     const { host, written } = maker();
     const handlers = new MapEditorHandlers(host);
@@ -820,6 +847,21 @@ suite('MapEditorHandlers — the Layers box thumbnails', () => {
     [terrainFile, encodeBmp8(4, 2, [0, 0, 5, 5, 0, 0, 5, 5], grayPalette())],
   ]);
 
+  test('the pick lists come with the map, not with every province', async () => {
+    const files = new Map(ALL);
+    files.set(path.join(ROOT, 'map/definition.csv'), new Uint8Array());
+    const handlers = new MapEditorHandlers({
+      ...bitmaps(files).host,
+      readText: (absolutePath: string): Promise<string | undefined> =>
+        Promise.resolve(absolutePath.endsWith('definition.csv') ? ';r;g;b;x;x\n' : undefined),
+    });
+    const result = await handlers.map(targetParams);
+    assert.ok(result.kind === 'ready');
+    assert.ok(result.vocabulary.countries.some((entry) => entry.id === 'ENG'));
+    const province = await handlers.province({ ...targetParams, provinceId: 1, popDate: '1836.1.1' });
+    assert.ok(province.kind === 'details' && !('vocabulary' in province.details));
+  });
+
   test('the map says where terrain.bmp is, next to rivers.bmp', async () => {
     const files = new Map(ALL);
     files.set(path.join(ROOT, 'map/definition.csv'), new Uint8Array());
@@ -863,6 +905,26 @@ suite('MapEditorHandlers — the Layers box thumbnails', () => {
     assert.ok(reads.length > before + 1, String(reads.length));
   });
 
+  test('provinces.bmp is decoded once for the thumbnails and the terrain alike', async () => {
+    const { host, reads } = bitmaps(ALL);
+    const handlers = new MapEditorHandlers(host);
+    await handlers.thumbnails(targetParams);
+    await handlers.terrainPictureFor({ ...targetParams, terrain: 'desert' });
+    assert.strictEqual(reads.filter((file) => file === provincesFile).length, 1, reads.join(', '));
+  });
+
+  test('a changed file drops only what was read from it', async () => {
+    const { host, reads } = bitmaps(ALL);
+    const handlers = new MapEditorHandlers(host);
+    await handlers.thumbnails(targetParams);
+    handlers.invalidate([path.join(ROOT, 'history/provinces/1 - One.txt')]);
+    await handlers.thumbnails(targetParams);
+    assert.strictEqual(reads.length, 3, 'a history file is no reason to read the bitmaps again');
+    handlers.invalidate([riversFile]);
+    await handlers.thumbnails(targetParams);
+    assert.deepStrictEqual(reads.slice(3), [riversFile], reads.join(', '));
+  });
+
   test('no mod to edit is no thumbnails, not an error', async () => {
     const result = await new MapEditorHandlers(recordingHost([]).host).thumbnails(targetParams);
     assert.deepStrictEqual(result, {});
@@ -893,6 +955,19 @@ suite('MapEditorHandlers — caching by layers key', () => {
     await handlers.countryColors(targetParams);
 
     assert.strictEqual(readTextPaths.length, afterFirst * 2);
+  });
+
+  test('a read that throws is not kept: the next call tries again', async () => {
+    let fail = true;
+    const { host } = recordingHost();
+    const handlers = new MapEditorHandlers({
+      ...host,
+      readText: (): Promise<string | undefined> => (fail ? Promise.reject(new Error('disk')) : Promise.resolve(undefined)),
+    });
+    await assert.rejects(handlers.countryColors(targetParams));
+    fail = false;
+    const result = await handlers.countryColors(targetParams);
+    assert.strictEqual(result.kind, 'unavailable');
   });
 
   test('positions are read once and reused', async () => {

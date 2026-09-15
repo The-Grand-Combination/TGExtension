@@ -135,6 +135,12 @@ suite('mapEditorMessages', () => {
     });
   });
 
+  test('a save carries no target: the extension adds the picked mods, which the page never knows', () => {
+    const message = asPageMessage({ type: 'save', section: 'pops', pops: [], provinceId: 9, popDate: '1836.1.1' });
+    assert.ok(message?.type === 'save');
+    assert.ok(!('mods' in message.params) && !('workspaceFolders' in message.params));
+  });
+
   test('the states ride with the history section, and nothing that is not a name is kept', () => {
     const message = asPageMessage({
       type: 'save', section: 'history', data: {}, states: ['ENG_1', 3, null], provinceId: 9, popDate: '1836.1.1',

@@ -15,6 +15,10 @@ import { mapEditorHtml } from '../providers/mapEditorHtml.js';
 import { EXTENSION_ID } from './extensionId.js';
 import { encodeBmp24 } from './unit/bmpFixtures.js';
 
+const EMPTY_VOCABULARY: MapEditorMap['vocabulary'] = {
+  countries: [], goods: [], terrains: [], cultures: [], religions: [], popTypes: [], ideologies: [], buildings: [], factories: [],
+};
+
 const TGC_MAP = 'F:/SteamLibrary/steamapps/common/Victoria 2/mod/TGC/map/provinces.bmp';
 
 interface PageRun {
@@ -57,6 +61,7 @@ async function loadPage(
     historyFolders: [''],
     popFiles: { '1836.1.1': [] },
     lakeColors: [],
+    vocabulary: EMPTY_VOCABULARY,
   };
   const done = new Promise<void>((resolve) => {
     const timer = setTimeout(resolve, timeoutMs);
@@ -152,6 +157,7 @@ suite('Map Editor panel', () => {
       historyFolders: [''],
       popFiles: { '1836.1.1': [] },
       lakeColors: [],
+      vocabulary: EMPTY_VOCABULARY,
     };
     const fakeClient = {
       sendRequest: (method: string): Promise<MapEditorMap | MapPositionsResult | MapCountryColorsResult> =>
