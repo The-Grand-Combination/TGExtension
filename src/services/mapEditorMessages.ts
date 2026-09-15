@@ -10,6 +10,7 @@ import {
   type SaveParams,
   type SaveSection,
 } from '../model/mapEditor.js';
+import { asReference, type ReferenceLayer } from './referenceLayers.js';
 
 /** One province's map positions, edited in the page and not yet written. */
 export interface PendingPositions {
@@ -32,7 +33,16 @@ export type PageMessage =
   | { readonly type: 'paint'; readonly runs: readonly number[] }
   /** How many painted pixels the page is holding, so closing the tab can say so. */
   | { readonly type: 'paintPending'; readonly pixels: number }
-  | { readonly type: 'saveAll' };
+  | { readonly type: 'saveAll' }
+  /** A picture dropped from the desktop: its bytes, base64, kept in `map/references` and placed at the drop point. */
+  | { readonly type: 'addReference'; readonly name: string; readonly bytes: string; readonly x: number; readonly y: number }
+  /** A picture dragged from the Explorer: a `file:` URI the extension copies. */
+  | { readonly type: 'addReferencePath'; readonly uri: string; readonly x: number; readonly y: number }
+  /** Open the file picker for a picture, to land at this map point. */
+  | { readonly type: 'pickReference'; readonly x: number; readonly y: number }
+  /** The whole list as the page holds it, written to the manifest. */
+  | { readonly type: 'references'; readonly layers: readonly ReferenceLayer[] }
+  | { readonly type: 'removeReference'; readonly file: string };
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -57,8 +67,10 @@ export function asPageMessage(message: unknown): PageMessage | undefined {
         : undefined;
     case 'paint':
       return asPaint(record);
+    case 'references':
+      return { type: 'references', layers: asArray(record['layers'], asReference) };
     default:
-      return asFieldMessage(record);
+      return asFieldMessage(record) ?? asReferenceMessage(record);
   }
 }
 
@@ -81,6 +93,29 @@ function asFieldMessage(record: UnknownRecord): PageMessage | undefined {
     default:
       return undefined;
   }
+}
+
+function asReferenceMessage(record: UnknownRecord): PageMessage | undefined {
+  switch (record['type']) {
+    case 'addReference':
+      return typeof record['name'] === 'string' && typeof record['bytes'] === 'string' && isPoint(record)
+        ? { type: 'addReference', name: record['name'], bytes: record['bytes'], x: record.x, y: record.y }
+        : undefined;
+    case 'addReferencePath':
+      return typeof record['uri'] === 'string' && isPoint(record)
+        ? { type: 'addReferencePath', uri: record['uri'], x: record.x, y: record.y }
+        : undefined;
+    case 'pickReference':
+      return isPoint(record) ? { type: 'pickReference', x: record.x, y: record.y } : undefined;
+    case 'removeReference':
+      return typeof record['file'] === 'string' ? { type: 'removeReference', file: record['file'] } : undefined;
+    default:
+      return undefined;
+  }
+}
+
+function isPoint(record: UnknownRecord): record is UnknownRecord & { x: number; y: number } {
+  return typeof record['x'] === 'number' && typeof record['y'] === 'number' && Number.isFinite(record['x']) && Number.isFinite(record['y']);
 }
 
 /** What a save of a province that is only paint so far carries; anything short of whole is no creation at all. */

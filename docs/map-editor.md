@@ -54,18 +54,73 @@ no `climate.txt` or no `region.txt` at all is not held to the rule: there would 
 Moved points are kept when the next province is clicked, so a run of provinces can be fixed in one
 go: they stay drawn on the map, the province keeps them when it is clicked again, and a **Save N
 provinces** button appears under the map's own box to write them all. A **Cancel** drops the ones of
-the province it is in. Closing the tab with points still held cannot be stopped — a webview has no
+the province it is in. A province that is only paint so far is the exception: its points live with
+its panel and go when it is left or when the paint is reset — there is no id in `definition.csv` to
+hold them against — unless the Save that creates it has run, after which they are kept like any
+other's. Closing the tab with points still held cannot be stopped — a webview has no
 say in being closed — so the extension asks afterwards whether to write them, and writes them if the
 answer is yes.
 
-A translucent box in the map's bottom-left corner holds the **map layers** and, under them, the
-**Fit** (whole map in view) and **Reload** (re-read the map and the mod files) buttons:
+## Layers
+
+The top box in the map's bottom-left corner is **Layers**: the three map bitmaps, each a row with a
+square thumbnail (the whole map squeezed into it, the way an icon is), its name beside it and an
+**opacity slider** under the name (the number is on the slider's tooltip), and under them the
+reference pictures dropped in.
+
+- **Provinces** (`provinces.bmp`) is what is painted and what the clicks read. It is drawn first, at 100%.
+- **Rivers** (`rivers.bmp`) goes over it, at 20%: every palette index below 254 (source, merge point and the
+  river widths) is a blue pixel and everything else is clear — only the rivers, never the land and
+  sea the file itself paints. Its thumbnail, though, is the file as an image editor shows it, through
+  its own palette (the magenta sea and white land), with every cell a river crosses in the river's
+  palette colour, since a one-pixel river would otherwise vanish from a sample.
+- **Terrain** (`terrain.bmp`) goes over both, at 0%: shown through its own palette, the colours an image editor
+  gives it.
+
+A layer at 0% is not even fetched; the first time its slider leaves 0 it is read from wherever the
+stack resolves it (a mod without its own `rivers.bmp` shows the vanilla rivers), decoded once and
+kept until **Reload**. The thumbnails come from the server, which samples the bitmaps rather than
+decoding them whole (`services/mapThumbnails.ts`), after the map is up so they never hold it back.
+The fixed layers' opacities last the session; a reference's is written with it.
+
+### Reference pictures
+
+Any picture — a historical map, a sketch — comes in through **Add Reference** under the rows, a file
+picker that takes several at once. (Dropping a file on the tab does not work: VS Code takes the drop
+itself and opens the file in an editor before the page sees it; the page still accepts a drop that
+does reach it.) The picture is copied into the target mod's **`map/references/`** under its own name
+(made safe, and numbered when taken), and
+`map/references/references.json` records, in order, each picture's file, its four corners in map
+pixels and its opacity, so the whole set travels with the mod's git. The file is never re-encoded:
+it stays at the resolution it came in, and lands one picture pixel per map pixel with its top-left
+corner at the middle of the view (or where it was dropped, when a drop gets through), at 60%.
+
+The box shows three reference rows; more scroll inside the same height, so the box never grows. A
+row's slider is the picture's opacity, and its **×** removes it — from the list and from the folder.
+Pictures are edited with the **reference tool**, second in the tool box (the picture-file glyph): click a
+picture to select it — a dashed frame with eight grips appears — and drag inside to move it, drag a
+grip to stretch that side or corner, hold **Shift** on a grip to scale keeping the proportions (from
+the opposite corner, by the axis pulled further), or hold **Ctrl** on a grip for Photoshop's distort:
+a corner grip moves that corner alone and a side grip slides the whole side, so the picture becomes
+any quadrilateral. Where pictures overlap, the topmost (last in the list) is the one grabbed. A click
+on bare map puts the frame away; so does **Esc**; and under any other tool the frame is simply not
+drawn — the selection is kept, and comes back with the tool. A picture just added comes up selected, with the
+tool, and clicking a row's name selects one later, switching to the tool as well. The hand and the
+painting tools never mind a reference: the hand opens the province under it, the brushes paint the
+province map straight through it, and the middle and right buttons still pan under the reference
+tool as under every other.
+
+A picture that is still a parallelogram is drawn with one transformed `drawImage`; a bent one is
+drawn as an 8 × 8 mesh of triangles, each under its own affine map (`services/referenceLayers.ts`
+holds the geometry both the page and the extension use). References are the editor's own data, so
+the extension reads and writes the folder itself, in UTF-8 and raw bytes, never through the mod's
+code page. Ctrl+Z does not reach them — it undoes paint — and they come from the target mod only.
+
+The box under Layers holds the tools ([Painting provinces](#painting-provinces)), and the bottom one
+the **map switches** and, under them, the **Fit** (whole map in view) and **Reload** (re-read the map
+and the mod files) buttons:
 
 - **Positions** (on by default) shows or hides the dots at any zoom; hidden dots cannot be dragged.
-- **Show Rivers** (off by default) draws `map/rivers.bmp` over the map: every palette index below
-  254 (source, merge point and the river widths) becomes a blue pixel, sea and land stay clear. The
-  bitmap is fetched from wherever the stack resolves it, so a mod without its own `rivers.bmp` shows
-  the vanilla rivers. It is decoded once per map and kept until **Reload**.
 - **Country Colors** (off by default) repaints every province towards the `color` of the country
   that owns it at the start date (the top-level `owner` of its history file; dated blocks are
   ignored). Each pixel becomes a mix of the owner's colour and the province's own `definition.csv`
@@ -85,11 +140,13 @@ province to be selected.
 
 The **hand** is what the editor has always done — drag to move the map, click a province to open it
 in the side panel (clicking the one already open closes it again), drag a position dot to move it —
-and it is the tool the page starts on. The other
-three paint with the box's colour:
+and it is the tool the page starts on. Next to it, the **reference tool** edits the pictures of the
+Layers box ([Reference pictures](#reference-pictures)). The other three paint with the box's colour:
 
 - the **eye drop** takes the colour of the pixel clicked, whether or not a province owns it, and the
-  status line names the province when one does.
+  status line names the province when one does. Picked up from another tool, it gives that tool
+  back once the colour is taken — pencil, eye drop, click, pencil again — so matching a colour is
+  one click out of the drawing, not two.
 - the **pencil** paints the pixels it is dragged over, as a square of the brush slider's map pixels
   (1 by default, up to 16; the slider is greyed under the tools that do not draw a line). A fast drag
   still draws a line, not a dotted one.
@@ -179,9 +236,11 @@ The panel header shows the province view's terrain picture behind the name: the 
 `GFX_terrainimg_<terrain>` of `interface/*.gfx` (the `.dds` twin of a declared `.tga` is accepted,
 as the game does), where the terrain is the history file's `terrain = x` or, failing that, the
 category most of the province's `terrain.bmp` pixels carry through `map/terrain.txt`. Both bitmaps
-are read once per mod stack, when the map opens. Only that terrain's own sprite is shown: a province
-with neither terrain, or one whose terrain has no sprite, keeps a plain header instead of borrowing
-another terrain's picture. A sea province shows the ocean instead: the stack's own
+are read once per mod stack, when the map opens. Only that terrain's own sprite is shown, never
+another terrain's: a province whose terrain has no sprite keeps a plain header. A province with no
+terrain at all — one being created is one, and so is one whose `terrain = x` you clear while the
+bitmap names none — shows `no_terrain` from the extension's `assets/` instead. A sea province shows
+the ocean: the stack's own
 `gfx/interface/terrain/terrain_ocean` (`.tga` or `.dds`), else the copy shipped in the extension's
 `assets/`. Its `GFX_terrainimg_ocean` sprite is not used, because vanilla declares that one against
 the mountains texture.
@@ -281,7 +340,7 @@ and drops the other 25 folders. Leave it empty (the default) to use every folder
 expression is ignored, which is also every folder.
 
 It narrows four things at once, so they stay consistent: which file a province opens, which file a
-save patches, the **Folder** list offered when a province has no history file yet, and the owners the
+save patches, the **Folder** list the province offers, and the owners the
 **Country Colors** layer paints. A pattern matching no folder at all therefore leaves the editor
 believing no province has a history file, and every save offers to create one.
 
@@ -305,7 +364,11 @@ mod's own code page — see [encoding.md](encoding.md).
   replaced; the other language columns and the `;x` terminator stay. `;` and line breaks in the new
   text become spaces. With **Rename the history file to match** ticked, a history file of the
   target whose name differs from `<id> - <new name>.txt` is renamed; characters Windows forbids in
-  file names are dropped. The box starts ticked only above vanilla's `max_provinces` (3249): a
+  file names are dropped, and the name is folded to ASCII first — the game loads a file name as
+  plain ASCII, so `São José do Norte` names `3532 - Sao Jose do Norte.txt`. A name no ASCII letter
+  stands for (Cyrillic, CJK) is refused before anything is written, naming the character: the
+  localisation itself may hold it, the file name may not. An existing file already named that way is
+  reported as `non-ascii-file-name` by the full report. The box starts ticked only above vanilla's `max_provinces` (3249): a
   base-game province keeps the file name vanilla gave it unless you ask for the rename. With no
   history file to rename, the box is greyed out.
 - **History** (`services/provinceHistoryEdit.ts`): each top-level entry is compared with the form.
@@ -316,9 +379,11 @@ mod's own code page — see [encoding.md](encoding.md).
   `clr_province_flag` lines, `colony` and `is_slave`, the province's own `remove_core` (only a dated
   block edits that one) and top-level entries the form does not know (a non-numeric unknown key, a
   stray token) are left untouched: the form does not show them, so it never rewrites them. The **Folder** row offers the
-  `history/provinces` subfolders and creates `<folder>/<id> - <name>.txt` (name from the
-  localisation, else `definition.csv`) where the province has no file yet; it is greyed out, not
-  taken away, once it has one.
+  `history/provinces` subfolders. Where the province has no file yet it creates
+  `<folder>/<id> - <name>.txt` (name from the localisation, else `definition.csv`); where it has one
+  the row opens on the folder holding it, and picking another one makes the next save move the file
+  there — a file a layer below owns is never moved, so the copy this mod takes over is written in the
+  folder picked instead.
 - **Climate and State** (`services/provinceGroupEdit.ts`): both files are named blocks of bare
   province ids, and both are edited the same way — the id joins the blocks it should be in, after the
   last id already there, and leaves the ones it should not, taking one separator with it (or its
@@ -346,7 +411,8 @@ file, every pops block and every positions block and saving it back unchanged pr
 ## How it is built
 
 - Model and requests: [model/mapEditor.ts](../src/model/mapEditor.ts) —
-  `victorianTools/mapEditor/map` (the target, `provinces.bmp` and `rivers.bmp` paths, `definition.csv`
+  `victorianTools/mapEditor/thumbnails` (the three bitmaps sampled small for the Layers box),
+  `victorianTools/mapEditor/map` (the target, `provinces.bmp`, `rivers.bmp` and `terrain.bmp` paths, `definition.csv`
   rows, sea ids, pops dates and files, history folders), `victorianTools/mapEditor/positions` (every editable
   point of `map/positions.txt`, asked for once the map is shown), `victorianTools/mapEditor/countryColors`
   (the start-date owner of every province with a history file and the `color` of every owning tag,
@@ -367,6 +433,12 @@ file, every pops block and every positions block and saving it back unchanged pr
   page fetches `provinces.bmp` itself (the map folder is allowed as a local resource), decodes the
   24/32-bit BMP in the browser, and maps a clicked pixel's color to a province through the
   `definition.csv` rows it received. Nothing pixel-sized crosses the language server connection.
+- One builder per kind of control, used by every tab: `selectInput` for every pick list, `textInput`
+  for text and numbers, `sliderInput`, `checkInput` (a tick in a table row) and `checkRow` (a tick
+  with its own text), `plusButton` and `removeButton`, `listEditor` and `rowsEditor` for the row
+  lists, `sectionHeader` with `saveBar` for a section. The page holds no `<select>`: a select insets
+  its text further than an input, so a row built with one stands out of line with the rows around
+  it. See §4 of `CLAUDE.md` before adding a control.
 - Services are `vscode`-free and unit-tested: `textPatch`, `provinceTable`, `provinceLocEdit`,
   `provinceHistoryEdit`, `provincePopsEdit`, `provincePositionsEdit`, `countryColors`
   (`src/test/unit/`).

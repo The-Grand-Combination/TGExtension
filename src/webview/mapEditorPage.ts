@@ -27,6 +27,7 @@ import type {
   ProvincePositions,
   SaveResult,
   FileRef,
+  HistorySection,
   Rgb,
 } from '../model/mapEditor.js';
 
@@ -35,6 +36,25 @@ import type { PaintResult } from '../model/mapEditor.js';
 import { DEFAULT_PAINT_UNDO_STEPS, VANILLA_MAX_PROVINCES } from '../model/mapEditor.js';
 
 import { enclosedPixels, floodFill, runsOf, strokePixels, unusedColor } from '../services/provincePaint.js';
+import {
+  affineFromTriangles,
+  bilinear,
+  boundsOf,
+  boxFromHandle,
+  distortQuad,
+  fitQuad,
+  handleAt,
+  handlePoint,
+  HANDLES,
+  insideQuad,
+  isAffine,
+  moveQuad,
+  quadOfBox,
+  type Box,
+  type Handle,
+  type Quad,
+  type ReferenceLayer,
+} from '../services/referenceLayers.js';
 
 import { decodeBmp as decodeBmpFile, type BmpImage } from '../services/bmpDecoder.js';
 
@@ -165,13 +185,20 @@ const SEA_TINT: Rgb = [150, 190, 230];
 const UNOWNED_TINT: Rgb = [150, 150, 150];
 /** Share of the owner's colour (victorianTools.mapEditor.countryColorsTint / 100). */
 let TINT_WEIGHT = 0.82;
-// Show Rivers: map/rivers.bmp (8-bit, every index below 254 is river) drawn as blue over the map.
-let showRivers = false;
-/** Webview URI of rivers.bmp, or null when the stack has none. */
-let riversUri: string | null = null;
-/** Tiles of the river overlay (transparent where there is no river). */
-let riverTiles: Tile[] | null = null;
-let riversLoading = false;
+// The Layers box: the three map bitmaps, each at its own opacity. provinces.bmp
+// is what is painted and drawn first; rivers.bmp (8-bit, every index below 254
+// is river, drawn blue over nothing) and terrain.bmp (8-bit, shown through its
+// own palette) go over it, and are only fetched once their slider leaves 0.
+type FixedLayer = 'provinces' | 'rivers' | 'terrain';
+type Overlay = Exclude<FixedLayer, 'provinces'>;
+const FIXED_LAYERS: readonly FixedLayer[] = ['provinces', 'rivers', 'terrain'];
+const LAYER_LABELS: Record<FixedLayer, string> = { provinces: 'Provinces', rivers: 'Rivers', terrain: 'Terrain' };
+const layerOpacity: Record<FixedLayer, number> = { provinces: 100, rivers: 20, terrain: 0 };
+/** Webview URIs of the two overlays, or null when the stack has none. */
+const overlayUri: Record<Overlay, string | null> = { rivers: null, terrain: null };
+const overlayTiles: Record<Overlay, Tile[] | null> = { rivers: null, terrain: null };
+const overlayLoading: Record<Overlay, boolean> = { rivers: false, terrain: false };
+const layerRows = new Map<FixedLayer, HTMLElement>();
 const RIVER_COLOR: Rgb = [47, 128, 255];
 const RIVER_SEA_INDEX = 254;
 
@@ -239,7 +266,6 @@ const loading = required('loading');
 const layerCountry = requiredInput('layerCountry');
 const layerPositions = requiredInput('layerPositions');
 const saveAllButton = requiredButton('saveAllButton');
-const layerRivers = requiredInput('layerRivers');
 const side = required('side');
 const statusBox = required('status');
 const targetBox = required('target');
@@ -294,6 +320,18 @@ function appendChildren(node: HTMLElement, child: Child): void {
   if (child instanceof Node) { node.append(child); return; }
   for (const item of child) { appendChildren(node, item); }
 }
+/** The `×` that takes a row, or a value, away. Every one in the panel is this button. */
+function removeButton(title: string, onClick: EventListener): HTMLButtonElement {
+  return h('button', { class: 'secondary icon remove', title: title, onclick: onClick }, '×');
+}
+
+/** A tick with its text beside it: what a yes/no outside a table looks like. */
+function checkRow(text: string, checked: boolean): { readonly node: HTMLElement; readonly box: HTMLInputElement } {
+  const box = h('input', { type: 'checkbox' });
+  box.checked = checked;
+  return { node: h('label', { class: 'check' }, box, text), box: box };
+}
+
 function textInput(value: string | undefined, type?: string, extraClass?: string): HTMLInputElement {
   const input = h('input', { type: type ?? 'text', class: 'field' + (extraClass ? ' ' + extraClass : ''), spellcheck: 'false' });
   input.value = value ?? '';
@@ -366,9 +404,6 @@ function valueOf(input: FieldElement): string | undefined {
   const value = input.value.trim();
   return value === '' ? undefined : value;
 }
-function option(value: string, label: string): HTMLOptionElement {
-  return h('option', { value: value }, label);
-}
 /** A control the panel reads with `valueOf`: a plain input, or the combo that mimics one. */
 type FieldElement = HTMLElement & { value: string };
 
@@ -420,7 +455,9 @@ function selectInput(
   function paintDisplay(): void {
     const entry = focused ? undefined : byId.get(selected);
     const show = entry !== undefined && (entry.name ?? '') !== '';
-    if (entry && show) { display.replaceChildren(...comboItemContent(entry)); }
+    // One element, not two: the overlay lays its children out as a flex row, and a
+    // flex item loses the space it starts with — which is the one before the dash.
+    if (entry && show) { display.replaceChildren(h('span', null, ...comboItemContent(entry))); }
     display.hidden = !show;
     wrapper.classList.toggle('named', show);
   }
@@ -551,12 +588,23 @@ function decodeBmp(buffer: ArrayBuffer): DecodedPixels {
   return { width: width, height: height, rgba: rgba, packed: packed };
 }
 
-/** rivers.bmp as a transparent overlay: every palette index below 254 (source, merge, widths) becomes a blue pixel. */
-function decodeRiversBmp(buffer: ArrayBuffer): { width: number; height: number; rgba: Uint8ClampedArray } {
-  const image = readBitmap(buffer, 'rivers.bmp');
+interface OverlayPixels {
+  readonly width: number;
+  readonly height: number;
+  readonly rgba: Uint8ClampedArray;
+}
+
+function readOverlay(buffer: ArrayBuffer, name: string): BmpImage {
+  const image = readBitmap(buffer, name);
   if (image.bitsPerPixel !== 8) {
-    throw new Error(String(image.bitsPerPixel) + '-bit rivers.bmp; the game reads an 8-bit one.');
+    throw new Error(String(image.bitsPerPixel) + '-bit ' + name + '; the game reads an 8-bit one.');
   }
+  return image;
+}
+
+/** rivers.bmp as a transparent overlay: every palette index below 254 (source, merge, widths) becomes a blue pixel. */
+function decodeRiversBmp(buffer: ArrayBuffer): OverlayPixels {
+  const image = readOverlay(buffer, 'rivers.bmp');
   const { width, height, bytes } = image;
   const rgba = new Uint8ClampedArray(width * height * 4);
   for (let y = 0; y < height; y++) {
@@ -566,6 +614,29 @@ function decodeRiversBmp(buffer: ArrayBuffer): { width: number; height: number; 
       if ((bytes[source] ?? RIVER_SEA_INDEX) < RIVER_SEA_INDEX) {
         rgba[out] = RIVER_COLOR[0]; rgba[out + 1] = RIVER_COLOR[1]; rgba[out + 2] = RIVER_COLOR[2]; rgba[out + 3] = 255;
       }
+    }
+  }
+  return { width: width, height: height, rgba: rgba };
+}
+
+/** terrain.bmp in the colours its own palette gives each index: what an image editor shows for it. */
+function decodeTerrainBmp(buffer: ArrayBuffer): OverlayPixels {
+  const image = readOverlay(buffer, 'terrain.bmp');
+  const { width, height, bytes } = image;
+  const palette = new Uint8ClampedArray(256 * 3);
+  for (let index = 0; index < image.paletteEntries && index < 256; index++) {
+    const entry = image.paletteOffset + index * 4;
+    palette[index * 3] = bytes[entry + 2] ?? 0;
+    palette[index * 3 + 1] = bytes[entry + 1] ?? 0;
+    palette[index * 3 + 2] = bytes[entry] ?? 0;
+  }
+  const rgba = new Uint8ClampedArray(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    let source = storedRowOffset(image, y);
+    let out = y * width * 4;
+    for (let x = 0; x < width; x++, source++, out += 4) {
+      const index = (bytes[source] ?? 0) * 3;
+      rgba[out] = palette[index] ?? 0; rgba[out + 1] = palette[index + 1] ?? 0; rgba[out + 2] = palette[index + 2] ?? 0; rgba[out + 3] = 255;
     }
   }
   return { width: width, height: height, rgba: rgba };
@@ -622,7 +693,8 @@ function loadMap(bmpUri: string): void {
         fitView();
         render();
         if (showCountryColors && countryColors) { buildTintedTiles(); }
-        if (showRivers && riversUri) { loadRivers(); }
+        for (const kind of ['rivers', 'terrain'] as const) { if (layerOpacity[kind] > 0) { loadOverlay(kind); } }
+        placeReferences();
         setStatus(String(decoded.width) + ' x ' + String(decoded.height) + ', ' + String(definitionById.size) + ' provinces');
         log('map ready; overlay ' + getComputedStyle(loading).display);
         applyReveal();
@@ -677,48 +749,449 @@ function buildTiles(
 }
 
 layerPositions.addEventListener('change', function () { showPositions = layerPositions.checked; render(); });
-layerRivers.addEventListener('change', function () {
-  showRivers = layerRivers.checked;
-  if (showRivers && !riversUri && map) {
-    setStatus('The picked mods have no map/rivers.bmp.', 'error');
-    showRivers = false; layerRivers.checked = false;
-    return;
-  }
-  if (showRivers && !riverTiles && image) { loadRivers(); }
-  render();
-});
-/** Fetch and decode rivers.bmp once; the overlay is kept until the map is reloaded. */
-function loadRivers(): void {
-  if (riversLoading || riverTiles || !riversUri) { return; }
-  riversLoading = true;
+/** Fetch and decode an overlay once; it is kept until the map is reloaded. */
+function loadOverlay(kind: Overlay): void {
+  const uri = overlayUri[kind];
+  if (overlayLoading[kind] || overlayTiles[kind] || !uri || !image) { return; }
+  overlayLoading[kind] = true;
   const forImage = image;
-  showLoading('Loading rivers.bmp…');
-  fetch(riversUri)
+  const name = kind + '.bmp';
+  showLoading('Loading ' + name + '…');
+  fetch(uri)
     .then(function (response) {
-      if (!response.ok) { throw new Error('rivers.bmp could not be read (HTTP ' + String(response.status) + ').'); }
+      if (!response.ok) { throw new Error(name + ' could not be read (HTTP ' + String(response.status) + ').'); }
       return readBody(response);
     })
-    .then(function (buffer) { return decodeRiversBmp(buffer); })
+    .then(function (buffer) { return kind === 'rivers' ? decodeRiversBmp(buffer) : decodeTerrainBmp(buffer); })
     .then(function (decoded) {
       if (image && (decoded.width !== image.width || decoded.height !== image.height)) {
-        setStatus('rivers.bmp is ' + String(decoded.width) + ' x ' + String(decoded.height) + ', the map ' + String(image.width) + ' x ' + String(image.height), 'error');
+        setStatus(name + ' is ' + String(decoded.width) + ' x ' + String(decoded.height) + ', the map ' + String(image.width) + ' x ' + String(image.height), 'error');
       }
-      return buildTiles(decoded.rgba, decoded.width, decoded.height, 'Drawing rivers');
+      return buildTiles(decoded.rgba, decoded.width, decoded.height, 'Drawing ' + kind);
     })
     .then(function (tiles) {
-      riversLoading = false;
+      overlayLoading[kind] = false;
       if (image !== forImage) { return; }
-      riverTiles = tiles;
+      overlayTiles[kind] = tiles;
       loading.hidden = true;
       render();
     })
     .catch(function (error: unknown) {
-      riversLoading = false;
+      overlayLoading[kind] = false;
       loading.hidden = true;
-      showRivers = false; layerRivers.checked = false;
-      setStatus('Could not show rivers: ' + messageOf(error), 'error');
+      layerOpacity[kind] = 0;
+      syncLayerRow(kind);
+      setStatus('Could not show ' + name + ': ' + messageOf(error), 'error');
     });
 }
+
+// --- The Layers box ----------------------------------------------------------------------
+const fixedLayersBox = required('fixedLayers');
+const referenceLayersBox = required('referenceLayers');
+const layersBox = required('layersBox');
+const OPACITY_RANGE: SliderRange = { min: 0, max: 100 };
+
+/** One row of the box: thumbnail, name, and the opacity slider under them. */
+function layerRow(name: string, opacity: number, onOpacity: (value: number) => void): { node: HTMLElement; head: HTMLElement; thumb: HTMLElement; slider: FieldElement } {
+  const thumb = h('span', { class: 'thumb' });
+  const head = h('div', { class: 'caption' }, h('span', { class: 'name', title: name }, name));
+  const slider = sliderInput(String(opacity), OPACITY_RANGE);
+  function tell(): void { slider.title = 'Opacity ' + slider.value + '%'; }
+  slider.addEventListener('input', function () { tell(); onOpacity(Number(slider.value) || 0); });
+  tell();
+  return { node: h('div', { class: 'layer' }, thumb, head, slider), head: head, thumb: thumb, slider: slider };
+}
+
+function buildFixedRows(): void {
+  fixedLayersBox.replaceChildren();
+  layerRows.clear();
+  for (const kind of FIXED_LAYERS) {
+    const row = layerRow(LAYER_LABELS[kind], layerOpacity[kind], function (value) {
+      layerOpacity[kind] = value;
+      if (kind !== 'provinces' && value > 0) { loadOverlay(kind); }
+      render();
+    });
+    layerRows.set(kind, row.node);
+    fixedLayersBox.append(row.node);
+  }
+  syncLayerRow('rivers'); syncLayerRow('terrain');
+}
+
+/** A layer the stack does not have is greyed with its slider at 0; a failed load puts it back there. */
+function syncLayerRow(kind: Overlay): void {
+  const row = layerRows.get(kind);
+  if (!row) { return; }
+  const missing = overlayUri[kind] === null;
+  row.classList.toggle('off', missing);
+  row.title = missing ? 'The picked mods have no map/' + kind + '.bmp' : '';
+  const slider = row.querySelector('.slider');
+  if (slider instanceof HTMLElement && 'value' in slider) { (slider as FieldElement).value = String(layerOpacity[kind]); }
+  for (const input of row.querySelectorAll('input')) { input.disabled = missing; }
+}
+
+function applyThumbnails(pictures: Record<FixedLayer, string | undefined>): void {
+  for (const kind of FIXED_LAYERS) {
+    const uri = pictures[kind];
+    const thumb = layerRows.get(kind)?.querySelector('.thumb');
+    if (uri && thumb instanceof HTMLElement) { thumb.style.backgroundImage = 'url(' + uri + ')'; }
+  }
+}
+buildFixedRows();
+
+// --- Reference pictures ------------------------------------------------------------------
+// Pictures dropped over the map to draw against, kept in the mod's map/references.
+// The extension owns the files and the manifest; the page owns the picture on
+// screen: where it sits, how it is bent, and how see-through it is.
+interface Reference {
+  layer: ReferenceLayer;
+  bitmap: ImageBitmap | null;
+  row: HTMLElement;
+}
+
+let references: Reference[] = [];
+let referencesFolder = '';
+/** The file of the reference whose frame is up, if any: the one the hand moves. */
+let activeReference: string | null = null;
+let referencesTimer: number | null = null;
+/** Cells per side of the mesh a distorted picture is drawn with. */
+const MESH = 8;
+const GRIP_PX = 7;
+
+function referenceOf(file: string): Reference | undefined {
+  return references.find(function (item) { return item.layer.file === file; });
+}
+
+/** The list the extension sent: pictures already decoded are kept, the rest are fetched. */
+function handleReferences(folderUri: string, layers: readonly ReferenceLayer[]): void {
+  // The first list after a map load is what the mod already had; a later one has something added.
+  const firstList = referencesFolder === '';
+  referencesFolder = folderUri;
+  const kept = new Map(references.map(function (item) { return [item.layer.file, item]; }));
+  references = layers.map(function (layer) {
+    const previous = kept.get(layer.file);
+    const row = referenceRow(layer);
+    return { layer: layer, bitmap: previous ? previous.bitmap : null, row: row };
+  });
+  if (activeReference !== null && !referenceOf(activeReference)) { activeReference = null; }
+  // A picture just added is the one to place: its frame is up before anything is clicked.
+  const added = references.filter(function (item) { return !kept.has(item.layer.file); });
+  const last = added[added.length - 1];
+  if (!firstList && last) { activate(last.layer.file); }
+  for (const item of references) { if (!item.bitmap) { fetchReference(item); } }
+  renderReferenceRows();
+  render();
+}
+
+/** The frame goes up over one picture (or down, when it is the one already up), and the status line says what the hand now does. */
+function activate(file: string | null): void {
+  activeReference = activeReference === file ? null : file;
+  if (activeReference !== null && tool !== 'reference') { setTool('reference'); }
+  renderReferenceRows();
+  render();
+  setStatus(activeReference === null
+    ? 'No picture selected.'
+    : 'Editing ' + activeReference + ': drag it to move, drag a grip to stretch, Shift keeps proportions, Ctrl distorts; Esc when done.');
+}
+
+function fetchReference(item: Reference): void {
+  item.row.classList.add('loading');
+  fetch(referencesFolder + '/' + encodeURIComponent(item.layer.file))
+    .then(function (response) {
+      if (!response.ok) { throw new Error('HTTP ' + String(response.status)); }
+      return response.blob();
+    })
+    .then(function (blob) { return createImageBitmap(blob); })
+    .then(function (bitmap) {
+      if (!referenceOf(item.layer.file)) { return; }
+      item.bitmap = bitmap;
+      item.row.classList.remove('loading');
+      paintReferenceThumb(item);
+      placeReferences();
+      render();
+    })
+    .catch(function (error: unknown) {
+      item.row.classList.remove('loading');
+      setStatus(item.layer.file + ' could not be shown: ' + messageOf(error), 'error');
+    });
+}
+
+/**
+ * Four corners on one point is a picture not placed yet: the extension puts it
+ * there when it is dropped, and the page — the one side that decodes it — gives
+ * it its own size, one picture pixel per map pixel, and writes that back.
+ */
+function placeReferences(): void {
+  let placed = false;
+  for (const item of references) {
+    const box = boundsOf(item.layer.corners);
+    if (!item.bitmap || box.width > 0 || box.height > 0) { continue; }
+    item.layer = { ...item.layer, corners: quadOfBox(box.x, box.y, item.bitmap.width, item.bitmap.height) };
+    placed = true;
+  }
+  if (placed) { postReferences(); }
+}
+
+function paintReferenceThumb(item: Reference): void {
+  const bitmap = item.bitmap;
+  const thumb = item.row.querySelector('.thumb');
+  if (!bitmap || !(thumb instanceof HTMLElement)) { return; }
+  const small = document.createElement('canvas');
+  small.width = 40; small.height = 40;
+  const context = small.getContext('2d');
+  if (!context) { return; }
+  const scale = Math.max(small.width / bitmap.width, small.height / bitmap.height);
+  const width = bitmap.width * scale;
+  const height = bitmap.height * scale;
+  context.drawImage(bitmap, (small.width - width) / 2, (small.height - height) / 2, width, height);
+  thumb.style.backgroundImage = 'url(' + small.toDataURL() + ')';
+}
+
+function referenceRow(layer: ReferenceLayer): HTMLElement {
+  const row = layerRow(layer.file, layer.opacity, function (value) {
+    const item = referenceOf(layer.file);
+    if (!item) { return; }
+    item.layer = { ...item.layer, opacity: value };
+    render();
+    postReferences();
+  });
+  const remove = removeButton('Remove this reference and delete its copy from map/references', function (event) {
+    event.stopPropagation();
+    vscode.postMessage({ type: 'removeReference', file: layer.file });
+  });
+  row.head.append(remove);
+  row.head.title = 'Select this picture on the map (and the reference tool): drag to move, grips to resize (Shift keeps proportions, Ctrl distorts). Esc, or click again, to stop.';
+  row.head.addEventListener('click', function () { activate(layer.file); });
+  return row.node;
+}
+
+function renderReferenceRows(): void {
+  referenceLayersBox.replaceChildren();
+  for (const item of references) {
+    item.row.classList.toggle('active', item.layer.file === activeReference);
+    referenceLayersBox.append(item.row);
+  }
+}
+
+/** The list as the page holds it, written to the manifest; a burst of drags becomes one write. */
+function postReferences(): void {
+  if (referencesTimer !== null) { clearTimeout(referencesTimer); }
+  referencesTimer = window.setTimeout(function () {
+    referencesTimer = null;
+    vscode.postMessage({ type: 'references', layers: references.map(function (item) { return item.layer; }) });
+  }, 400);
+}
+
+/** Every picture at its opacity, over the map layers and under the province outline. */
+function drawReferences(): void {
+  // Pictures are scaled, not pixel art: they are smoothed whatever the map's zoom.
+  ctx.imageSmoothingEnabled = true;
+  for (const item of references) {
+    if (!item.bitmap || item.layer.opacity <= 0) { continue; }
+    ctx.globalAlpha = item.layer.opacity / 100;
+    drawQuadImage(item.bitmap, item.layer.corners);
+  }
+  ctx.globalAlpha = 1;
+  // The frame belongs to the reference tool: under any other it is only in the way of the map.
+  const active = activeReference === null || tool !== 'reference' ? undefined : referenceOf(activeReference);
+  if (active?.bitmap) { drawFrame(boundsOf(active.layer.corners)); }
+}
+
+/** A parallelogram is one transformed drawImage; a bent picture is a mesh of triangles, each drawn under its own map. */
+function drawQuadImage(bitmap: ImageBitmap, quad: Quad): void {
+  const width = bitmap.width;
+  const height = bitmap.height;
+  if (isAffine(quad)) {
+    const matrix = affineFromTriangles([{ x: 0, y: 0 }, { x: width, y: 0 }, { x: 0, y: height }], [quad[0], quad[1], quad[3]]);
+    if (!matrix) { return; }
+    ctx.save();
+    ctx.transform(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5]);
+    ctx.drawImage(bitmap, 0, 0);
+    ctx.restore();
+    return;
+  }
+  for (let row = 0; row < MESH; row++) {
+    for (let column = 0; column < MESH; column++) {
+      const u0 = column / MESH; const u1 = (column + 1) / MESH;
+      const v0 = row / MESH; const v1 = (row + 1) / MESH;
+      const source = { a: { x: u0 * width, y: v0 * height }, b: { x: u1 * width, y: v0 * height }, c: { x: u1 * width, y: v1 * height }, d: { x: u0 * width, y: v1 * height } };
+      const target = { a: bilinear(quad, u0, v0), b: bilinear(quad, u1, v0), c: bilinear(quad, u1, v1), d: bilinear(quad, u0, v1) };
+      drawTriangle(bitmap, [source.a, source.b, source.c], [target.a, target.b, target.c]);
+      drawTriangle(bitmap, [source.a, source.c, source.d], [target.a, target.c, target.d]);
+    }
+  }
+}
+
+function drawTriangle(bitmap: ImageBitmap, source: readonly [Point, Point, Point], target: readonly [Point, Point, Point]): void {
+  const matrix = affineFromTriangles(source, target);
+  if (!matrix) { return; }
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(target[0].x, target[0].y);
+  ctx.lineTo(target[1].x, target[1].y);
+  ctx.lineTo(target[2].x, target[2].y);
+  ctx.closePath();
+  ctx.clip();
+  ctx.transform(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5]);
+  ctx.drawImage(bitmap, 0, 0);
+  ctx.restore();
+}
+
+/** The frame and its eight grips, in screen pixels whatever the zoom. */
+function drawFrame(box: Box): void {
+  const unit = 1 / view.scale;
+  ctx.save();
+  ctx.lineWidth = unit;
+  ctx.strokeStyle = '#fff';
+  ctx.setLineDash([4 * unit, 3 * unit]);
+  ctx.strokeRect(box.x, box.y, box.width, box.height);
+  ctx.setLineDash([]);
+  const grip = GRIP_PX * unit;
+  for (const handle of HANDLES) {
+    const at = handlePoint(box, handle);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(at.x - grip / 2, at.y - grip / 2, grip, grip);
+    ctx.strokeStyle = '#000';
+    ctx.strokeRect(at.x - grip / 2, at.y - grip / 2, grip, grip);
+  }
+  ctx.restore();
+}
+
+/**
+ * The reference tool's press: a grip of the selected picture first, else the
+ * topmost picture under the pointer (selected as it is grabbed), else nothing —
+ * which puts the frame away.
+ */
+function pressReference(event: MouseEvent): void {
+  const grabbed = referenceHit(event.clientX, event.clientY);
+  if (grabbed) { startReferenceDrag(grabbed.file, grabbed.handle, event); return; }
+  const at = toImageExact(event.clientX, event.clientY);
+  for (let index = references.length - 1; index >= 0; index--) {
+    const item = references[index];
+    if (!item?.bitmap || !insideQuad(item.layer.corners, at)) { continue; }
+    if (activeReference !== item.layer.file) { activate(item.layer.file); }
+    startReferenceDrag(item.layer.file, 'inside', event);
+    return;
+  }
+  if (activeReference !== null) { activate(null); }
+}
+
+function startReferenceDrag(file: string, handle: Handle | 'inside', event: MouseEvent): void {
+  const item = referenceOf(file);
+  if (!item) { return; }
+  referenceDrag = { file: file, handle: handle, from: item.layer.corners, startX: event.clientX, startY: event.clientY };
+}
+
+/** A drag of the active reference: what was grabbed, and the picture as it was when the button went down. */
+interface ReferenceDrag {
+  readonly file: string;
+  readonly handle: Handle | 'inside';
+  readonly from: Quad;
+  readonly startX: number;
+  readonly startY: number;
+}
+let referenceDrag: ReferenceDrag | null = null;
+
+/** The reference tool over the selected picture: a grip or the picture itself, else nothing. */
+function referenceHit(clientX: number, clientY: number): { file: string; handle: Handle | 'inside' } | null {
+  if (tool !== 'reference' || activeReference === null) { return null; }
+  const item = referenceOf(activeReference);
+  if (!item?.bitmap) { return null; }
+  const hit = handleAt(item.layer.corners, toImageExact(clientX, clientY), (GRIP_PX / 2 + 1) / view.scale);
+  return hit === null ? null : { file: item.layer.file, handle: hit };
+}
+
+/**
+ * Photoshop's free transform, from the picture as it was when the button went
+ * down: a plain grip stretches, Shift keeps the proportion, Ctrl bends the
+ * corner (or slides the side) on its own, and the inside moves the whole thing.
+ */
+function moveReference(event: MouseEvent): void {
+  const current = referenceDrag;
+  const item = current ? referenceOf(current.file) : undefined;
+  if (!current || !item) { return; }
+  const dx = (event.clientX - current.startX) / view.scale;
+  const dy = (event.clientY - current.startY) / view.scale;
+  let next: Quad;
+  if (current.handle === 'inside') {
+    next = moveQuad(current.from, dx, dy);
+  } else if (event.ctrlKey || event.metaKey) {
+    next = distortQuad(current.from, current.handle, dx, dy);
+  } else {
+    const from = boundsOf(current.from);
+    next = fitQuad(current.from, from, boxFromHandle(from, current.handle, dx, dy, event.shiftKey));
+  }
+  item.layer = { ...item.layer, corners: next };
+  render();
+}
+
+function gripCursor(clientX: number, clientY: number): void {
+  const hit = referenceDrag ? { handle: referenceDrag.handle } : referenceHit(clientX, clientY);
+  for (const handle of [...HANDLES, 'move']) { mapArea.classList.toggle('grip-' + handle, hit !== null && (hit.handle === 'inside' ? 'move' : hit.handle) === handle); }
+}
+
+// --- Dropping a picture in ---------------------------------------------------------------------
+/** Where a dropped picture lands: the map pixel under the drop, or the middle of the view for a drop on the box. */
+function dropPoint(event: DragEvent, overMap: boolean): Point {
+  if (overMap && image) {
+    const at = toImage(event.clientX, event.clientY);
+    return { x: Math.min(image.width - 1, Math.max(0, at.x)), y: Math.min(image.height - 1, Math.max(0, at.y)) };
+  }
+  return viewCentre();
+}
+
+/** The middle of what is on screen, in map pixels: where a picked picture lands. */
+function viewCentre(): Point {
+  const rect = mapArea.getBoundingClientRect();
+  const centre = toImage(rect.left + mapArea.clientWidth / 2, rect.top + mapArea.clientHeight / 2);
+  return { x: Math.round(centre.x), y: Math.round(centre.y) };
+}
+
+requiredButton('addReferenceButton').addEventListener('click', function () {
+  if (!map) { return; }
+  const at = viewCentre();
+  vscode.postMessage({ type: 'pickReference', x: at.x, y: at.y });
+});
+
+function acceptDrop(event: DragEvent, overMap: boolean): void {
+  event.preventDefault();
+  mapArea.classList.remove('dropping'); layersBox.classList.remove('dropping');
+  const transfer = event.dataTransfer;
+  if (!transfer || !map) { return; }
+  const at = dropPoint(event, overMap);
+  const files = [...transfer.files].filter(function (file) { return file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp)$/i.test(file.name); });
+  for (const file of files) { readDroppedFile(file, at); }
+  if (files.length > 0) { return; }
+  const uris = transfer.getData('text/uri-list').split(/\r?\n/).map(function (line) { return line.trim(); })
+    .filter(function (line) { return line.startsWith('file:'); });
+  for (const uri of uris) { vscode.postMessage({ type: 'addReferencePath', uri: uri, x: at.x, y: at.y }); }
+  if (uris.length === 0) { setStatus('Drop a picture file (PNG, JPEG, GIF, WebP or BMP).', 'warning'); }
+}
+
+/** The picture's bytes as base64: a data URL is the browser's own way to that, and the extension strips the head. */
+function readDroppedFile(file: File, at: Point): void {
+  const reader = new FileReader();
+  reader.onload = function (): void {
+    const result = typeof reader.result === 'string' ? reader.result : '';
+    const comma = result.indexOf(',');
+    if (comma < 0) { setStatus(file.name + ' could not be read.', 'error'); return; }
+    vscode.postMessage({ type: 'addReference', name: file.name, bytes: result.slice(comma + 1), x: at.x, y: at.y });
+    setStatus('Adding ' + file.name + '…');
+  };
+  reader.onerror = function (): void { setStatus(file.name + ' could not be read.', 'error'); };
+  reader.readAsDataURL(file);
+}
+
+for (const target of [mapArea, layersBox]) {
+  target.addEventListener('dragover', function (event) {
+    if (!event.dataTransfer) { return; }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    target.classList.add('dropping');
+  });
+  target.addEventListener('dragleave', function () { target.classList.remove('dropping'); });
+}
+mapArea.addEventListener('drop', function (event) { acceptDrop(event, true); });
+layersBox.addEventListener('drop', function (event) { event.stopPropagation(); acceptDrop(event, false); });
 layerCountry.addEventListener('change', function () {
   showCountryColors = layerCountry.checked;
   if (showCountryColors && !tintedTiles) { buildTintedTiles(); }
@@ -790,11 +1263,17 @@ function render(): void {
   const top = -view.y / view.scale;
   const right = left + mapArea.clientWidth / view.scale;
   const bottom = top + mapArea.clientHeight / view.scale;
+  ctx.globalAlpha = layerOpacity.provinces / 100;
   drawTiles(showCountryColors && tintedTiles ? tintedTiles : image.tiles, left, top, right, bottom);
-  if (showRivers && riverTiles) {
+  for (const kind of ['rivers', 'terrain'] as const) {
+    const tiles = overlayTiles[kind];
+    if (!tiles || layerOpacity[kind] <= 0) { continue; }
+    ctx.globalAlpha = layerOpacity[kind] / 100;
     ctx.imageSmoothingEnabled = false;
-    drawTiles(riverTiles, left, top, right, bottom);
+    drawTiles(tiles, left, top, right, bottom);
   }
+  ctx.globalAlpha = 1;
+  drawReferences();
   if (selection) {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(selection.canvas, selection.x, selection.y);
@@ -902,7 +1381,11 @@ function samePoints(one: Draft | null, other: Draft | null): boolean {
 /** Hold the selected province's points when they no longer match its file, or let them go when they do. */
 function capturePending(): void {
   if (!details || !draft) { return; }
-  if (samePoints(draft, draftBaseline)) { pendingPositions.delete(details.id); }
+  // A province that is only paint has no id in definition.csv to hold points
+  // against: they live with its panel and leave with it. The save that creates
+  // it puts the id in the table before this runs, so those points are kept.
+  const abandoned = !definitionById.has(details.id);
+  if (abandoned || samePoints(draft, draftBaseline)) { pendingPositions.delete(details.id); }
   else { pendingPositions.set(details.id, clonePoints(draft)); }
   refreshPending();
 }
@@ -1044,10 +1527,11 @@ function zoomAt(clientX: number, clientY: number, factor: number): void {
 // is drawn from. Nothing reaches provinces.bmp until Save map, and every stroke
 // can be taken back until then.
 
-type Tool = 'hand' | 'pencil' | 'draw' | 'bucket' | 'pick';
+type Tool = 'hand' | 'reference' | 'pencil' | 'draw' | 'bucket' | 'pick';
 
 const TOOLS: readonly { readonly tool: Tool; readonly id: string }[] = [
   { tool: 'hand', id: 'toolHand' },
+  { tool: 'reference', id: 'toolReference' },
   { tool: 'pencil', id: 'toolPencil' },
   { tool: 'draw', id: 'toolDraw' },
   { tool: 'bucket', id: 'toolBucket' },
@@ -1087,8 +1571,10 @@ function setTool(next: Tool): void {
   for (const entry of toolButtons) { entry.button.classList.toggle('active', entry.tool === next); }
   brushSize.disabled = !paints(next);
   brushRow.classList.toggle('off', !paints(next));
-  mapArea.classList.toggle('painting', next !== 'hand' && next !== 'pick');
+  mapArea.classList.toggle('painting', next !== 'hand' && next !== 'pick' && next !== 'reference');
   mapArea.classList.toggle('picking', next === 'pick');
+  mapArea.classList.toggle('referencing', next === 'reference');
+  render();
 }
 
 /** The tools the brush width is for. */
@@ -1190,6 +1676,9 @@ function closeLine(line: readonly number[]): void {
 }
 
 /** The eye drop takes the colour the pixel holds, whether or not a province owns it. */
+/** The tool the eye drop was picked up from: one colour taken, the eye drop hands it back. */
+let pickReturn: Tool | null = null;
+
 function pickAt(point: Point): void {
   const currentImage = image;
   if (!currentImage) { return; }
@@ -1198,6 +1687,9 @@ function pickAt(point: Point): void {
   setBrushColor(color);
   const id = provinceAt(point);
   setStatus('Painting with ' + hexOf(color) + (id === undefined ? '' : ' (province ' + String(id) + ')'));
+  const back = pickReturn;
+  pickReturn = null;
+  if (back !== null) { setTool(back); }
 }
 
 function paintIndices(indices: readonly number[], color: number): void {
@@ -1385,7 +1877,17 @@ function handlePainted(result: PaintResult): void {
 }
 
 for (const entry of toolButtons) {
-  entry.button.addEventListener('click', function () { setTool(entry.tool); });
+  entry.button.addEventListener('click', function () {
+    // Picked up from the pencil, the eye drop goes back to the pencil after one
+    // colour; picked up on purpose, or left for another tool, it does not.
+    pickReturn = entry.tool === 'pick' && tool !== 'pick' ? tool : null;
+    setTool(entry.tool);
+    if (entry.tool === 'reference') {
+      setStatus(references.length === 0
+        ? 'No reference pictures yet: Add Reference in the Layers box puts one on the map.'
+        : 'Click a picture to select it; drag moves it, a grip stretches, Shift keeps proportions, Ctrl distorts.');
+    }
+  });
 }
 brushSize.addEventListener('input', function () {
   brush = Math.min(16, Math.max(1, Math.round(Number(brushSize.value) || 1)));
@@ -1413,6 +1915,8 @@ resetPaintButton.addEventListener('click', function () {
   paintPixels(back);
   resetPaint();
   refreshOutline(before);
+  // The colour a new province was made of is gone with the paint, and so is the province.
+  if (details?.isNew) { clearSelection(); }
   setStatus('The map is back the way the file has it');
 });
 savePaintButton.addEventListener('click', function () {
@@ -1426,6 +1930,10 @@ savePaintButton.addEventListener('click', function () {
 });
 window.addEventListener('keydown', function (event) {
   const target = event.target;
+  if (event.key === 'Escape' && activeReference !== null && !(target instanceof HTMLInputElement)) {
+    activate(null);
+    return;
+  }
   if (!(event.ctrlKey || event.metaKey) || target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement) { return; }
   const key = event.key.toLowerCase();
   if (key === 'z' && !event.shiftKey) {
@@ -1458,7 +1966,7 @@ mapArea.addEventListener('mousedown', function (event) {
   // The middle button pans under every tool: painting a border is no reason to
   // have to put the brush down to reach the rest of the map.
   if (event.button === 0 && tool !== 'hand') {
-    if (event.target === canvas) { startPaint(event); }
+    if (event.target === canvas) { if (tool === 'reference') { pressReference(event); } else { startPaint(event); } }
     return;
   }
   if (event.button !== 0 && event.button !== 1 && event.button !== 2) { return; }
@@ -1477,6 +1985,8 @@ mapArea.addEventListener('mousedown', function (event) {
 });
 window.addEventListener('mousemove', function (event) {
   if (brushAt) { continueStroke(event); return; }
+  if (referenceDrag) { moveReference(event); return; }
+  gripCursor(event.clientX, event.clientY);
   const current = drag;
   if (current?.marker && image) {
     current.moved = true;
@@ -1496,6 +2006,7 @@ window.addEventListener('mousemove', function (event) {
 });
 window.addEventListener('mouseup', function (event) {
   if (brushAt) { endStroke(); return; }
+  if (referenceDrag) { referenceDrag = null; postReferences(); gripCursor(event.clientX, event.clientY); return; }
   if (!drag) { return; }
   const wasClick = !drag.moved && !drag.marker && drag.select;
   const restore = drag.restore;
@@ -1563,26 +2074,60 @@ function boundsOfColor(currentImage: DecodedImage, color: number): { minX: numbe
   return box;
 }
 
+/**
+ * Where the province meets anything else. 1 marks its pixels that touch another
+ * colour or the map's edge, 2 the ones wholly inside it. Diagonal-only
+ * neighbours do not count, or a one-pixel isthmus would light its whole width.
+ */
+function edgeMaskOf(currentImage: DecodedImage, color: number, minX: number, minY: number, boxWidth: number, boxHeight: number): Uint8Array {
+  const { packed, width, height } = currentImage;
+  const edge = new Uint8Array(boxWidth * boxHeight);
+  function own(x: number, y: number): boolean {
+    return x >= 0 && y >= 0 && x < width && y < height && packed[y * width + x] === color;
+  }
+  for (let yy = 0; yy < boxHeight; yy++) {
+    for (let xx = 0; xx < boxWidth; xx++) {
+      const x = minX + xx;
+      const y = minY + yy;
+      if (!own(x, y)) { continue; }
+      edge[yy * boxWidth + xx] = own(x - 1, y) && own(x + 1, y) && own(x, y - 1) && own(x, y + 1) ? 2 : 1;
+    }
+  }
+  return edge;
+}
+
+/**
+ * The selection is not a tint: a one-pixel glow runs along the inside of the
+ * edge, with a fainter pixel just inside it, so the shape reads and the colour
+ * stays the colour.
+ */
+function glowMaskOf(edge: Uint8Array, boxWidth: number, boxHeight: number): Uint8ClampedArray<ArrayBuffer> {
+  const mask = new Uint8ClampedArray(new ArrayBuffer(boxWidth * boxHeight * 4));
+  for (let at = 0; at < edge.length; at++) {
+    const kind = edge[at];
+    if (kind === 0) { continue; }
+    const xx = at % boxWidth;
+    const yy = (at - xx) / boxWidth;
+    const besideEdge = (xx > 0 && edge[at - 1] === 1) || (xx + 1 < boxWidth && edge[at + 1] === 1)
+      || (yy > 0 && edge[at - boxWidth] === 1) || (yy + 1 < boxHeight && edge[at + boxWidth] === 1);
+    const alpha = kind === 1 ? 190 : besideEdge ? 60 : 0;
+    if (alpha === 0) { continue; }
+    const out = at * 4;
+    mask[out] = 255; mask[out + 1] = 255; mask[out + 2] = 255; mask[out + 3] = alpha;
+  }
+  return mask;
+}
+
 function highlightOf(id: number, painted?: number): Highlight | null {
   const color = painted ?? definitionById.get(id)?.color;
   const currentImage = image;
   if (color === undefined || !currentImage) { return null; }
-  const packed = currentImage.packed;
-  const width = currentImage.width;
   const { minX, minY, maxX, maxY } = boundsOfColor(currentImage, color);
   if (maxX < 0) { return null; }
   const boxWidth = maxX - minX + 1;
   const boxHeight = maxY - minY + 1;
-  const mask = new Uint8ClampedArray(boxWidth * boxHeight * 4);
-  for (let yy = 0; yy < boxHeight; yy++) {
-    const rowStart = (minY + yy) * width + minX;
-    for (let xx = 0; xx < boxWidth; xx++) {
-      if (packed[rowStart + xx] === color) {
-        const out = (yy * boxWidth + xx) * 4;
-        mask[out] = 255; mask[out + 1] = 255; mask[out + 2] = 255; mask[out + 3] = 150;
-      }
-    }
-  }
+  const edge = edgeMaskOf(currentImage, color, minX, minY, boxWidth, boxHeight);
+  const mask = glowMaskOf(edge, boxWidth, boxHeight);
   const overlay = document.createElement('canvas');
   overlay.width = boxWidth; overlay.height = boxHeight;
   const overlayContext = overlay.getContext('2d');
@@ -1767,7 +2312,9 @@ function renderHeader(id: number, current: ProvinceDetails | null, currentMap: M
     h('span', { class: 'id' }, '- ' + String(id) + ' -'),
     headerTerrainLabel);
   previewTerrain = terrainName;
-  if (terrainName !== '' && terrain?.pictureDataUri) { terrainPictures.set(terrainName, terrain.pictureDataUri); }
+  // Keyed by the terrain name, '' included: that is the province with no terrain,
+  // which has a picture of its own.
+  if (terrain?.pictureDataUri) { terrainPictures.set(terrainName, terrain.pictureDataUri); }
   const box = h('div', { class: 'header' }, heading);
   headerBox = box;
   applyHeaderPicture(terrain?.pictureDataUri ?? null);
@@ -1833,7 +2380,11 @@ function applyHeaderPicture(uri: string | null | undefined): void {
   headerBox.classList.toggle('pictured', Boolean(uri));
   headerBox.style.backgroundImage = uri ? 'linear-gradient(rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.55)), url(' + uri + ')' : '';
 }
-/** Show the picture of the terrain the form now holds (or the bitmap's terrain when cleared), fetching it once per map. */
+/**
+ * Show the picture of the terrain the form now holds — the bitmap's terrain when
+ * the field is cleared, and the no-terrain picture when there is neither.
+ * Fetched once per terrain per map.
+ */
 function showTerrain(name: string): void {
   const effective = name === '' ? (details?.terrain.dominant ?? '') : name;
   previewTerrain = effective;
@@ -1842,7 +2393,6 @@ function showTerrain(name: string): void {
     const fallback = effective === '' ? (map?.targetName ?? '') : effective;
     headerTerrainLabel.textContent = entry ? entry.label : fallback;
   }
-  if (!effective) { applyHeaderPicture(null); return; }
   if (terrainPictures.has(effective)) { applyHeaderPicture(terrainPictures.get(effective)); return; }
   vscode.postMessage({ type: 'terrainPicture', terrain: effective });
 }
@@ -1947,19 +2497,15 @@ function localisationSection(current: ProvinceDetails): HTMLElement {
   const input = textInput(loc.text);
   // The name a save writes into definition.csv, and whether the id joins sea_starts.
   nameInput = input;
-  const sea = h('input', { type: 'checkbox' });
-  seaInput = current.isNew ? sea : null;
-  const seaRow = current.isNew
-    ? h('label', { class: 'check' }, sea, 'Sea province (the id joins sea_starts in default.map)')
-    : null;
-  const rename = h('input', { type: 'checkbox' });
-  renameInput = rename;
+  const sea = checkRow('Sea province (the id joins sea_starts in default.map)', false);
+  seaInput = current.isNew ? sea.box : null;
+  const seaRow = current.isNew ? sea.node : null;
   // A base-game province keeps the name vanilla gave its file, and other tools match
   // on it, so renaming there is opt-in. Above that id the province is the mod's own.
   const renamable = current.history.file !== undefined && !current.isSea;
-  rename.checked = current.id > VANILLA_MAX_PROVINCES && renamable;
-  const renameRow = h('label', { class: 'check' }, rename, 'Rename the history file to match');
-  if (!renamable) { lock(renameRow); }
+  const rename = checkRow('Rename the history file to match', current.id > VANILLA_MAX_PROVINCES && renamable);
+  renameInput = rename.box;
+  if (!renamable) { lock(rename.node); }
   // The tab has one Save, at the bottom of the History section; Enter reaches it.
   input.addEventListener('keydown', function (event) { if (event.key === 'Enter') { definitionSave?.click(); } });
   return h('div', { class: 'section' },
@@ -1967,7 +2513,7 @@ function localisationSection(current: ProvinceDetails): HTMLElement {
     layerNote(loc),
     h('div', { class: 'inline' }, h('label', null, loc.key), input),
     seaRow,
-    renameRow);
+    rename.node);
 }
 
 // History — one form behind four tabs. Cores, Buildings and the dated blocks
@@ -1979,6 +2525,17 @@ interface HistoryPanes {
   readonly dates: HTMLElement;
 }
 
+/** How `history/provinces` itself reads in the Folder list, where the other rows are subfolder names. */
+const ROOT_FOLDER_LABEL = '(history/provinces)';
+
+/** What picking another folder does, which is not the same for a file this mod does not own. */
+function folderTitle(history: HistorySection): string {
+  if (history.file === undefined) { return 'Where the history file is created'; }
+  return history.inTarget
+    ? 'Where the history file sits; picking another folder moves it on the next save'
+    : 'Where the copy of the history file this mod takes over is created';
+}
+
 function historySections(current: ProvinceDetails): HistoryPanes {
   const history = current.history;
   const data = carriedHistory ?? history.data ?? emptyHistory();
@@ -1988,13 +2545,17 @@ function historySections(current: ProvinceDetails): HistoryPanes {
   historyRead = form.read;
   historyRendered = JSON.stringify(data);
   climateRendered = form.climate();
-  // Where a new history file goes. The row stands whether it is needed or not,
-  // greyed once the file exists, so the panel keeps its height from one province
-  // to the next; a sea province has the whole pane locked over it.
+  // Which subfolder of history/provinces the file sits in: where a new one goes,
+  // and where a save puts one that exists — the target's own file is moved, and a
+  // file another layer owns is copied there. A sea province has the pane locked.
   const folders = map && map.historyFolders.length > 0 ? map.historyFolders : [''];
-  const folder = h('select', null, folders.map(function (name) { return option(name, name || '(history/provinces)'); }));
+  const known = history.folder !== undefined && !folders.includes(history.folder) ? [history.folder, ...folders] : folders;
+  // The same pick list the fields below use, rather than a plain select: a select
+  // insets its text a pixel further than an input, leaving this row out of line.
+  // A province with no file keeps the first folder the list offers; one with a file opens on its own.
+  const folder = selectInput(history.folder ?? known[0], known.map(function (name) { return { id: name, label: name === '' ? ROOT_FOLDER_LABEL : name }; }));
+  folder.title = folderTitle(history);
   const folderRow = h('div', { class: 'grid lone' }, h('label', null, 'Folder'), folder);
-  if (history.data) { lock(folderRow); }
   // The Definition tab shows the name, the climate and the states as well, so
   // its one Save carries them; the other two history tabs show none of them.
   function pane(title: string, whole: boolean): (body: Child) => HTMLElement {
@@ -2214,7 +2775,7 @@ function listEditor(
   const rows = h('div', { class: 'rows' });
   function addRow(value: string, ghost?: boolean): FieldElement {
     const input = entries ? selectInput(value, entries, '(pick)') : textInput(value);
-    const row = h('div', { class: 'row' + (ghost ? ' ghost' : '') }, input, h('button', { class: 'secondary icon remove', title: 'Remove', onclick: function () { row.remove(); keepOne(); } }, '×'));
+    const row = h('div', { class: 'row' + (ghost ? ' ghost' : '') }, input, removeButton('Remove', function () { row.remove(); keepOne(); }));
     if (ghost) {
       setPlaceholder(input, placeholder ?? '');
       row.addEventListener('input', function () { row.classList.remove('ghost'); });
@@ -2305,7 +2866,7 @@ function rowsEditor(
     });
     const row = h('div', { class: 'row' + (ghost ? ' ghost' : '') }, inputs,
       options.duplicate ? h('button', { class: 'secondary icon', title: 'Duplicate', onclick: function () { addRow(readRow(row)); } }, '⧉') : null,
-      h('button', { class: 'secondary icon remove', title: 'Remove', onclick: function () { row.remove(); keepOne(); rows.dispatchEvent(new Event('input', { bubbles: true })); } }, '×'));
+      removeButton('Remove', function () { row.remove(); keepOne(); rows.dispatchEvent(new Event('input', { bubbles: true })); }));
     if (ghost) {
       // The column heads name the fields; an empty table repeats them in the row.
       inputs.forEach(function (input, index) { setPlaceholder(input, columns[index]?.placeholder ?? ''); });
@@ -2362,7 +2923,7 @@ function datedEditor(current: ProvinceDetails, blocks: readonly DatedHistory[]):
     const entry = { date: date, form: form };
     forms.push(entry);
     const node = h('details', { class: 'dated' },
-      h('summary', null, 'Dated block ', date, h('span', { class: 'spacer' }), h('button', { class: 'secondary icon remove', title: 'Remove', onclick: function (event) { event.preventDefault(); forms.splice(forms.indexOf(entry), 1); node.remove(); } }, '×')),
+      h('summary', null, 'Dated block ', date, h('span', { class: 'spacer' }), removeButton('Remove', function (event) { event.preventDefault(); forms.splice(forms.indexOf(entry), 1); node.remove(); })),
       form.node);
     date.addEventListener('click', function (event) { event.preventDefault(); });
     rows.append(node);
@@ -2400,7 +2961,7 @@ function positionsSection(current: ProvinceDetails): HTMLElement {
     y.addEventListener('input', changed);
     const swatch = h('span', { class: 'swatch', title: spec.label });
     swatch.style.background = spec.color;
-    const clear = h('button', { class: 'secondary icon remove', title: 'Clear ' + spec.label, onclick: function () { x.value = ''; y.value = ''; changed(); } }, '×');
+    const clear = removeButton('Clear ' + spec.label, function () { x.value = ''; y.value = ''; changed(); });
     const center = h('button', { class: 'glyph center', title: 'Put ' + spec.label + ' in the middle of the province', 'aria-label': 'Center ' + spec.label, onclick: function () {
       const middle = selectionCenter();
       if (!middle) { setStatus('The province has no pixels to centre on.', 'warning'); return; }
@@ -2437,9 +2998,9 @@ function popsSection(current: ProvinceDetails): HTMLElement {
   const parts: Child[] = [sectionHeader('Pops', pops, missing), layerNote(pops)];
   const currentMap = map;
   if (currentMap && currentMap.popDates.length > 1) {
-    const dateSelect = h('select', { onchange: function () { popDate = dateSelect.value; selectProvince(current.id); } }, currentMap.popDates.map(function (date) { return option(date, date); }));
-    dateSelect.value = popDate;
-    parts.push(h('div', { class: 'grid lone' }, h('label', null, 'Start date'), dateSelect));
+    const dateField = selectInput(popDate, currentMap.popDates.map(function (date) { return { id: date, label: date }; }));
+    dateField.addEventListener('input', function () { popDate = dateField.value; selectProvince(current.id); });
+    parts.push(h('div', { class: 'grid lone' }, h('label', null, 'Start date'), dateField));
   }
   const names = currentMap?.popFiles[popDate] ?? [];
   const fileField = selectInput('', names.map(function (name) { return { id: name, label: name }; }), 'Existing or new file name', true);
@@ -2503,7 +3064,10 @@ function loadFreshMap(message: Extract<HostMessage, { type: 'map' }>): void {
   countryColors = null; tintedTiles = null; tintOfColor = null;
   usedColors = null;
   resetPaint(); setTool('hand');
-  riversUri = message.riversUri ?? null; riverTiles = null; riversLoading = false;
+  overlayUri.rivers = message.riversUri ?? null; overlayUri.terrain = message.terrainUri ?? null;
+  overlayTiles.rivers = null; overlayTiles.terrain = null; overlayLoading.rivers = false; overlayLoading.terrain = false;
+  syncLayerRow('rivers'); syncLayerRow('terrain');
+  references = []; referencesFolder = ''; activeReference = null; referenceDrag = null; renderReferenceRows();
   showHint();
   loadMap(message.bmpUri);
 }
@@ -2514,6 +3078,10 @@ function handleMessage(message: HostMessage): void {
   } else if (message.type === 'revealPixel') {
     pendingReveal = { file: message.file, x: message.x, y: message.y };
     applyReveal();
+  } else if (message.type === 'thumbnails') {
+    applyThumbnails({ provinces: message.provinces, rivers: message.rivers, terrain: message.terrain });
+  } else if (message.type === 'references') {
+    handleReferences(message.folderUri, message.layers);
   } else {
     handleUpdate(message);
   }
@@ -2538,7 +3106,7 @@ function handleDetails(fresh: ProvinceDetails): void {
   setStatus('Province ' + String(fresh.id));
 }
 
-function handleUpdate(message: Exclude<HostMessage, { type: 'map' | 'revealPixel' }>): void {
+function handleUpdate(message: Exclude<HostMessage, { type: 'map' | 'revealPixel' | 'thumbnails' | 'references' }>): void {
   if (message.type === 'details') {
     handleDetails(message.details);
   } else if (message.type === 'positions') {

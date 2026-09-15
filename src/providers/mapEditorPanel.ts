@@ -10,6 +10,7 @@ import {
   MAP_EDITOR_PROVINCE_REQUEST,
   MAP_EDITOR_SAVE_REQUEST,
   MAP_EDITOR_TERRAIN_PICTURE_REQUEST,
+  MAP_EDITOR_THUMBNAILS_REQUEST,
   type HostMessage,
   type MapEditorMap,
   type MapEditorReveal,
@@ -18,7 +19,9 @@ import {
 } from '../model/mapEditor.js';
 import { affectsMapEditorView, readCountryColorsTint, readPaintUndoSteps } from '../config.js';
 import { asPageMessage, type PageMessage, type PendingPositions } from '../services/mapEditorMessages.js';
+import type { ReferenceLayer } from '../services/referenceLayers.js';
 import { mapEditorHtml, mapEditorNoticeHtml } from './mapEditorHtml.js';
+import { ReferenceStore } from './referenceStore.js';
 import { request } from './request.js';
 
 /**
@@ -36,6 +39,8 @@ export class MapEditorPanel implements vscode.Disposable {
   private popDate = '';
   /** Painted pixels the page is holding, so a Reload or a close can say they are there. */
   private paintPixels = 0;
+  /** The target mod's reference pictures; set with the map. */
+  private references: ReferenceStore | undefined;
   private readonly subscriptions: vscode.Disposable[] = [];
 
   constructor(
@@ -107,10 +112,11 @@ export class MapEditorPanel implements vscode.Disposable {
       return;
     }
     this.map = result;
+    this.references = new ReferenceStore(result.targetRoot);
     panel.title = `Map Editor: ${result.targetName}`;
     panel.webview.options = {
       enableScripts: true,
-      localResourceRoots: [...resourceRootsOf(result), this.extensionUri],
+      localResourceRoots: [...resourceRootsOf(result), this.references.folder, this.extensionUri],
     };
     const scriptUri = panel.webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, 'dist', 'mapEditorPage.js'),
@@ -124,7 +130,7 @@ export class MapEditorPanel implements vscode.Disposable {
     if (!panel || !client || !message) {
       return;
     }
-    if (this.note(client, message)) {
+    if (await this.aside(panel, client, message)) {
       return;
     }
     switch (message.type) {
@@ -133,6 +139,8 @@ export class MapEditorPanel implements vscode.Disposable {
         this.sendMap(panel);
         await this.sendPositions(panel, client);
         await this.sendCountryColors(panel, client);
+        await this.sendReferences(panel);
+        await this.sendThumbnails(panel, client);
         return;
       case 'reload':
         if (await this.keepPainted()) {
@@ -166,6 +174,11 @@ export class MapEditorPanel implements vscode.Disposable {
     }
   }
 
+  /** Everything that is not a request to the server: notes the page leaves, and the reference pictures. */
+  private async aside(panel: vscode.WebviewPanel, client: LanguageClient, message: PageMessage): Promise<boolean> {
+    return this.note(client, message) || this.handleReferences(panel, message);
+  }
+
   /** What the page only tells the extension about: its log, and what it is holding. */
   private note(client: LanguageClient, message: PageMessage): boolean {
     switch (message.type) {
@@ -181,6 +194,74 @@ export class MapEditorPanel implements vscode.Disposable {
       default:
         return false;
     }
+  }
+
+  /** The reference pictures: dropped in, moved, removed. Each answer is the whole list, which the page redraws from. */
+  private async handleReferences(panel: vscode.WebviewPanel, message: PageMessage): Promise<boolean> {
+    const store = this.references;
+    if (!store) {
+      return false;
+    }
+    switch (message.type) {
+      case 'addReference':
+        this.postReferences(panel, await store.add(message.name, Buffer.from(message.bytes, 'base64'), message.x, message.y));
+        return true;
+      case 'addReferencePath':
+        await this.addReferenceFiles(panel, store, [vscode.Uri.parse(message.uri)], message.x, message.y);
+        return true;
+      case 'pickReference': {
+        // Dropping a file on the tab is taken by VS Code itself, which opens the
+        // file in an editor before the page ever sees it: the picker is the way in.
+        const picked = await vscode.window.showOpenDialog({
+          canSelectMany: true,
+          openLabel: 'Add reference',
+          filters: { Pictures: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'] },
+        });
+        await this.addReferenceFiles(panel, store, picked ?? [], message.x, message.y);
+        return true;
+      }
+      case 'references':
+        await store.write(message.layers);
+        return true;
+      case 'removeReference':
+        this.postReferences(panel, await store.remove(message.file));
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /** Each picture copied in and placed at the same point; the page spreads none of them, the modder does. */
+  private async addReferenceFiles(panel: vscode.WebviewPanel, store: ReferenceStore, files: readonly vscode.Uri[], x: number, y: number): Promise<void> {
+    let layers: readonly ReferenceLayer[] | undefined;
+    for (const file of files) {
+      const bytes = await vscode.workspace.fs.readFile(file);
+      layers = await store.add(path.basename(file.fsPath), bytes, x, y);
+    }
+    if (layers) {
+      this.postReferences(panel, layers);
+    }
+  }
+
+  private async sendReferences(panel: vscode.WebviewPanel): Promise<void> {
+    if (this.references) {
+      this.postReferences(panel, await this.references.read());
+    }
+  }
+
+  private postReferences(panel: vscode.WebviewPanel, layers: readonly ReferenceLayer[]): void {
+    if (this.references) {
+      post(panel, { type: 'references', folderUri: panel.webview.asWebviewUri(this.references.folder).toString(), layers });
+    }
+  }
+
+  /** The Layers box pictures, asked last: the three bitmaps are read whole on the server, and the map is already up. */
+  private async sendThumbnails(panel: vscode.WebviewPanel, client: LanguageClient): Promise<void> {
+    if (!this.params || !this.map) {
+      return;
+    }
+    const thumbnails = await request(client, MAP_EDITOR_THUMBNAILS_REQUEST, this.params);
+    post(panel, { type: 'thumbnails', ...thumbnails });
   }
 
   private async terrainPicture(panel: vscode.WebviewPanel, client: LanguageClient, terrain: string): Promise<void> {
@@ -268,11 +349,9 @@ export class MapEditorPanel implements vscode.Disposable {
       return;
     }
     const bmpUri = panel.webview.asWebviewUri(vscode.Uri.file(this.map.provincesBmpPath)).toString();
-    const riversUri =
-      this.map.riversBmpPath === undefined
-        ? undefined
-        : panel.webview.asWebviewUri(vscode.Uri.file(this.map.riversBmpPath)).toString();
-    post(panel, { type: 'map', map: this.map, bmpUri, riversUri });
+    const uriOf = (file: string | undefined): string | undefined =>
+      file === undefined ? undefined : panel.webview.asWebviewUri(vscode.Uri.file(file)).toString();
+    post(panel, { type: 'map', map: this.map, bmpUri, riversUri: uriOf(this.map.riversBmpPath), terrainUri: uriOf(this.map.terrainBmpPath) });
     if (this.reveal) {
       post(panel, { type: 'revealPixel', ...this.reveal });
       this.reveal = undefined;
@@ -432,11 +511,13 @@ function post(panel: vscode.WebviewPanel, message: HostMessage): void {
   void panel.webview.postMessage(message);
 }
 
-/** The map folders the page may fetch bitmaps from: rivers.bmp can come from a lower layer than provinces.bmp. */
+/** The map folders the page may fetch bitmaps from: rivers.bmp and terrain.bmp can come from a lower layer than provinces.bmp. */
 function resourceRootsOf(map: MapEditorMap): vscode.Uri[] {
   const folders = new Set([path.dirname(map.provincesBmpPath)]);
-  if (map.riversBmpPath !== undefined) {
-    folders.add(path.dirname(map.riversBmpPath));
+  for (const file of [map.riversBmpPath, map.terrainBmpPath]) {
+    if (file !== undefined) {
+      folders.add(path.dirname(file));
+    }
   }
   return [...folders].map((folder) => vscode.Uri.file(folder));
 }

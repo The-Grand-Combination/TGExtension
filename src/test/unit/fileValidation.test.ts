@@ -27,6 +27,23 @@ suite('fileValidation — the per-file pipeline', () => {
     assert.deepStrictEqual(validateFileText('1;1;1;1;x;x\n', 'mapDefinition', undefined, 'map/definition.csv'), []);
   });
 
+  test('a path the game cannot read is an error on the file itself', () => {
+    const found = validateFileText('owner = ENG\n', 'historyProvince', index, 'history/provinces/Europe/3532 - São José.txt');
+    const name = found.filter((item) => item.code === 'non-ascii-file-name');
+    assert.deepStrictEqual(
+      name.map((item) => ({ severity: item.severity, range: item.range })),
+      [{ severity: 'error', range: { start: 0, end: 0 } }],
+    );
+    assert.ok(name.some((item) => item.message.includes('ã')), JSON.stringify(name));
+  });
+
+  test('an accented folder is caught too, and a plain ASCII path says nothing', () => {
+    const folder = validateFileText('owner = ENG\n', 'historyProvince', index, 'history/provinces/Ámerica/1 - One.txt');
+    assert.deepStrictEqual(folder.map((item) => item.code), ['non-ascii-file-name']);
+    const clean = validateFileText('owner = ENG\n', 'historyProvince', index, 'history/provinces/Europe/3532 - Sao Jose.txt');
+    assert.deepStrictEqual(clean.map((item) => item.code), []);
+  });
+
   test('routes the map CSVs to the CSV validator', () => {
     const codes = validateFileText(';r;g;b;x;x\n1;1;1;1;One;x\n2;1;1;1;Two;x\n', 'mapDefinition', index, 'map/definition.csv').map(
       (item) => item.code,

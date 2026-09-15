@@ -1,4 +1,5 @@
 import { requestDescriptor } from './request.js';
+import type { ReferenceLayer } from '../services/referenceLayers.js';
 /**
  * The Map Editor: a province map the user clicks on to edit one province's
  * localisation, history file, pops and map positions. Custom LSP requests carry
@@ -14,6 +15,7 @@ export const MAP_EDITOR_POSITIONS_REQUEST = requestDescriptor<MapEditorTargetPar
 export const MAP_EDITOR_COUNTRY_COLORS_REQUEST = requestDescriptor<MapEditorTargetParams, MapCountryColorsResult>('victorianTools/mapEditor/countryColors');
 export const MAP_EDITOR_PAINT_REQUEST = requestDescriptor<PaintParams, PaintResult>('victorianTools/mapEditor/paint');
 export const MAP_EDITOR_NEW_PROVINCE_REQUEST = requestDescriptor<NewProvinceParams, ProvinceResult>('victorianTools/mapEditor/newProvince');
+export const MAP_EDITOR_THUMBNAILS_REQUEST = requestDescriptor<MapEditorTargetParams, MapThumbnails>('victorianTools/mapEditor/thumbnails');
 
 /** `victorianTools.mapEditor.countryColorsTint`: percent of the owner's colour in the Country Colors layer. */
 export const DEFAULT_COUNTRY_COLORS_TINT = 82;
@@ -56,8 +58,9 @@ export interface MapEditorMap {
   readonly targetRoot: string;
   /** `map/provinces.bmp` as the game would load it for the target. */
   readonly provincesBmpPath: string;
-  /** `map/rivers.bmp` as the game would load it, for the Show Rivers layer; undefined when the stack has none. */
+  /** `map/rivers.bmp` and `map/terrain.bmp` as the game would load them, for the Layers box; undefined when the stack has none. */
   readonly riversBmpPath: string | undefined;
+  readonly terrainBmpPath: string | undefined;
   readonly definitions: readonly ProvinceDefinition[];
   readonly seaProvinces: readonly number[];
   /** Start dates found under `history/pops`, earliest first. */
@@ -151,6 +154,8 @@ export interface HistorySection {
   readonly inTarget: boolean;
   /** Undefined when no layer has a history file for the province. */
   readonly data: ProvinceHistory | undefined;
+  /** The subfolder of `history/provinces` holding the file; `''` for one directly in it. */
+  readonly folder: string | undefined;
 }
 
 export interface PopEntry {
@@ -362,6 +367,13 @@ export interface PaintParams extends MapEditorTargetParams {
   readonly runs: readonly number[];
 }
 
+/** PNG data URIs of the three map bitmaps, small enough for the Layers box; a bitmap the stack lacks or cannot decode is absent. */
+export interface MapThumbnails {
+  readonly provinces?: string;
+  readonly rivers?: string;
+  readonly terrain?: string;
+}
+
 export type PaintResult =
   | { readonly ok: true; readonly path: string; readonly pixels: number }
   | { readonly ok: false; readonly reason: string };
@@ -372,7 +384,10 @@ export type PaintResult =
  * compile. (The other direction is validated at runtime, in mapEditorMessages.)
  */
 export type HostMessage =
-  | { readonly type: 'map'; readonly map: MapEditorMap; readonly bmpUri: string; readonly riversUri: string | undefined }
+  | { readonly type: 'map'; readonly map: MapEditorMap; readonly bmpUri: string; readonly riversUri: string | undefined; readonly terrainUri: string | undefined }
+  | ({ readonly type: 'thumbnails' } & MapThumbnails)
+  /** The reference pictures of the target mod; each file is fetched as `folderUri/file`. */
+  | { readonly type: 'references'; readonly folderUri: string; readonly layers: readonly ReferenceLayer[] }
   | ({ readonly type: 'revealPixel' } & MapEditorReveal)
   | { readonly type: 'details'; readonly details: ProvinceDetails }
   | { readonly type: 'positions'; readonly markers: readonly PositionMarker[] }

@@ -1,4 +1,5 @@
 import * as assert from 'node:assert';
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { DEFAULT_CODEPAGE, type Codepage } from '../../io/textCodec.js';
 import type {
@@ -10,7 +11,7 @@ import type {
 import { decodeBmp } from '../../services/bmpDecoder.js';
 import { MapEditorHandlers, type MapEditorHost } from '../../services/mapEditorHandlers.js';
 import { singleRootLayers, type ModLayers } from '../../services/modLayers.js';
-import { encodeBmp24, packRgb } from './bmpFixtures.js';
+import { encodeBmp24, encodeBmp8, grayPalette, packRgb } from './bmpFixtures.js';
 import type { FileLocation } from '../../services/modLayout.js';
 import { buildTestIndex } from './testIndex.js';
 
@@ -18,6 +19,8 @@ const ROOT = '/mods/Test';
 const LAYERS: ModLayers = singleRootLayers(ROOT);
 const TARGET: FileLocation = { root: ROOT, layers: LAYERS };
 const NO_MOD = 'No mod to edit: pick a mod, or open a mod folder in the workspace.';
+/** The pictures the extension ships, read off disk so a broken asset fails the test. */
+const ASSETS = path.join(__dirname, '..', '..', '..', 'assets');
 
 interface Recorder {
   readonly host: MapEditorHost;
@@ -128,6 +131,34 @@ suite('MapEditorHandlers — no mod to edit', () => {
     ]) {
       assert.deepStrictEqual(result, { kind: 'unavailable', reason: NO_MOD });
     }
+  });
+
+  test('a province with no terrain shows the picture shipped for that', async () => {
+    const shipped = fs.readFileSync(path.join(ASSETS, 'no_terrain.dds'));
+    const { host } = recordingHost();
+    const handlers = new MapEditorHandlers({
+      ...host,
+      assetsFolder: ASSETS,
+      readBytes: (absolutePath: string): Promise<Uint8Array | undefined> =>
+        Promise.resolve(absolutePath === path.join(ASSETS, 'no_terrain.dds') ? new Uint8Array(shipped) : undefined),
+    });
+    const result = await handlers.province({ ...targetParams, provinceId: 1, popDate: '1836.1.1' });
+    assert.ok(result.kind === 'details', result.kind === 'unavailable' ? result.reason : '');
+    assert.strictEqual(result.details.terrain.name, undefined, 'the fixture mod has no terrain for the province');
+    assert.ok(result.details.terrain.pictureDataUri?.startsWith('data:image/'), String(result.details.terrain.pictureDataUri));
+  });
+
+  test('the form asks for the same picture when it leaves the province with no terrain', async () => {
+    const shipped = fs.readFileSync(path.join(ASSETS, 'no_terrain.dds'));
+    const { host } = recordingHost();
+    const handlers = new MapEditorHandlers({
+      ...host,
+      assetsFolder: ASSETS,
+      readBytes: (): Promise<Uint8Array | undefined> => Promise.resolve(new Uint8Array(shipped)),
+    });
+    const result = await handlers.terrainPictureFor({ ...targetParams, terrain: '' });
+    assert.strictEqual(result.terrain, '');
+    assert.ok(result.pictureDataUri?.startsWith('data:image/'), String(result.pictureDataUri));
   });
 
   test('a terrain picture request degrades to no picture instead of an error', async () => {
@@ -399,6 +430,24 @@ suite('MapEditorHandlers — creating a province from a painted colour', () => {
     assert.deepStrictEqual(plan.written, real.written);
   });
 
+  test('a name with no ASCII shape is refused, and not one file is written', async () => {
+    const { host, written } = maker();
+    const result = await new MapEditorHandlers(host).save({ ...createParams(false), create: { color: COLOR, isSea: false, name: 'Москва', climate: '', states: [] } });
+    assert.ok(!result.ok);
+    assert.ok(result.reason.includes('plain ASCII'), result.reason);
+    assert.strictEqual(written.size, 0, 'the definition.csv row must not be written either');
+  });
+
+  test('an accented name is kept, folded, in the file it creates', async () => {
+    const { host, written } = maker();
+    const result = await new MapEditorHandlers(host).save({ ...createParams(false), create: { color: COLOR, isSea: false, name: 'São José do Norte', climate: '', states: [] } });
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+    assert.ok(
+      [...written.keys()].some((file) => file.endsWith('3 - Sao Jose do Norte.txt')),
+      [...written.keys()].join(', '),
+    );
+  });
+
   test('a second save of a province already created adds no second row', async () => {
     const { host, written } = maker();
     const handlers = new MapEditorHandlers(host);
@@ -406,6 +455,119 @@ suite('MapEditorHandlers — creating a province from a painted colour', () => {
     const table = written.get(path.join(ROOT, 'map/definition.csv'));
     assert.strictEqual((await handlers.save(createParams(false))).ok, true);
     assert.strictEqual(written.get(path.join(ROOT, 'map/definition.csv')), table);
+  });
+});
+
+suite('MapEditorHandlers — the folder a history file sits in', () => {
+  const GAME = '/game';
+  const CLIMATE = 'harsh_climate = {\n\tmax_attrition = 5\n}\n\nharsh_climate = {\n\t1\n}\n';
+  const REGION = 'ENG_1 = { 1 }\n';
+  const HISTORY = 'owner = ENG\ncontroller = ENG\n';
+  const FROM = 'history/provinces/Europe/1 - One.txt';
+
+  interface Moved {
+    readonly host: MapEditorHost;
+    readonly written: Map<string, string>;
+    /** One `from -> to` per rename the save asked for. */
+    readonly renamed: string[];
+  }
+
+  /**
+   * A mod holding one history file, in `history/provinces/Europe`. `owner`
+   * says which root the file comes from: the target itself, or a layer below it.
+   */
+  function moved(owner: string, layers: ModLayers = LAYERS, renames = true): Moved {
+    const all = new Map<string, string>([
+      [path.join(ROOT, 'map/climate.txt'), CLIMATE],
+      [path.join(ROOT, 'map/region.txt'), REGION],
+      [path.join(owner, FROM), HISTORY],
+    ]);
+    const written = new Map<string, string>();
+    const renamed: string[] = [];
+    const host: MapEditorHost = {
+      targets: (): readonly FileLocation[] => [{ root: ROOT, layers }],
+      modNameOf: (root: string): string => root,
+      ensureIndex: (): Promise<ReturnType<typeof buildTestIndex> | undefined> => Promise.resolve(buildTestIndex()),
+      fileSystem: {
+        fileExists: (absolutePath: string): boolean => all.has(absolutePath) || written.has(absolutePath),
+        listFiles: (): string[] => [],
+        listFilesRecursive: (root: string, relativeFolder: string): string[] =>
+          root === owner && relativeFolder === 'history/provinces' ? [FROM] : [],
+      },
+      readText: (absolutePath: string): Promise<string | undefined> =>
+        Promise.resolve(written.get(absolutePath) ?? all.get(absolutePath)),
+      readBytes: (): Promise<Uint8Array | undefined> => Promise.resolve(undefined),
+      assetsFolder: '/extension/assets',
+      writeText: (absolutePath: string, text: string): Promise<boolean> => {
+        written.set(absolutePath, text);
+        return Promise.resolve(true);
+      },
+      writeBytes: (): Promise<boolean> => Promise.resolve(true),
+      rename: (fromPath: string, toPath: string): Promise<boolean> => {
+        renamed.push(`${fromPath} -> ${toPath}`);
+        return Promise.resolve(renames);
+      },
+      codepage: (): Codepage => DEFAULT_CODEPAGE,
+      historyFolderPattern: (): RegExp | undefined => undefined,
+    };
+    return { host, written, renamed };
+  }
+
+  const save = { ...targetParams, provinceId: 1, popDate: '1836.1.1', section: 'history' as const, data: EMPTY_HISTORY, climate: 'harsh_climate' };
+  const source = path.join(ROOT, FROM);
+  const target = path.join(ROOT, 'history/provinces/Asia/1 - One.txt');
+
+  test('the province says which folder its history file sits in', async () => {
+    const result = await new MapEditorHandlers(moved(ROOT).host).province({ ...targetParams, provinceId: 1, popDate: '1836.1.1' });
+    assert.ok(result.kind === 'details', result.kind === 'unavailable' ? result.reason : '');
+    assert.strictEqual(result.details.history.folder, 'Europe');
+  });
+
+  test('another folder moves the file there, even with nothing else to write', async () => {
+    const { host, written, renamed } = moved(ROOT);
+    const result = await new MapEditorHandlers(host).save({ ...save, data: { ...EMPTY_HISTORY, owner: 'ENG', controller: 'ENG' }, createInFolder: 'Asia' });
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+    assert.deepStrictEqual(renamed, [`${source} -> ${target}`]);
+    assert.strictEqual(written.get(target), HISTORY);
+    assert.deepStrictEqual(result.written, [target]);
+  });
+
+  test('the folder it already sits in leaves the file where it is', async () => {
+    const { host, written, renamed } = moved(ROOT);
+    const result = await new MapEditorHandlers(host).save({ ...save, createInFolder: 'Europe' });
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+    assert.deepStrictEqual(renamed, []);
+    assert.strictEqual(written.get(target), undefined);
+    assert.ok(written.get(source)?.includes('owner') === false, written.get(source));
+  });
+
+  test('a file a layer below owns is copied into the folder the form picked', async () => {
+    const layers: ModLayers = { key: 'game+mod', gameRoot: GAME, roots: [GAME, ROOT], hiddenFolders: [], caseInsensitivePaths: false };
+    const { host, written, renamed } = moved(GAME, layers);
+    const result = await new MapEditorHandlers(host).save({ ...save, data: { ...EMPTY_HISTORY, owner: 'ENG', controller: 'ENG' }, createInFolder: 'Asia' });
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+    assert.deepStrictEqual(renamed, [], 'a file this mod does not own is never moved');
+    assert.strictEqual(written.get(target), HISTORY);
+    assert.strictEqual(written.get(path.join(GAME, FROM)), undefined);
+  });
+
+  test('renaming the file to a name with no ASCII shape is refused, and nothing is written', async () => {
+    const { host, written, renamed } = moved(ROOT);
+    const result = await new MapEditorHandlers(host).save({
+      ...save, createInFolder: 'Europe', localisation: { text: 'Москва', renameHistoryFile: true },
+    });
+    assert.ok(!result.ok);
+    assert.ok(result.reason.includes('plain ASCII'), result.reason);
+    assert.deepStrictEqual(renamed, []);
+    assert.strictEqual(written.size, 0);
+  });
+
+  test('a move the file system refuses is a reason, and the file is not written elsewhere', async () => {
+    const { host, written } = moved(ROOT, LAYERS, false);
+    const result = await new MapEditorHandlers(host).save({ ...save, createInFolder: 'Asia' });
+    assert.ok(!result.ok);
+    assert.ok(result.reason.includes("into 'Asia'"), result.reason);
+    assert.strictEqual(written.get(target), undefined);
   });
 });
 
@@ -610,6 +772,100 @@ suite('MapEditorHandlers — climate and state', () => {
     const result = await new MapEditorHandlers(placed(NEW).host).save(createParams('mild_climate', []));
     assert.ok(!result.ok);
     assert.ok(result.reason.includes('no state'), result.reason);
+  });
+});
+
+suite('MapEditorHandlers — the Layers box thumbnails', () => {
+  const RED = (255 << 16);
+  const BLUE = 255;
+
+  interface Bitmaps {
+    readonly host: MapEditorHost;
+    readonly reads: string[];
+  }
+
+  /** A mod whose map folder holds the bitmaps given, and nothing else. */
+  function bitmaps(files: ReadonlyMap<string, Uint8Array>): Bitmaps {
+    const reads: string[] = [];
+    const host: MapEditorHost = {
+      targets: (): readonly FileLocation[] => [TARGET],
+      modNameOf: (root: string): string => root,
+      ensureIndex: (): Promise<ReturnType<typeof buildTestIndex> | undefined> => Promise.resolve(buildTestIndex()),
+      fileSystem: {
+        fileExists: (absolutePath: string): boolean => files.has(absolutePath),
+        listFiles: (): string[] => [],
+        listFilesRecursive: (): string[] => [],
+      },
+      readText: (): Promise<string | undefined> => Promise.resolve(undefined),
+      readBytes: (absolutePath: string): Promise<Uint8Array | undefined> => {
+        reads.push(absolutePath);
+        return Promise.resolve(files.get(absolutePath));
+      },
+      assetsFolder: '/extension/assets',
+      writeText: (): Promise<boolean> => Promise.resolve(true),
+      writeBytes: (): Promise<boolean> => Promise.resolve(true),
+      rename: (): Promise<boolean> => Promise.resolve(true),
+      codepage: (): Codepage => DEFAULT_CODEPAGE,
+      historyFolderPattern: (): RegExp | undefined => undefined,
+    };
+    return { host, reads };
+  }
+
+  const provincesFile = path.join(ROOT, 'map/provinces.bmp');
+  const riversFile = path.join(ROOT, 'map/rivers.bmp');
+  const terrainFile = path.join(ROOT, 'map/terrain.bmp');
+  const ALL = new Map<string, Uint8Array>([
+    [provincesFile, encodeBmp24(4, 2, [RED, RED, BLUE, BLUE, RED, RED, BLUE, BLUE])],
+    [riversFile, encodeBmp8(4, 2, [255, 2, 255, 254, 255, 255, 255, 254], grayPalette())],
+    [terrainFile, encodeBmp8(4, 2, [0, 0, 5, 5, 0, 0, 5, 5], grayPalette())],
+  ]);
+
+  test('the map says where terrain.bmp is, next to rivers.bmp', async () => {
+    const files = new Map(ALL);
+    files.set(path.join(ROOT, 'map/definition.csv'), new Uint8Array());
+    const { host } = bitmaps(files);
+    const result = await new MapEditorHandlers({
+      ...host,
+      readText: (absolutePath: string): Promise<string | undefined> =>
+        Promise.resolve(absolutePath.endsWith('definition.csv') ? ';r;g;b;x;x\n' : undefined),
+    }).map(targetParams);
+    assert.ok(result.kind === 'ready', result.kind === 'unavailable' ? result.reason : '');
+    assert.strictEqual(result.terrainBmpPath, terrainFile);
+    assert.strictEqual(result.riversBmpPath, riversFile);
+  });
+
+  test('all three bitmaps become PNG data URIs', async () => {
+    const result = await new MapEditorHandlers(bitmaps(ALL).host).thumbnails(targetParams);
+    for (const uri of [result.provinces, result.rivers, result.terrain]) {
+      assert.ok(uri?.startsWith('data:image/png;base64,'), uri);
+    }
+  });
+
+  test('a bitmap the stack lacks is left out, and one that is not 8-bit rivers is too', async () => {
+    const files = new Map(ALL);
+    files.delete(terrainFile);
+    files.set(riversFile, encodeBmp24(4, 2, [RED, RED, BLUE, BLUE, RED, RED, BLUE, BLUE]));
+    const result = await new MapEditorHandlers(bitmaps(files).host).thumbnails(targetParams);
+    assert.ok(result.provinces);
+    assert.strictEqual(result.terrain, undefined);
+    assert.strictEqual(result.rivers, undefined);
+  });
+
+  test('the thumbnails are built once per stack, and again after a paint changes the province map', async () => {
+    const { host, reads } = bitmaps(ALL);
+    const handlers = new MapEditorHandlers(host);
+    await handlers.thumbnails(targetParams);
+    await handlers.thumbnails(targetParams);
+    const before = reads.length;
+    assert.strictEqual(before, 3);
+    assert.strictEqual((await handlers.paint({ ...targetParams, runs: [0, 1, BLUE] })).ok, true);
+    await handlers.thumbnails(targetParams);
+    assert.ok(reads.length > before + 1, String(reads.length));
+  });
+
+  test('no mod to edit is no thumbnails, not an error', async () => {
+    const result = await new MapEditorHandlers(recordingHost([]).host).thumbnails(targetParams);
+    assert.deepStrictEqual(result, {});
   });
 });
 

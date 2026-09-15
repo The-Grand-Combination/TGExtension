@@ -1,4 +1,4 @@
-import type { Diagnostic } from '../model/diagnostic.js';
+import { diagnostic, type Diagnostic } from '../model/diagnostic.js';
 import { CSV_FILE_TYPES, type FileType } from '../model/fileType.js';
 import type { ModIndex } from '../model/modIndex.js';
 import { DEFAULT_VALIDATION_OPTIONS, type ValidationOptions } from '../model/validationOptions.js';
@@ -21,8 +21,33 @@ export function validateFileText(
   relativePath: string | undefined,
   options: ValidationOptions = DEFAULT_VALIDATION_OPTIONS,
 ): Diagnostic[] {
-  return dropIgnoredLines(text, findingsOf(text, fileType, index, relativePath, options), options.ignoreMarker);
+  const found = [...fileNameFindings(relativePath), ...findingsOf(text, fileType, index, relativePath, options)];
+  return dropIgnoredLines(text, found, options.ignoreMarker);
 }
+
+/**
+ * The game reads a path as plain ASCII, so a file or folder named with anything
+ * else is a file it never loads — `history/provinces/3532 - São José.txt` is
+ * simply not there as far as the game is concerned. Reported on the file itself,
+ * at its first character, since the name has no place inside the text.
+ */
+function fileNameFindings(relativePath: string | undefined): Diagnostic[] {
+  const stray = relativePath === undefined ? undefined : NOT_ASCII.exec(relativePath)?.[0];
+  if (stray === undefined) {
+    return [];
+  }
+  return [
+    diagnostic(
+      'error',
+      'non-ascii-file-name',
+      `The path carries '${stray}', which the game cannot read: it loads a file name as plain ASCII. Rename it without that character (an accent folds: 'São' becomes 'Sao').`,
+      { start: 0, end: 0 },
+    ),
+  ];
+}
+
+/** Printable ASCII: every character the game can read out of a path. */
+const NOT_ASCII = /[^\x20-\x7e]/;
 
 function findingsOf(
   text: string,

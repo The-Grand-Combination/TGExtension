@@ -224,7 +224,12 @@ of one goes through while either is missing, and why `modIndex` carries `climate
 save that creates it — the one Save the Definition tab has, which is also the only one that writes
 the localisation and the states — which can also be asked to
 write nothing and answer with the files it would touch, which is what the confirmation modal lists.
-Painting works the same way one level down:
+The reference pictures of the Layers box are the one exception to "everything through the server":
+`providers/referenceStore.ts` copies a dropped picture into the target mod's `map/references/` and
+keeps `references.json` there with `vscode.workspace.fs` — editor data, UTF-8 and raw bytes, that the
+server never reads; `services/referenceLayers.ts` holds the manifest and the frame geometry both
+sides use, and `services/mapThumbnails.ts` samples the three bitmaps for the box's pictures on the
+`victorianTools/mapEditor/thumbnails` request. Painting works the same way one level down:
 `provincePaint.ts` holds the brush, the fill and the run encoding the page and the server share, and
 writes the pixels back into the bitmap's own bytes. Behaviour and rules in
 [map-editor.md](map-editor.md).

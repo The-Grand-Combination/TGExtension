@@ -57,8 +57,10 @@ import {
   MAP_EDITOR_PROVINCE_REQUEST,
   MAP_EDITOR_SAVE_REQUEST,
   MAP_EDITOR_TERRAIN_PICTURE_REQUEST,
+  MAP_EDITOR_THUMBNAILS_REQUEST,
   PROVINCE_FOLDER_FLAGS,
   type MapCountryColorsResult,
+  type MapThumbnails,
   type MapEditorMapResult,
   type MapEditorTargetParams,
   type NewProvinceParams,
@@ -872,6 +874,7 @@ onRequest(MAP_EDITOR_POSITIONS_REQUEST, (params: MapEditorTargetParams): Promise
 onRequest(MAP_EDITOR_COUNTRY_COLORS_REQUEST, (params: MapEditorTargetParams): Promise<MapCountryColorsResult> => mapEditor.countryColors(params));
 onRequest(MAP_EDITOR_TERRAIN_PICTURE_REQUEST, (params: TerrainPictureParams): Promise<TerrainPictureResult> => mapEditor.terrainPictureFor(params));
 onRequest(MAP_EDITOR_NEW_PROVINCE_REQUEST, (params: NewProvinceParams): Promise<ProvinceResult> => mapEditor.newProvince(params));
+onRequest(MAP_EDITOR_THUMBNAILS_REQUEST, (params: MapEditorTargetParams): Promise<MapThumbnails> => mapEditor.thumbnails(params));
 
 onRequest(MAP_EDITOR_PAINT_REQUEST, async (params: PaintParams): Promise<PaintResult> => {
   const result = await mapEditor.paint(params);

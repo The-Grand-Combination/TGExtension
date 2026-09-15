@@ -10,6 +10,15 @@ Codes with a `<category>` placeholder are generated dynamically — one per `Ide
 `unknown-terrain`, `unknown-technology`, `unknown-invention`, `unknown-reformclass`,
 `unknown-reformoption`, `unknown-issue`, `unknown-unit`, `unknown-trait`, `unknown-event-id`.
 
+## File names (`fileValidation.ts`)
+
+Checked on the mod-root-relative path, so it covers the folders as well as the file, and reported
+at the file's first character.
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `non-ascii-file-name` | error | The path carries a character outside printable ASCII. The game loads a file name as plain ASCII, so `history/provinces/3532 - São José.txt` is a file it never reads. The Map Editor folds an accent away when it names a file (`São` becomes `Sao`) and refuses to save a name with no ASCII shape at all — see [map-editor.md](map-editor.md). |
+
 ## Syntax (`parser/lexer.ts`, `parser/parser.ts`)
 
 Always active, even with no mod root found.

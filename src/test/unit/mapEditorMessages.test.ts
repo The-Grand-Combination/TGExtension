@@ -57,6 +57,54 @@ suite('mapEditorMessages', () => {
     assert.strictEqual(asPageMessage({ type: 'paint' }), undefined);
   });
 
+  test('a dropped picture carries its name, its bytes and where it landed', () => {
+    const message = asPageMessage({ type: 'addReference', name: 'old map.png', bytes: 'AAAA', x: 10, y: 20 });
+    assert.deepStrictEqual(message, { type: 'addReference', name: 'old map.png', bytes: 'AAAA', x: 10, y: 20 });
+    assert.strictEqual(asPageMessage({ type: 'addReference', name: 'a.png', bytes: 'AAAA', x: '10', y: 20 }), undefined);
+    assert.strictEqual(asPageMessage({ type: 'addReference', name: 'a.png', x: 10, y: 20 }), undefined);
+  });
+
+  test('a picture dragged from the Explorer carries its URI and the drop point', () => {
+    assert.deepStrictEqual(
+      asPageMessage({ type: 'addReferencePath', uri: 'file:///c:/maps/old.png', x: 1, y: 2 }),
+      { type: 'addReferencePath', uri: 'file:///c:/maps/old.png', x: 1, y: 2 },
+    );
+    assert.strictEqual(asPageMessage({ type: 'addReferencePath', uri: 'file:///c:/maps/old.png' }), undefined);
+  });
+
+  test('the reference list keeps whole entries and drops the rest, corners four pairs and opacity clamped', () => {
+    const message = asPageMessage({
+      type: 'references',
+      layers: [
+        { file: 'a.png', corners: [[0, 0], [4, 0], [4, 2], [0, 2]], opacity: 130 },
+        { file: 'b.png', corners: [[0, 0], [4, 0], [4, 2]], opacity: 50 },
+        { file: 'c.png', corners: [[0, 0], [4, 0], [4, 2], [0, 'x']], opacity: 50 },
+      ],
+    });
+    assert.ok(message?.type === 'references');
+    assert.deepStrictEqual(message.layers, [
+      { file: 'a.png', corners: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 2 }, { x: 0, y: 2 }], opacity: 100 },
+    ]);
+    assert.deepStrictEqual(asPageMessage({ type: 'references' }), { type: 'references', layers: [] });
+  });
+
+  test('the picker is asked for with the point the picture lands on', () => {
+    assert.deepStrictEqual(asPageMessage({ type: 'pickReference', x: 3, y: 4 }), { type: 'pickReference', x: 3, y: 4 });
+    assert.strictEqual(asPageMessage({ type: 'pickReference', x: 3 }), undefined);
+  });
+
+  test('the list the page posts, points as objects, comes through whole', () => {
+    const layers = [{ file: 'a.png', corners: [{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 2 }, { x: 0, y: 2 }], opacity: 60 }];
+    const message = asPageMessage({ type: 'references', layers });
+    assert.ok(message?.type === 'references');
+    assert.deepStrictEqual(message.layers, layers);
+  });
+
+  test('removing a reference names its file', () => {
+    assert.deepStrictEqual(asPageMessage({ type: 'removeReference', file: 'a.png' }), { type: 'removeReference', file: 'a.png' });
+    assert.strictEqual(asPageMessage({ type: 'removeReference' }), undefined);
+  });
+
   test('paintPending carries the count the close warning uses', () => {
     assert.deepStrictEqual(asPageMessage({ type: 'paintPending', pixels: 12 }), { type: 'paintPending', pixels: 12 });
     assert.strictEqual(asPageMessage({ type: 'paintPending', pixels: 'many' }), undefined);
