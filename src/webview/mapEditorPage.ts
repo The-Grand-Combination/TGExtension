@@ -2156,6 +2156,12 @@ function clickAt(point: Point): void {
   details = null;
   draft = null;
   selection = null;
+  headerBox = null;
+  headerTerrainLabel = null;
+  previewTerrain = '';
+  // The panel of the province clicked before this one must go at once: the answer
+  // may take a moment, and may not come at all when the colour cannot be read.
+  showHint('Reading a province for ' + hexOf(color) + '…');
   render();
   setStatus('Reading a province for ' + hexOf(color) + '…');
   vscode.postMessage({ type: 'newProvince', color: color, popDate: popDate });
@@ -2198,8 +2204,9 @@ function clearSelection(): void {
   render();
 }
 
-function showHint(): void {
-  side.replaceChildren(h('p', { class: 'hint' }, 'Click a province on the map to edit it.'));
+/** The side panel holding one line: what to click, or what it is waiting for. */
+function showHint(text = 'Click a province on the map to edit it.'): void {
+  side.replaceChildren(h('p', { class: 'hint' }, text));
 }
 
 function centerOn(id: number): void {
