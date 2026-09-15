@@ -79,8 +79,10 @@ reference pictures dropped in.
 
 A layer at 0% is not even fetched; the first time its slider leaves 0 it is read from wherever the
 stack resolves it (a mod without its own `rivers.bmp` shows the vanilla rivers), decoded once and
-kept until **Reload**. The thumbnails come from the server, which samples the bitmaps rather than
-decoding them whole (`services/mapThumbnails.ts`), after the map is up so they never hold it back.
+kept until **Reload**. A layer's thumbnail is the icon shipped with the extension as
+`assets/<layer>.png` when there is one; a layer without an icon gets its bitmap sampled small on the
+server rather than decoded whole (`services/mapThumbnails.ts`), after the map is up so it never
+holds it back.
 The fixed layers' opacities last the session; a reference's is written with it.
 
 ### Reference pictures

@@ -15,6 +15,7 @@ import {
   type MapEditorMap,
   type MapEditorReveal,
   type MapEditorTargetParams,
+  type MapThumbnails,
   type PageSaveParams,
   type SaveParams,
 } from '../model/mapEditor.js';
@@ -24,6 +25,9 @@ import type { ReferenceLayer } from '../services/referenceLayers.js';
 import { mapEditorHtml, mapEditorNoticeHtml } from './mapEditorHtml.js';
 import { ReferenceStore } from './referenceStore.js';
 import { request } from './request.js';
+
+/** The rows of the Layers box, and the names of the icons `assets/` may hold for them. */
+const LAYER_NAMES = ['provinces', 'rivers', 'terrain'] as const;
 
 /** The messages that touch the reference pictures, and so the one manifest. */
 type ReferenceMessage = Extract<
@@ -304,13 +308,34 @@ export class MapEditorPanel implements vscode.Disposable {
     }
   }
 
-  /** The Layers box pictures: the three bitmaps are read whole on the server, and the map is already up. */
+  /**
+   * The Layers box pictures: the icon shipped in `assets/<layer>.png` for each
+   * layer that has one, and for the rest the bitmap sampled small on the
+   * server — which is only asked for when some layer still needs it.
+   */
   private async sendThumbnails(panel: vscode.WebviewPanel, client: LanguageClient): Promise<void> {
     if (!this.params || !this.map) {
       return;
     }
-    const thumbnails = await request(client, MAP_EDITOR_THUMBNAILS_REQUEST, this.params);
-    post(panel, { type: 'thumbnails', ...thumbnails });
+    const icons = await this.layerIcons(panel);
+    const sampled = LAYER_NAMES.every((layer) => icons[layer] !== undefined)
+      ? {}
+      : await request(client, MAP_EDITOR_THUMBNAILS_REQUEST, this.params);
+    post(panel, { type: 'thumbnails', ...sampled, ...icons });
+  }
+
+  private async layerIcons(panel: vscode.WebviewPanel): Promise<MapThumbnails> {
+    const icons: { provinces?: string; rivers?: string; terrain?: string } = {};
+    for (const layer of LAYER_NAMES) {
+      const file = vscode.Uri.joinPath(this.extensionUri, 'assets', `${layer}.png`);
+      try {
+        await vscode.workspace.fs.stat(file);
+        icons[layer] = panel.webview.asWebviewUri(file).toString();
+      } catch {
+        // No icon for this layer: the sampled bitmap stands in.
+      }
+    }
+    return icons;
   }
 
   private async terrainPicture(panel: vscode.WebviewPanel, client: LanguageClient, terrain: string): Promise<void> {
