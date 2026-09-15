@@ -240,13 +240,14 @@ pops, and its points in `positions.txt`, each with its own Save in the panel.
 
 The panel header shows the province view's terrain picture behind the name: the sprite
 `GFX_terrainimg_<terrain>` of `interface/*.gfx` (the `.dds` twin of a declared `.tga` is accepted,
-as the game does), where the terrain is the history file's `terrain = x` or, failing that, the
-category most of the province's `terrain.bmp` pixels carry through `map/terrain.txt`. Both bitmaps
-are read once per mod stack, when the map opens. Only that terrain's own sprite is shown, never
-another terrain's: a province whose terrain has no sprite keeps a plain header. A province with no
-terrain at all — one being created is one, and so is one whose `terrain = x` you clear while the
-bitmap names none — shows `no_terrain` from the extension's `assets/` instead. A sea province shows
-the ocean: the stack's own
+as the game does), where the terrain is the history file's `terrain = x` — and only that. A province
+whose file names none has no terrain here, however its `terrain.bmp` pixels read, and shows
+`no_terrain` from the extension's `assets/`; a province being created is one such. The heading's
+tooltip still names the category most of its `terrain.bmp` pixels carry through `map/terrain.txt`,
+so the bitmap is one hover away. Both bitmaps are read once per mod stack, when the map opens. Only
+the named terrain's own sprite is shown, never another terrain's: a province whose terrain has no
+sprite keeps a plain header. Clearing the **Terrain** field swaps the picture for `no_terrain` at
+once, before any Save. A sea province shows the ocean: the stack's own
 `gfx/interface/terrain/terrain_ocean` (`.tga` or `.dds`), else the copy shipped in the extension's
 `assets/`. Its `GFX_terrainimg_ocean` sprite is not used, because vanilla declares that one against
 the mountains texture.

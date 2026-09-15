@@ -7,10 +7,12 @@ import type {
   ProvinceHistory,
   ProvincePositions,
   SaveParams,
+  TerrainSection,
 } from '../../model/mapEditor.js';
 import { decodeBmp } from '../../services/bmpDecoder.js';
 import { MapEditorHandlers, type MapEditorHost } from '../../services/mapEditorHandlers.js';
 import { singleRootLayers, type ModLayers } from '../../services/modLayers.js';
+import { TERRAIN_BMP_PALETTE } from '../../data/mapPalettes.js';
 import { encodeBmp24, encodeBmp8, grayPalette, packRgb } from './bmpFixtures.js';
 import type { FileLocation } from '../../services/modLayout.js';
 import { buildTestIndex } from './testIndex.js';
@@ -799,6 +801,63 @@ suite('MapEditorHandlers — climate and state', () => {
     const result = await new MapEditorHandlers(placed(NEW).host).save(createParams('mild_climate', []));
     assert.ok(!result.ok);
     assert.ok(result.reason.includes('no state'), result.reason);
+  });
+});
+
+suite('MapEditorHandlers — the terrain a province shows', () => {
+  const ONE = (10 << 16) | (20 << 8) | 30;
+  const DEFINITION = ';r;g;b;x;x\n1;10;20;30;One;x\n';
+  const TERRAIN_TXT = [
+    'terrain = 64',
+    'categories = { arctic = { color = { 1 2 3 } } farmlands = { color = { 4 5 6 } } }',
+    'text_0 = { type = arctic color = { 0 } priority = 0 }',
+    'text_1 = { type = farmlands color = { 1 } priority = 1 }',
+  ].join('\n');
+  const HISTORY = 'history/provinces/1 - One.txt';
+
+  /** A mod whose terrain.bmp makes farmlands the dominant terrain of province 1. */
+  function terrained(history: string): MapEditorHost {
+    const texts = new Map<string, string>([
+      [path.join(ROOT, 'map/definition.csv'), DEFINITION],
+      [path.join(ROOT, 'map/terrain.txt'), TERRAIN_TXT],
+      [path.join(ROOT, HISTORY), history],
+    ]);
+    const bytes = new Map<string, Uint8Array>([
+      [path.join(ROOT, 'map/provinces.bmp'), encodeBmp24(2, 1, [ONE, ONE])],
+      [path.join(ROOT, 'map/terrain.bmp'), encodeBmp8(2, 1, [1, 1], TERRAIN_BMP_PALETTE)],
+      [path.join(ASSETS, 'no_terrain.dds'), new Uint8Array(fs.readFileSync(path.join(ASSETS, 'no_terrain.dds')))],
+    ]);
+    return {
+      ...recordingHost().host,
+      assetsFolder: ASSETS,
+      fileSystem: {
+        fileExists: (absolutePath: string): boolean => texts.has(absolutePath) || bytes.has(absolutePath),
+        listFiles: (): string[] => [],
+        listFilesRecursive: (_root: string, relativeFolder: string): string[] =>
+          relativeFolder === 'history/provinces' ? [HISTORY] : [],
+      },
+      readText: (absolutePath: string): Promise<string | undefined> => Promise.resolve(texts.get(absolutePath)),
+      readBytes: (absolutePath: string): Promise<Uint8Array | undefined> => Promise.resolve(bytes.get(absolutePath)),
+    };
+  }
+
+  async function terrainOf(history: string): Promise<TerrainSection> {
+    const result = await new MapEditorHandlers(terrained(history)).province({ ...targetParams, provinceId: 1, popDate: '1836.1.1' });
+    assert.ok(result.kind === 'details', result.kind === 'unavailable' ? result.reason : '');
+    return result.details.terrain;
+  }
+
+  test('a history file with no terrain leaves the province without one, whatever terrain.bmp says', async () => {
+    const terrain = await terrainOf('owner = ENG\n');
+    assert.strictEqual(terrain.name, undefined);
+    assert.strictEqual(terrain.dominant, 'farmlands', 'the bitmap category is still reported, as a note');
+    assert.ok(terrain.pictureDataUri?.startsWith('data:image/'), 'the no-terrain picture stands in');
+  });
+
+  test('the terrain the history file names is the one the province has', async () => {
+    const terrain = await terrainOf('owner = ENG\nterrain = arctic\n');
+    assert.strictEqual(terrain.name, 'arctic');
+    assert.strictEqual(terrain.dominant, 'farmlands');
   });
 });
 

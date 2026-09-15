@@ -685,7 +685,7 @@ export class MapEditorHandlers {
     };
   }
 
-  /** The history's `terrain`, else the dominant terrain.bmp category, with that terrain's own picture. */
+  /** The history file's `terrain`, with that terrain's picture; terrain.bmp's category comes along as a note. */
   private async readTerrain(
     target: Target,
     provinceId: number,
@@ -693,19 +693,17 @@ export class MapEditorHandlers {
     isSea: boolean,
   ): Promise<TerrainSection> {
     if (isSea) {
-      return { name: OCEAN_TERRAIN, fromHistory: false, dominant: undefined, pictureDataUri: await this.oceanPicture(target.layers) };
+      return { name: OCEAN_TERRAIN, dominant: undefined, pictureDataUri: await this.oceanPicture(target.layers) };
     }
     const info = await this.terrainInfo(target.layers);
-    const fromHistory = history.data?.terrain;
-    const dominant = info.dominant.get(provinceId);
-    const name = fromHistory ?? dominant;
-    // Only the named terrain's own sprite: another terrain's would read as this
-    // province's. With no terrain at all — a province being created is one — the
-    // picture shipped for that stands in; a terrain whose sprite is missing shows
-    // none, since the province does have a terrain.
+    const name = history.data?.terrain;
+    // The province's terrain is the one its history file names, and the picture is
+    // that terrain's own sprite: another terrain's would read as this province's.
+    // A province the file leaves without one — a province being created is one —
+    // shows the picture shipped for that, whatever terrain.bmp has under it.
     const pictureDataUri =
       name === undefined ? await this.noTerrainPicture() : await this.terrainPicture(target.layers, info, name);
-    return { name, fromHistory: fromHistory !== undefined, dominant, pictureDataUri };
+    return { name, dominant: info.dominant.get(provinceId), pictureDataUri };
   }
 
   /**

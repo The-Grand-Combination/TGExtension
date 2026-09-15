@@ -74,12 +74,12 @@ function terrainLabelOf(terrainName: string): string {
   return entry?.label ?? terrainName;
 }
 
-/** What the heading says on hover: where the row came from, and where edits go. */
-function headingTip(id: number, currentMap: MapEditorMap, terrainLabel: string, fromHistory: boolean): string {
+/** What the heading says on hover: where the row came from, where edits go, and what each terrain source says. */
+function headingTip(id: number, currentMap: MapEditorMap, terrainLabel: string, dominant: string | undefined): string {
   const definitionName = definitionById.get(id)?.name;
   const tip = 'definition.csv: ' + (definitionName ?? '(no row)') + '\nEdits go to ' + currentMap.targetName + '\n' + currentMap.targetRoot;
-  if (terrainLabel === '') { return tip; }
-  return tip + '\nTerrain: ' + terrainLabel + (fromHistory ? ' (from the history file)' : ' (from terrain.bmp)');
+  const terrain = terrainLabel === '' ? '\nTerrain: none in the history file' : '\nTerrain: ' + terrainLabel + ' (from the history file)';
+  return tip + terrain + (dominant === undefined ? '' : '\nterrain.bmp: ' + dominant);
 }
 
 /** The province heading: its name, id, terrain and the picture behind them. */
@@ -88,7 +88,7 @@ function renderHeader(id: number, current: ProvinceDetails | null, currentMap: M
   const terrainName = terrain?.name ?? '';
   const terrainLabel = terrainLabelOf(terrainName);
   headerTerrainLabel = h('span', { class: 'file' }, terrainLabel === '' ? currentMap.targetName : terrainLabel);
-  const heading = h('h1', { title: headingTip(id, currentMap, terrainLabel, terrain?.fromHistory ?? false) },
+  const heading = h('h1', { title: headingTip(id, currentMap, terrainLabel, terrain?.dominant) },
     h('span', { class: 'name' }, headingTitle(id, current)),
     h('span', { class: 'id' }, '- ' + String(id) + ' -'),
     headerTerrainLabel);
@@ -109,20 +109,19 @@ function applyHeaderPicture(uri: string | null | undefined): void {
 }
 
 /**
- * Show the picture of the terrain the form now holds — the bitmap's terrain when
- * the field is cleared, and the no-terrain picture when there is neither.
- * Fetched once per terrain per map.
+ * Show the picture of the terrain the form now holds, and the no-terrain picture
+ * when the field is empty — terrain.bmp is not consulted: what the history file
+ * does not name, the province does not have. Fetched once per terrain per map.
  */
 export function showTerrain(name: string): void {
-  const effective = name === '' ? (state.details?.terrain.dominant ?? '') : name;
-  previewTerrain = effective;
+  previewTerrain = name;
   if (headerTerrainLabel) {
-    const entry = vocabulary().terrains.find(function (item) { return item.id === effective; });
-    const fallback = effective === '' ? (state.map?.targetName ?? '') : effective;
+    const entry = vocabulary().terrains.find(function (item) { return item.id === name; });
+    const fallback = name === '' ? (state.map?.targetName ?? '') : name;
     headerTerrainLabel.textContent = entry ? entry.label : fallback;
   }
-  if (terrainPictures.has(effective)) { applyHeaderPicture(terrainPictures.get(effective)); return; }
-  post({ type: 'terrainPicture', terrain: effective });
+  if (terrainPictures.has(name)) { applyHeaderPicture(terrainPictures.get(name)); return; }
+  post({ type: 'terrainPicture', terrain: name });
 }
 
 /** The extension's answer to `showTerrain`: kept, and shown when it is still the terrain the form holds. */

@@ -238,10 +238,9 @@ export interface Vocabulary {
 }
 
 export interface TerrainSection {
-  /** `terrain = x` from the history file, else the category most terrain.bmp pixels of the province carry. */
+  /** `terrain = x` from the history file; undefined when the file names none. */
   readonly name: string | undefined;
-  readonly fromHistory: boolean;
-  /** The category most terrain.bmp pixels carry: what the province falls back to without `terrain = x`. */
+  /** The category most terrain.bmp pixels of the province carry, shown as a note beside the name. */
   readonly dominant: string | undefined;
   /** PNG data URI of the `GFX_terrainimg_<terrain>` picture, when the stack has one. */
   readonly pictureDataUri: string | undefined;
