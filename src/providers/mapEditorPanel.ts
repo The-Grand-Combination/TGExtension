@@ -9,6 +9,7 @@ import {
   MAP_EDITOR_POSITIONS_REQUEST,
   MAP_EDITOR_PROVINCE_REQUEST,
   MAP_EDITOR_SAVE_REQUEST,
+  MAP_EDITOR_STATE_COLORS_REQUEST,
   MAP_EDITOR_TERRAIN_PICTURE_REQUEST,
   MAP_EDITOR_THUMBNAILS_REQUEST,
   type HostMessage,
@@ -237,6 +238,7 @@ export class MapEditorPanel implements vscode.Disposable {
     await Promise.all([
       this.sendPositions(panel, client),
       this.sendCountryColors(panel, client),
+      this.sendStateColors(panel, client),
       this.sendReferences(panel),
       this.sendThumbnails(panel, client),
     ]);
@@ -370,6 +372,19 @@ export class MapEditorPanel implements vscode.Disposable {
     const result = await request(client, MAP_EDITOR_COUNTRY_COLORS_REQUEST, this.params);
     if (result.kind === 'ready') {
       post(panel, { type: 'countryColors', owners: result.owners, colors: result.colors });
+    } else {
+      client.outputChannel.appendLine(`Map editor: ${result.reason}`);
+    }
+  }
+
+  /** The first state of each province for the State Colors layer; asked with the owners, and again after a history save. */
+  private async sendStateColors(panel: vscode.WebviewPanel, client: LanguageClient): Promise<void> {
+    if (!this.params || !this.map) {
+      return;
+    }
+    const result = await request(client, MAP_EDITOR_STATE_COLORS_REQUEST, this.params);
+    if (result.kind === 'ready') {
+      post(panel, { type: 'stateColors', states: result.states });
     } else {
       client.outputChannel.appendLine(`Map editor: ${result.reason}`);
     }
@@ -578,7 +593,8 @@ export class MapEditorPanel implements vscode.Disposable {
     if (!result.ok) {
       void vscode.window.showErrorMessage(`Victorian Tools: ${result.reason}`);
     } else if (params.section === 'history' && result.written.length > 0) {
-      await this.sendCountryColors(panel, client);
+      // The owner and the states both come from the Definition tab's one Save.
+      await Promise.all([this.sendCountryColors(panel, client), this.sendStateColors(panel, client)]);
     }
   }
 }

@@ -6,7 +6,7 @@ import { mapArea, required, requiredButton, requiredInput, setStatus } from './d
 import { post } from './host.js';
 import { clearSelection } from './input.js';
 import { referenceCount } from './references.js';
-import { definitionById, state, TILE, type DecodedImage, type Point, type Tile, type Tool } from './state.js';
+import { definitionById, state, TILE, TINT_MODES, type DecodedImage, type Point, type Tile, type Tool } from './state.js';
 
 // --- Painting provinces -------------------------------------------------------
 // The pencil and the bucket write into the decoded bitmap and into the tiles it
@@ -215,18 +215,21 @@ function patchTiles(currentImage: DecodedImage, pixels: ReadonlyMap<number, numb
     if (held) { held.push(index); } else { byTile.set(at, [index]); }
   }
   for (const [at, indices] of byTile) {
-    patchTile(currentImage.tiles[at], indices, pixels, currentImage.width, false);
-    if (state.tintedTiles) { patchTile(state.tintedTiles[at], indices, pixels, currentImage.width, true); }
+    patchTile(currentImage.tiles[at], indices, pixels, currentImage.width, null);
+    for (const mode of TINT_MODES) {
+      const tinted = state.tinted[mode];
+      if (tinted) { patchTile(tinted.tiles[at], indices, pixels, currentImage.width, tinted.tintOfColor); }
+    }
   }
 }
 
-/** One tile's painted pixels, written through the one box that holds them all. */
+/** One tile's painted pixels, written through the one box that holds them all; `tints` maps each colour to its repaint. */
 function patchTile(
   tile: Tile | undefined,
   indices: readonly number[],
   pixels: ReadonlyMap<number, number>,
   width: number,
-  tinted: boolean,
+  tints: ReadonlyMap<number, number> | null,
 ): void {
   const context = tile?.canvas.getContext('2d');
   if (!tile || !context) { return; }
@@ -247,7 +250,7 @@ function patchTile(
   const box = context.getImageData(minX, minY, boxWidth, boxHeight);
   for (const index of indices) {
     const own = pixels.get(index) ?? 0;
-    const color = tinted ? (state.tintOfColor?.get(own) ?? own) : own;
+    const color = tints ? (tints.get(own) ?? own) : own;
     const x = (index % width) - tile.x - minX;
     const y = (index - (index % width)) / width - tile.y - minY;
     const out = (y * boxWidth + x) * 4;

@@ -60,6 +60,16 @@ export interface View {
 
 export type Tool = 'hand' | 'reference' | 'pencil' | 'draw' | 'bucket' | 'pick';
 
+/** The two ways the province map can be repainted; both are tints of the same bitmap, so at most one is on. */
+export type TintMode = 'country' | 'state';
+export const TINT_MODES: readonly TintMode[] = ['country', 'state'];
+
+/** The province map repainted one way, and the tint of each province colour, so a painted pixel can be tinted alone. */
+export interface Tinted {
+  readonly tiles: Tile[];
+  readonly tintOfColor: Map<number, number>;
+}
+
 // The Layers box: the three map bitmaps, each at its own opacity. provinces.bmp
 // is what is painted and drawn first; rivers.bmp (8-bit, every index below 254
 // is river, drawn blue over nothing) and terrain.bmp (8-bit, shown through its
@@ -118,15 +128,16 @@ export interface State {
   /** Kind -> the Positions tab inputs, kept in step with a drag. */
   positionInputs: Partial<Record<PositionKind, { x: HTMLInputElement; y: HTMLInputElement }>>;
   showPositions: boolean;
-  // Country Colors tints every province towards its start-date owner's colour;
-  // the pixels the clicks read (image.packed) stay the definition colours.
-  showCountryColors: boolean;
+  // Country Colors tints every province towards its start-date owner's colour,
+  // State Colors towards its first state's; the pixels the clicks read
+  // (image.packed) stay the definition colours.
+  tintMode: TintMode | null;
   countryColors: MapCountryColors | null;
-  /** Tiles of the tinted bitmap, built the first time the layer is shown. */
-  tintedTiles: Tile[] | null;
-  /** Province colour -> its tint, kept from that build so a painted pixel can be tinted on its own. */
-  tintOfColor: Map<number, number> | null;
-  /** Share of the owner's colour (victorianTools.mapEditor.countryColorsTint / 100). */
+  /** Province id (as a JSON key) -> the first state of map/region.txt listing it. */
+  stateOf: Readonly<Record<string, string>> | null;
+  /** Each repaint, built the first time its layer is shown and kept until its data changes. */
+  tinted: Record<TintMode, Tinted | null>;
+  /** Share of the owner's (or the state's) colour (victorianTools.mapEditor.countryColorsTint / 100). */
   tintWeight: number;
   layerOpacity: Record<FixedLayer, number>;
   /** Webview URIs of the two overlays, or null when the stack has none. */
@@ -151,10 +162,10 @@ export const state: State = {
   draftBaseline: null,
   positionInputs: {},
   showPositions: true,
-  showCountryColors: false,
+  tintMode: null,
   countryColors: null,
-  tintedTiles: null,
-  tintOfColor: null,
+  stateOf: null,
+  tinted: { country: null, state: null },
   tintWeight: DEFAULT_COUNTRY_COLORS_TINT / 100,
   layerOpacity: { provinces: 100, rivers: 20, terrain: 0 },
   overlayUri: { rivers: null, terrain: null },

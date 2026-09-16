@@ -659,6 +659,11 @@ suite('MapEditorHandlers — climate and state', () => {
     assert.deepStrictEqual(result.details.state.options.map((item) => item.id), ['ENG_1', 'USA_3']);
   });
 
+  test('the state colours name the first state listing each province', async () => {
+    const result = await new MapEditorHandlers(placed().host).stateColors(targetParams);
+    assert.deepStrictEqual(result, { kind: 'ready', states: { '1': 'ENG_1', '2': 'ENG_1', '7': 'USA_3' } });
+  });
+
   test('a history save moves the province to the climate it carries', async () => {
     const { host, written } = placed();
     const result = await new MapEditorHandlers(host).save({

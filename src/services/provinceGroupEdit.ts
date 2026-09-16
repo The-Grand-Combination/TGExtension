@@ -47,6 +47,20 @@ export function groupsOfProvince(document: Document, provinceId: number): string
   return names;
 }
 
+/** The first group listing each province, in file order: the one the engine puts the province in. */
+export function firstGroupByProvince(document: Document): Map<number, string> {
+  const first = new Map<number, string>();
+  for (const group of groupBlocks(document)) {
+    for (const entry of group.block.entries) {
+      const id = entry.kind === 'scalar' ? Number(entry.value) : NaN;
+      if (Number.isInteger(id) && !first.has(id)) {
+        first.set(id, group.name);
+      }
+    }
+  }
+  return first;
+}
+
 /** Every group the file declares, id lists and modifier blocks alike, without repeats. */
 export function groupNames(document: Document): string[] {
   const names: string[] = [];

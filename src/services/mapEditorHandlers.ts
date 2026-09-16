@@ -10,6 +10,7 @@ import {
   type MapEditorMapResult,
   type MapEditorTargetParams,
   type MapPositionsResult,
+  type MapStateColorsResult,
   type MapThumbnails,
   type NewProvince,
   type NewProvinceParams,
@@ -37,7 +38,7 @@ import { decodeBmp, indicesOf, type BmpImage } from './bmpDecoder.js';
 import { countryColorOf, countryFilesOf, provinceOwnerOf } from './countryColors.js';
 import { namedIdentifiersOf, vocabularyOf } from './mapEditorVocabulary.js';
 import { riversThumbnail, sampledThumbnail, THUMBNAIL_SIZE, thumbnailDataUri } from './mapThumbnails.js';
-import { groupNames, groupOffsetOf, groupsOfProvince, planGroupEdit } from './provinceGroupEdit.js';
+import { firstGroupByProvince, groupNames, groupOffsetOf, groupsOfProvince, planGroupEdit } from './provinceGroupEdit.js';
 import {
   listLayeredFiles,
   listLayeredFilesRecursive,
@@ -614,6 +615,23 @@ export class MapEditorHandlers {
       return { kind: 'unavailable', reason: target };
     }
     return cached(this.countryColorsByLayers, target.layers.key, () => this.readCountryColors(target.layers));
+  }
+
+  /** The first state of `map/region.txt` naming each province, for the page to tint the map by state. */
+  async stateColors(params: MapEditorTargetParams): Promise<MapStateColorsResult> {
+    const target = await this.resolveTarget(params);
+    if (typeof target === 'string') {
+      return { kind: 'unavailable', reason: target };
+    }
+    const file = await this.scriptFile(target.layers, REGION_FILE);
+    if (!file) {
+      return { kind: 'unavailable', reason: 'The picked mods have no map/region.txt.' };
+    }
+    const states: Record<string, string> = {};
+    for (const [id, name] of firstGroupByProvince(file.document)) {
+      states[String(id)] = name;
+    }
+    return { kind: 'ready', states };
   }
 
   /** The picture of one terrain, for the page to preview a terrain the user picked but has not saved. */

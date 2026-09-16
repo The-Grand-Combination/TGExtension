@@ -16,6 +16,7 @@ export const MAP_EDITOR_COUNTRY_COLORS_REQUEST = requestDescriptor<MapEditorTarg
 export const MAP_EDITOR_PAINT_REQUEST = requestDescriptor<PaintParams, PaintResult>('victorianTools/mapEditor/paint');
 export const MAP_EDITOR_NEW_PROVINCE_REQUEST = requestDescriptor<NewProvinceParams, ProvinceResult>('victorianTools/mapEditor/newProvince');
 export const MAP_EDITOR_THUMBNAILS_REQUEST = requestDescriptor<MapEditorTargetParams, MapThumbnails>('victorianTools/mapEditor/thumbnails');
+export const MAP_EDITOR_STATE_COLORS_REQUEST = requestDescriptor<MapEditorTargetParams, MapStateColorsResult>('victorianTools/mapEditor/stateColors');
 
 /** `victorianTools.mapEditor.countryColorsTint`: percent of the owner's colour in the Country Colors layer. */
 export const DEFAULT_COUNTRY_COLORS_TINT = 82;
@@ -368,6 +369,18 @@ export interface MapCountryColors {
 
 export type MapCountryColorsResult = MapCountryColors | { readonly kind: 'unavailable'; readonly reason: string };
 
+/**
+ * What the page needs to tint provinces by state: the first `map/region.txt`
+ * block naming each province (ids as strings, JSON keys). The colours are the
+ * page's, hashed from the names (`stateColors.ts`).
+ */
+export interface MapStateColors {
+  readonly kind: 'ready';
+  readonly states: Readonly<Record<string, string>>;
+}
+
+export type MapStateColorsResult = MapStateColors | { readonly kind: 'unavailable'; readonly reason: string };
+
 export interface PaintParams extends MapEditorTargetParams {
   /** Painted pixels as `index, length, colour` triples; see `provincePaint.runsOf`. */
   readonly runs: readonly number[];
@@ -399,6 +412,7 @@ export type HostMessage =
   | { readonly type: 'positions'; readonly markers: readonly PositionMarker[] }
   | { readonly type: 'settings'; readonly countryColorsTint: number; readonly paintUndoSteps: number }
   | { readonly type: 'countryColors'; readonly owners: Readonly<Record<string, string>>; readonly colors: Readonly<Record<string, Rgb>> }
+  | { readonly type: 'stateColors'; readonly states: Readonly<Record<string, string>> }
   | { readonly type: 'saved'; readonly result: SaveResult }
   | { readonly type: 'painted'; readonly result: PaintResult }
   | { readonly type: 'savedAll'; readonly written: readonly number[]; readonly failed: readonly { readonly provinceId: number; readonly reason: string }[] }

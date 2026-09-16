@@ -205,11 +205,12 @@ closes. A finding with no pixel gets no link.
 
 The side bar action **Map Editor** (`victorian-tools.openMapEditor`,
 `commands/openMapEditorCommand.ts`) uses the same mod dialog and target resolution, then opens a
-webview tab (`providers/mapEditorPanel.ts` + `mapEditorHtml.ts`). Nine requests
+webview tab (`providers/mapEditorPanel.ts` + `mapEditorHtml.ts`). Ten requests
 ([model/mapEditor.ts](../src/model/mapEditor.ts), handled by
 [services/mapEditorHandlers.ts](../src/services/mapEditorHandlers.ts)) carry the map description, the
 `map/positions.txt` points drawn over it, the start-date owners and country colours behind the
-Country Colors layer, one province's localisation/history/pops/positions, one section's save, and
+Country Colors layer, the first state of each province behind State Colors (coloured on the page by a
+hash of the state's name, `services/stateColors.ts`), one province's localisation/history/pops/positions, one section's save, and
 the pixels painted on the map;
 the page fetches and decodes `provinces.bmp` (and, for the Show Rivers layer, `rivers.bmp`) itself
 and tints it by owner in the browser. Saves are text patches

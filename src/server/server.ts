@@ -50,6 +50,7 @@ import {
 } from '../model/fullReport.js';
 import {
   MAP_EDITOR_COUNTRY_COLORS_REQUEST,
+  MAP_EDITOR_STATE_COLORS_REQUEST,
   MAP_EDITOR_MAP_REQUEST,
   MAP_EDITOR_NEW_PROVINCE_REQUEST,
   MAP_EDITOR_PAINT_REQUEST,
@@ -60,6 +61,7 @@ import {
   MAP_EDITOR_THUMBNAILS_REQUEST,
   PROVINCE_FOLDER_FLAGS,
   type MapCountryColorsResult,
+  type MapStateColorsResult,
   type MapThumbnails,
   type MapEditorMapResult,
   type MapEditorTargetParams,
@@ -872,6 +874,7 @@ onRequest(MAP_EDITOR_MAP_REQUEST, (params: MapEditorTargetParams): Promise<MapEd
 onRequest(MAP_EDITOR_PROVINCE_REQUEST, (params: ProvinceRequestParams): Promise<ProvinceResult> => mapEditor.province(params));
 onRequest(MAP_EDITOR_POSITIONS_REQUEST, (params: MapEditorTargetParams): Promise<MapPositionsResult> => mapEditor.positions(params));
 onRequest(MAP_EDITOR_COUNTRY_COLORS_REQUEST, (params: MapEditorTargetParams): Promise<MapCountryColorsResult> => mapEditor.countryColors(params));
+onRequest(MAP_EDITOR_STATE_COLORS_REQUEST, (params: MapEditorTargetParams): Promise<MapStateColorsResult> => mapEditor.stateColors(params));
 onRequest(MAP_EDITOR_TERRAIN_PICTURE_REQUEST, (params: TerrainPictureParams): Promise<TerrainPictureResult> => mapEditor.terrainPictureFor(params));
 onRequest(MAP_EDITOR_NEW_PROVINCE_REQUEST, (params: NewProvinceParams): Promise<ProvinceResult> => mapEditor.newProvince(params));
 onRequest(MAP_EDITOR_THUMBNAILS_REQUEST, (params: MapEditorTargetParams): Promise<MapThumbnails> => mapEditor.thumbnails(params));

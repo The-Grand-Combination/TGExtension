@@ -123,11 +123,13 @@ suite('mapEditorMessages', () => {
   test('a save that creates a province carries the colour, the sea tick and the name', () => {
     const message = asPageMessage({
       type: 'save',
-      section: 'positions',
-      data: {},
-      provinceId: 9,
-      popDate: '1836.1.1',
-      create: { color: 255, isSea: true, name: 'Nova', climate: 'arid_climate', states: ['ENG_1', 7] },
+      params: {
+        section: 'positions',
+        data: {},
+        provinceId: 9,
+        popDate: '1836.1.1',
+        create: { color: 255, isSea: true, name: 'Nova', climate: 'arid_climate', states: ['ENG_1', 7] },
+      },
     });
     assert.ok(message?.type === 'save');
     assert.deepStrictEqual(message.params.create, {
@@ -135,22 +137,29 @@ suite('mapEditorMessages', () => {
     });
   });
 
+  test('a save with its fields at the top level, not under params, is not a save', () => {
+    assert.strictEqual(asPageMessage({ type: 'save', section: 'pops', pops: [], provinceId: 9, popDate: '1836.1.1' }), undefined);
+  });
+
   test('a save carries no target: the extension adds the picked mods, which the page never knows', () => {
-    const message = asPageMessage({ type: 'save', section: 'pops', pops: [], provinceId: 9, popDate: '1836.1.1' });
+    const message = asPageMessage({ type: 'save', params: { section: 'pops', pops: [], provinceId: 9, popDate: '1836.1.1' } });
     assert.ok(message?.type === 'save');
     assert.ok(!('mods' in message.params) && !('workspaceFolders' in message.params));
   });
 
   test('the states ride with the history section, and nothing that is not a name is kept', () => {
     const message = asPageMessage({
-      type: 'save', section: 'history', data: {}, states: ['ENG_1', 3, null], provinceId: 9, popDate: '1836.1.1',
+      type: 'save',
+      params: {
+        section: 'history', data: {}, states: ['ENG_1', 3, null], provinceId: 9, popDate: '1836.1.1',
+      },
     });
     assert.ok(message?.type === 'save' && message.params.section === 'history');
     assert.deepStrictEqual(message.params.states, ['ENG_1']);
   });
 
   test('a history save without states or a localisation carries neither, so neither is written', () => {
-    const message = asPageMessage({ type: 'save', section: 'history', data: {}, provinceId: 9, popDate: '1836.1.1' });
+    const message = asPageMessage({ type: 'save', params: { section: 'history', data: {}, provinceId: 9, popDate: '1836.1.1' } });
     assert.ok(message?.type === 'save' && message.params.section === 'history');
     assert.strictEqual(message.params.states, undefined);
     assert.strictEqual(message.params.localisation, undefined);
@@ -158,16 +167,19 @@ suite('mapEditorMessages', () => {
 
   test('the localisation the Definition Save carries is taken whole', () => {
     const message = asPageMessage({
-      type: 'save', section: 'history', data: {}, provinceId: 9, popDate: '1836.1.1',
-      localisation: { text: 'Nova', renameHistoryFile: true },
+      type: 'save',
+      params: {
+        section: 'history', data: {}, provinceId: 9, popDate: '1836.1.1',
+        localisation: { text: 'Nova', renameHistoryFile: true },
+      },
     });
     assert.ok(message?.type === 'save' && message.params.section === 'history');
     assert.deepStrictEqual(message.params.localisation, { text: 'Nova', renameHistoryFile: true });
   });
 
   test('a history save carries the climate, and a missing one counts as cleared', () => {
-    const base = { type: 'save', section: 'history', data: {}, provinceId: 9, popDate: '1836.1.1' };
-    const withClimate = asPageMessage({ ...base, climate: 'mild_climate' });
+    const base = { type: 'save', params: { section: 'history', data: {}, provinceId: 9, popDate: '1836.1.1' } };
+    const withClimate = asPageMessage({ ...base, params: { ...base.params, climate: 'mild_climate' } });
     assert.ok(withClimate?.type === 'save' && withClimate.params.section === 'history');
     assert.strictEqual(withClimate.params.climate, 'mild_climate');
     const without = asPageMessage(base);
@@ -178,11 +190,13 @@ suite('mapEditorMessages', () => {
   test('a creation without a whole colour is no creation: the save goes out on its own', () => {
     const message = asPageMessage({
       type: 'save',
-      section: 'positions',
-      data: {},
-      provinceId: 9,
-      popDate: '1836.1.1',
-      create: { isSea: true, name: 'Nova' },
+      params: {
+        section: 'positions',
+        data: {},
+        provinceId: 9,
+        popDate: '1836.1.1',
+        create: { isSea: true, name: 'Nova' },
+      },
     });
     assert.ok(message?.type === 'save');
     assert.strictEqual(message.params.create, undefined);

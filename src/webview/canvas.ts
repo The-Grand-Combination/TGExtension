@@ -35,7 +35,8 @@ export function render(): void {
   const right = left + mapArea.clientWidth / view.scale;
   const bottom = top + mapArea.clientHeight / view.scale;
   ctx.globalAlpha = state.layerOpacity.provinces / 100;
-  drawTiles(state.showCountryColors && state.tintedTiles ? state.tintedTiles : image.tiles, left, top, right, bottom);
+  const tinted = state.tintMode === null ? null : state.tinted[state.tintMode];
+  drawTiles(tinted ? tinted.tiles : image.tiles, left, top, right, bottom);
   for (const kind of OVERLAYS) {
     const tiles = state.overlayTiles[kind];
     if (!tiles || state.layerOpacity[kind] <= 0) { continue; }

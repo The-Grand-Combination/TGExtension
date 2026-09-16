@@ -159,9 +159,11 @@ function asPending(value: unknown): PendingPositions | undefined {
     : undefined;
 }
 
-function asSave(record: UnknownRecord): PageMessage | undefined {
-  const section = asSection(record);
-  if (!section || typeof record['provinceId'] !== 'number' || typeof record['popDate'] !== 'string') {
+/** The save's fields ride under `params`, as the page posts them; `section` is the section's own discriminant. */
+function asSave(message: UnknownRecord): PageMessage | undefined {
+  const record = asRecord(message['params']);
+  const section = record ? asSection(record) : undefined;
+  if (!record || !section || typeof record['provinceId'] !== 'number' || typeof record['popDate'] !== 'string') {
     return undefined;
   }
   const create = asCreate(record['create']);

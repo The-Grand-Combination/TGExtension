@@ -78,6 +78,7 @@ ${PAGE_STYLE}
         </div>
         <div id="layers">
           <label><input type="checkbox" id="layerCountry"> Country Colors</label>
+          <label><input type="checkbox" id="layerState" title="Every province in the colour of the first map/region.txt state listing it"> State Colors</label>
           <label><input type="checkbox" id="layerPositions" checked> Positions</label>
           <div class="actions">
             <button id="fitButton" class="secondary" title="Fit the whole map in the view">Fit</button>

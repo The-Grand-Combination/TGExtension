@@ -133,6 +133,13 @@ and the mod files) buttons:
   `victorianTools.mapEditor.countryColorsTint` setting (default 82%, a slider in the **Victorian
   Tools Settings** tab), and the map repaints when it changes. Sea provinces get a light
   blue, and provinces with no owner, `owner = ---`, or an owner without a definition file get grey.
+- **State Colors** (off by default) repaints every province towards the colour of its state: the
+  **first** `map/region.txt` block that lists it, which is the one the engine puts it in. States have
+  no colour of their own, so each gets one hashed from its name — the same colour in every session,
+  through any amount of map editing, and the same for a state of the same name in another mod. The
+  mix, the sea and the grey for a province in no state follow Country Colors, and the two are the
+  same kind of repaint, so ticking one unticks the other. A Definition Save that moves a province to
+  another state repaints it at once.
   The layer is only paint: clicks, the tooltip, selection and drags keep reading the original pixels.
 
 ## Painting provinces

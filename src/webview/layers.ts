@@ -1,4 +1,5 @@
-import type { MapCountryColors, ProvinceDefinition } from '../model/mapEditor.js';
+import type { ProvinceDefinition, Rgb } from '../model/mapEditor.js';
+import { stateColorOf } from '../services/stateColors.js';
 import { buildTiles, decodeProvincesBmp, decodeRiversBmp, decodeTerrainBmp, fetchBitmap } from './bitmaps.js';
 import { fitView, render } from './canvas.js';
 import { h, hideLoading, loading, required, requiredInput, setStatus, showLoading } from './dom.js';
@@ -6,7 +7,7 @@ import { sliderInput, type Field, type SliderRange } from './fields.js';
 import { log, messageOf } from './host.js';
 import { applyReveal } from './input.js';
 import { placeReferences } from './references.js';
-import { definitionById, FIXED_LAYERS, OVERLAYS, SEA_TINT, seaIds, state, UNOWNED_TINT, type FixedLayer, type Overlay } from './state.js';
+import { definitionById, FIXED_LAYERS, OVERLAYS, SEA_TINT, seaIds, state, TINT_MODES, UNOWNED_TINT, type FixedLayer, type Overlay, type TintMode } from './state.js';
 
 /**
  * The map's own layers: provinces.bmp, which everything else sits on, the two
@@ -26,8 +27,8 @@ export interface LayerRow {
 
 const layerRows = new Map<FixedLayer, LayerRow>();
 const fixedLayersBox = required('fixedLayers');
-const layerCountry = requiredInput('layerCountry');
 const layerPositions = requiredInput('layerPositions');
+const tintBoxes: Record<TintMode, HTMLInputElement> = { country: requiredInput('layerCountry'), state: requiredInput('layerState') };
 
 /** One row of the box: thumbnail, name, and the opacity slider under them. */
 export function layerRow(name: string, opacity: number, onOpacity: (value: number) => void): LayerRow {
@@ -93,7 +94,7 @@ export function loadProvinces(bmpUri: string): void {
         hideLoading();
         fitView();
         render();
-        if (state.showCountryColors && state.countryColors) { buildTintedTiles(); }
+        if (state.tintMode) { buildTintedTiles(state.tintMode); }
         for (const kind of OVERLAYS) { if (state.layerOpacity[kind] > 0) { loadOverlay(kind); } }
         placeReferences();
         setStatus(String(decoded.width) + ' x ' + String(decoded.height) + ', ' + String(definitionById.size) + ' provinces');
@@ -140,14 +141,23 @@ function loadOverlay(kind: Overlay): void {
     });
 }
 
-/** One tint per province colour: the owner's colour with a share of the province's own, so neighbours still differ. */
-function tintByPacked(definitions: readonly ProvinceDefinition[], colors: MapCountryColors): Map<number, number> {
+/** The colour a province is repainted towards, or undefined for grey: its owner's, or its first state's. */
+function baseColorOf(mode: TintMode, definition: ProvinceDefinition): Rgb | undefined {
+  const id = String(definition.id);
+  if (mode === 'country') {
+    const tag = state.countryColors?.owners[id];
+    return tag === undefined ? undefined : state.countryColors?.colors[tag];
+  }
+  const name = state.stateOf?.[id];
+  return name === undefined ? undefined : stateColorOf(name);
+}
+
+/** One tint per province colour: the base colour with a share of the province's own, so neighbours still differ. */
+function tintByPacked(mode: TintMode, definitions: readonly ProvinceDefinition[]): Map<number, number> {
   const tints = new Map<number, number>();
   const weight = state.tintWeight;
   for (const definition of definitions) {
-    const tag = colors.owners[String(definition.id)];
-    const owned = tag === undefined ? undefined : colors.colors[tag];
-    const base = seaIds.has(definition.id) ? SEA_TINT : (owned ?? UNOWNED_TINT);
+    const base = seaIds.has(definition.id) ? SEA_TINT : (baseColorOf(mode, definition) ?? UNOWNED_TINT);
     const own = definition.color;
     const red = Math.round(weight * base[0] + (1 - weight) * ((own >> 16) & 255));
     const green = Math.round(weight * base[1] + (1 - weight) * ((own >> 8) & 255));
@@ -157,15 +167,19 @@ function tintByPacked(definitions: readonly ProvinceDefinition[], colors: MapCou
   return tints;
 }
 
-/** Repaint the whole bitmap by owner and cut it into tiles; drawn instead of image.tiles while the layer is on. */
-export function buildTintedTiles(): void {
+/** True once the data a repaint needs has arrived. */
+function tintReady(mode: TintMode): boolean {
+  return mode === 'country' ? state.countryColors !== null : state.stateOf !== null;
+}
+
+/** Repaint the whole bitmap one way and cut it into tiles; drawn instead of image.tiles while that layer is on. */
+export function buildTintedTiles(mode: TintMode): void {
   const forImage = state.image;
-  if (!forImage || !state.countryColors || !state.map) { return; }
+  if (!forImage || !state.map || !tintReady(mode)) { return; }
   const packed = forImage.packed;
   const count = packed.length;
   const rgba = new Uint8ClampedArray(new ArrayBuffer(count * 4));
-  const tints = tintByPacked(state.map.definitions, state.countryColors);
-  state.tintOfColor = tints;
+  const tints = tintByPacked(mode, state.map.definitions);
   let lastColor = -1;
   let lastTint = -1;
   for (let index = 0, out = 0; index < count; index++, out += 4) {
@@ -178,25 +192,39 @@ export function buildTintedTiles(): void {
   }
   buildTiles(rgba, forImage.width, forImage.height, 'Tinting').then(function (tiles) {
     if (state.image !== forImage) { return; }
-    state.tintedTiles = tiles;
+    state.tinted[mode] = { tiles: tiles, tintOfColor: tints };
     hideLoading();
     render();
   }).catch(function (error: unknown) { showLoading('Could not tint the map: ' + messageOf(error)); });
 }
 
-/** A new Country Colors tint: the tinted bitmap has to be built again. */
+/** The data behind one repaint changed: it is built again, now if it is the one on screen. */
+export function refreshTint(mode: TintMode): void {
+  state.tinted[mode] = null;
+  if (state.tintMode === mode) { buildTintedTiles(mode); }
+}
+
+/** A new Country Colors tint: both repaints have to be built again. */
 export function applyTint(percent: number): void {
   const weight = Math.min(100, Math.max(0, percent)) / 100;
   if (!isFinite(weight) || weight === state.tintWeight) { return; }
   state.tintWeight = weight;
-  state.tintedTiles = null;
-  if (state.showCountryColors) { buildTintedTiles(); }
+  for (const mode of TINT_MODES) { refreshTint(mode); }
   render();
 }
 
-/** A new map: the overlays and the tint start over. */
+/** One repaint at a time: ticking one box unticks the other. */
+function setTintMode(mode: TintMode | null): void {
+  state.tintMode = mode;
+  for (const each of TINT_MODES) { tintBoxes[each].checked = each === mode; }
+  if (mode && !state.tinted[mode]) { buildTintedTiles(mode); }
+  render();
+}
+
+/** A new map: the overlays and the repaints start over. */
 export function resetLayers(riversUri: string | undefined, terrainUri: string | undefined): void {
-  state.countryColors = null; state.tintedTiles = null; state.tintOfColor = null;
+  state.countryColors = null; state.stateOf = null;
+  for (const mode of TINT_MODES) { state.tinted[mode] = null; }
   state.overlayUri.rivers = riversUri ?? null; state.overlayUri.terrain = terrainUri ?? null;
   for (const kind of OVERLAYS) { state.overlayTiles[kind] = null; state.overlayLoading[kind] = false; }
   syncLayerRows();
@@ -204,10 +232,8 @@ export function resetLayers(riversUri: string | undefined, terrainUri: string | 
 
 export function initLayers(): void {
   layerPositions.addEventListener('change', function () { state.showPositions = layerPositions.checked; render(); });
-  layerCountry.addEventListener('change', function () {
-    state.showCountryColors = layerCountry.checked;
-    if (state.showCountryColors && !state.tintedTiles) { buildTintedTiles(); }
-    render();
-  });
+  for (const mode of TINT_MODES) {
+    tintBoxes[mode].addEventListener('change', function () { setTintMode(tintBoxes[mode].checked ? mode : null); });
+  }
   buildFixedRows();
 }

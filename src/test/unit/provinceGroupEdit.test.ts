@@ -1,5 +1,5 @@
 import * as assert from 'node:assert';
-import { groupNames, groupsOfProvince, isProvinceList, planGroupEdit } from '../../services/provinceGroupEdit.js';
+import { firstGroupByProvince, groupNames, groupsOfProvince, isProvinceList, planGroupEdit } from '../../services/provinceGroupEdit.js';
 import { applyPatches } from '../../services/textPatch.js';
 import { parseDocument } from '../../services/syntaxValidation.js';
 
@@ -31,6 +31,11 @@ function edit(text: string, provinceId: number, groups: readonly string[]): stri
 }
 
 suite('provinceGroupEdit', () => {
+  test('a province listed by two groups belongs to the first, the way the engine reads it', () => {
+    const document = parseDocument('ENG_1 = { 1 2 }\nUSA_3 = { 2 7 }\nharsh = { farm_rgo_size = 0 }\n').document;
+    assert.deepStrictEqual([...firstGroupByProvince(document)], [[1, 'ENG_1'], [2, 'ENG_1'], [7, 'USA_3']]);
+  });
+
   test('a modifier block is not an id list, so it never claims a province', () => {
     const document = parseDocument(CLIMATE).document;
     assert.deepStrictEqual(groupsOfProvince(document, 8), ['harsh_climate']);

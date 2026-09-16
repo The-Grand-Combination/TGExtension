@@ -3,7 +3,7 @@ import { highlightOf, render } from './canvas.js';
 import { saveAllButton, setStatus, showLoading, targetBox } from './dom.js';
 import { messageOf } from './host.js';
 import { applyReveal, clearSelectionState } from './input.js';
-import { applyThumbnails, applyTint, buildTintedTiles, loadProvinces, resetLayers } from './layers.js';
+import { applyThumbnails, applyTint, loadProvinces, refreshTint, resetLayers } from './layers.js';
 import { applyUndoLimit, handlePainted, resetPaint, setTool } from './paint.js';
 import { carryForms, failureText, fileNames, finishSave, renderSide, resetPanel, savingParts, showHint, handleTerrainPicture } from './panel/panel.js';
 import { asPositions, capturePending, clonePoints, refreshPending, replaceMarkers } from './positions.js';
@@ -65,8 +65,11 @@ function handleMessage(message: HostMessage): void {
       return;
     case 'countryColors':
       state.countryColors = { kind: 'ready', owners: message.owners, colors: message.colors };
-      state.tintedTiles = null;
-      if (state.showCountryColors) { buildTintedTiles(); }
+      refreshTint('country');
+      return;
+    case 'stateColors':
+      state.stateOf = message.states;
+      refreshTint('state');
       return;
     case 'saved':
       handleSaved(message.result);
