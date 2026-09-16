@@ -129,16 +129,16 @@ suite('provincePositionsEdit', () => {
   });
 
   test('lists where each province name is drawn, filling in what the block leaves out', () => {
-    assert.deepStrictEqual(provinceLabelsOf(parseDocument(FILE).document), [
-      { id: 1, x: 643.71, y: 2491.466667, rotation: 5.544018, scale: 6 },
+    assert.deepStrictEqual(provinceLabelsOf(parseDocument(FILE).document, (id) => 'PROV' + String(id)), [
+      { id: 1, name: 'PROV1', x: 643.71, y: 2491.466667, rotation: 5.544018, scale: 6 },
     ]);
     // No angle and no size is the game's own default: upright, and the size of one unit.
     const bare = FILE.replace('    text_rotation = 5.544018\r\n    text_scale = 6\r\n', '');
-    assert.deepStrictEqual(provinceLabelsOf(parseDocument(bare).document), [
-      { id: 1, x: 643.71, y: 2491.466667, rotation: 0, scale: 1 },
+    assert.deepStrictEqual(provinceLabelsOf(parseDocument(bare).document, () => ''), [
+      { id: 1, name: '', x: 643.71, y: 2491.466667, rotation: 0, scale: 1 },
     ]);
     // A block with an angle but no point has nowhere to draw a name.
-    assert.deepStrictEqual(provinceLabelsOf(parseDocument(VANILLA).document), []);
+    assert.deepStrictEqual(provinceLabelsOf(parseDocument(VANILLA).document, () => ''), []);
   });
 
   test('compares and formats coordinates as numbers', () => {

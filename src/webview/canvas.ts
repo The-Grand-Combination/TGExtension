@@ -222,9 +222,10 @@ export function boxOfHighlight(found: Highlight): PixelBox {
 }
 
 /**
- * Where to put a point that should sit "in" the province: its centre of mass,
- * moved to the nearest pixel the province owns, because a crescent-shaped one
- * has its centre outside itself. A map place, y up from the bottom.
+ * Where to put a point that should sit "in" the province: near its centre of
+ * mass, a little off it at random, moved to the nearest pixel the province
+ * owns, because a crescent-shaped one has its centre outside itself. A map
+ * place, y up from the bottom.
  */
 export function selectionCenter(): { x: number; y: number } | null {
   const current = state.selection;
@@ -243,15 +244,20 @@ export function selectionCenter(): { x: number; y: number } | null {
     }
   }
   if (count === 0) { return null; }
-  const meanX = sumX / count;
-  const meanY = sumY / count;
+  // A little scatter around the centre of mass, so points dropped one after
+  // another do not land on the same pixel; how much grows with the province.
+  const reach = Math.max(1, Math.sqrt(count) * 0.2);
+  const angle = Math.random() * 2 * Math.PI;
+  const distanceOut = Math.random() * reach;
+  const targetX = sumX / count + Math.cos(angle) * distanceOut;
+  const targetY = sumY / count + Math.sin(angle) * distanceOut;
   let best: { x: number; y: number } | null = null;
   let bestDistance = Infinity;
   for (let y = current.y; y < current.y + current.height; y++) {
     const row = y * width;
     for (let x = current.x; x < current.x + current.width; x++) {
       if (packed[row + x] !== color) { continue; }
-      const distance = (x - meanX) * (x - meanX) + (y - meanY) * (y - meanY);
+      const distance = (x - targetX) * (x - targetX) + (y - targetY) * (y - targetY);
       if (distance < bestDistance) { bestDistance = distance; best = { x: x + 0.5, y: currentImage.height - y - 0.5 }; }
     }
   }

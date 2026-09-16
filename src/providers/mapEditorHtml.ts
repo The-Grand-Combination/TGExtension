@@ -359,10 +359,12 @@ const PAGE_STYLE = String.raw`
   .pos-row .pos-label { flex: 0 0 78px; opacity: 0.85; margin-left: 4px; }
   .pos-row input { flex: 1; min-width: 0; width: auto; }
   .pos-head { padding-left: 96px; }
-  /* The name's angle and size belong to the Text point: same columns, no swatch of its own. */
-  .label-row .swatch { visibility: hidden; }
-  .label-row .sub { flex: none; opacity: 0.75; }
-  .label-row .deg { flex: 0 0 52px; font-style: italic; opacity: 0.6; }
+  /* The name's angle and size sit under the Name row, set in past where its dot is, with no dot of their own. */
+  .name-row { padding-left: 18px; }
+  .name-row .pos-label { flex: 0 0 96px; margin-left: 0; }
+  /* One number each: the same short box on both rows, the degrees taking the room the angle's leaves. */
+  .name-row input { flex: 0 0 88px; }
+  .name-row .deg { flex: 0 0 52px; font-style: italic; opacity: 0.6; }
   label.check { display: flex; gap: 6px; align-items: center; opacity: 0.9; margin-top: 2px; position: relative; top: 2px; }
   .tabs { display: flex; flex-wrap: wrap; gap: 2px; margin: 10px 0 4px; border-bottom: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, #444)); }
   .tabs button { background: transparent; color: var(--vscode-foreground); opacity: 0.7; border-radius: 0; padding: 6px 10px; border-bottom: 2px solid transparent; }

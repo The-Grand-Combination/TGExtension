@@ -33,7 +33,7 @@ export function positionsSection(current: ProvinceDetails): HTMLElement {
     const swatch = h('span', { class: 'swatch', title: spec.label });
     swatch.style.background = spec.color;
     const clear = removeButton('Clear ' + spec.label, function () { x.value = ''; y.value = ''; changed(); });
-    const center = h('button', { class: 'glyph center', title: 'Put ' + spec.label + ' in the middle of the province', 'aria-label': 'Center ' + spec.label, onclick: function () {
+    const center = h('button', { class: 'glyph center', title: 'Put ' + spec.label + ' near the middle of the province', 'aria-label': 'Center ' + spec.label, onclick: function () {
       const middle = selectionCenter();
       if (!middle) { setStatus('The province has no pixels to centre on.', 'warning'); return; }
       setDraftPoint(spec.kind, middle.x, middle.y);
@@ -42,6 +42,8 @@ export function positionsSection(current: ProvinceDetails): HTMLElement {
     const row = h('div', { class: 'row pos-row' }, swatch, h('span', { class: 'pos-label' }, spec.label), center, xInput, yInput, clear);
     if (!editableHere(spec.kind, current.isSea)) { lock(row); }
     rows.append(row);
+    // The name's angle and size hang under its point: they are how it is drawn from there.
+    if (spec.kind === 'text_position') { rows.append(...nameRows()); }
   }
   const bar = saveBar(function () {
     postSave({ section: 'positions', data: asPositions(state.draft ?? {}) });
@@ -54,28 +56,25 @@ export function positionsSection(current: ProvinceDetails): HTMLElement {
       : 'Where the game draws the province\'s name, unit, city, factory and buildings. y counts from the bottom of the map. Zoom in until the points show; drag one to move it, or type here.'),
     h('div', { class: 'head pos-head' }, h('span', null, 'x'), h('span', null, 'y')),
     rows,
-    labelRow(),
     bar);
 }
 
 /**
- * How the game draws the name from the Text point: the angle it turns it by and
- * the size it draws it at. The file keeps the angle in radians, so the field
- * does too, with the degrees beside it. Dragging the grip at the end of the name
- * on the map writes here.
+ * How the game draws the name from its point: the angle it turns it by and the
+ * size it draws it at, one row each under the Name row, with no legend dot
+ * because they are not places on the map. The file keeps the angle in radians,
+ * so the field does too, with the degrees beside it; dragging the grip at the
+ * end of the name on the map writes there.
  */
-function labelRow(): HTMLElement {
+function nameRows(): HTMLElement[] {
   const rotation = textInput(state.draft?.text_rotation ?? '', 'number');
   const scale = textInput(state.draft?.text_scale ?? '', 'number');
   const degrees = h('span', { class: 'deg' }, degreesOf(state.draft?.text_rotation));
-  const row = h('div', { class: 'row pos-row label-row' },
-    h('span', { class: 'swatch' }),
-    h('span', { class: 'pos-label' }),
-    h('span', { class: 'sub' }, 'rotation'), rotation.node, degrees,
-    h('span', { class: 'sub' }, 'scale'), scale.node);
+  const rotationRow = h('div', { class: 'row pos-row name-row' }, h('span', { class: 'pos-label' }, 'Name Rotation'), rotation.node, degrees);
+  const scaleRow = h('div', { class: 'row pos-row name-row' }, h('span', { class: 'pos-label' }, 'Name Scale'), scale.node);
   const rotationInput = rotation.input;
   const scaleInput = scale.input;
-  if (!rotationInput || !scaleInput) { return row; }
+  if (!rotationInput || !scaleInput) { return [rotationRow, scaleRow]; }
   rotationInput.step = '0.01'; rotationInput.placeholder = 'radians';
   scaleInput.step = '0.01'; scaleInput.min = '0'; scaleInput.placeholder = 'scale';
   function changed(): void {
@@ -90,7 +89,7 @@ function labelRow(): HTMLElement {
   rotationInput.addEventListener('input', changed);
   scaleInput.addEventListener('input', changed);
   state.labelInputs = { rotation: rotationInput, degrees: degrees };
-  return row;
+  return [rotationRow, scaleRow];
 }
 
 function written(value: string): string | undefined {

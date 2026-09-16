@@ -100,8 +100,11 @@ export function positionMarkersOf(document: Document): PositionMarker[] {
   return markers;
 }
 
-/** Where each province's name is drawn: no `text_position`, no label. */
-export function provinceLabelsOf(document: Document): ProvinceLabel[] {
+/**
+ * Where each province's name is drawn, and the name itself — the game draws the
+ * localisation's, so `nameOf` is asked for it. No `text_position`, no label.
+ */
+export function provinceLabelsOf(document: Document, nameOf: (id: number) => string): ProvinceLabel[] {
   const labels: ProvinceLabel[] = [];
   for (const [id, block] of provinceBlocks(document)) {
     const positions = parseProvincePositions(block);
@@ -111,6 +114,7 @@ export function provinceLabelsOf(document: Document): ProvinceLabel[] {
     if (Number.isFinite(x) && Number.isFinite(y)) {
       labels.push({
         id,
+        name: nameOf(id),
         x,
         y,
         rotation: numberOr(positions.text_rotation, 0),

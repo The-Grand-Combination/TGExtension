@@ -32,17 +32,25 @@ tab (the round swatch is the legend), once the view is zoomed to at least four s
 pixel. The selected province's dots are the exception: they are what the form holds, so they show at
 any zoom and whatever the Positions layer switch says, with a white rim around them. Typing a
 coordinate moves the dot, dragging a dot fills in the coordinates, and the target button on a row
-drops the point on the province's centre of mass (moved to the nearest pixel the province owns, so a
-crescent-shaped one does not send it to a neighbour). Nothing is written until **Save**; **Cancel**,
+drops the point near the province's centre of mass — scattered a little, more in a big province, so
+points dropped one after another do not pile up on one pixel, and moved to the nearest pixel the
+province owns, so a crescent-shaped one does not send it to a neighbour. Nothing is written until **Save**; **Cancel**,
 next to every Save, puts the whole form back as the file has it.
 
 With the **Text Positions** switch on, every province's **name** is drawn from its **Name** point,
-turned by `text_rotation` and sized by `text_scale` — a guide to the angle and the size, not the
-game's own type. The selected province's name comes from the form and shows at any zoom; the rest
+turned by `text_rotation` and as tall as `text_scale` makes it — a guide to the place, the angle and
+the size, not the game's own type. The name stands on the point, in the middle of its length, the way
+the game draws it above the position; `text_scale` sets the height of the letters (0.85 map pixels a
+scale unit, measured against the game), so the length of the name does not change how big it is
+drawn, and the map font is a serif like the game's. A name longer than twenty characters is drawn
+in two lines, the way the game breaks it: the word that would carry the first line past twenty
+characters goes underneath, and the rest of the name goes with it. The selected province's name comes from the form
+and shows at any zoom; the rest
 come from the file and appear with the dots. A second dot sits at the end of the selected province's
 name: dragging it swings the name around the Name point and writes the angle, so the label can be
-aimed without doing trigonometry. The name shown is the localisation's for the selected province and
-the `definition.csv` one for the rest. Under the rows, the **rotation** and **scale** fields hold the same
+aimed without doing trigonometry. The name drawn is the localisation's `PROV<id>`, which is what the
+game draws; a province whose key has no text falls back to the `definition.csv` name, and then to its
+id. Renaming a province in the Definition tab changes the name on the map with it. Under the Name row, the **Name Rotation** and **Name Scale** fields hold the same
 two values — the rotation in radians, as the file keeps it, with the degrees beside it in grey — and
 clearing a field takes its line out of the block. The angle grows counter-clockwise from east, the
 way `positions.txt` counts it (0 to 2π).
@@ -138,8 +146,8 @@ and the mod files) buttons:
 
 - **Positions** (on by default) shows or hides the dots at any zoom; hidden dots cannot be dragged.
 - **Text Positions** (on by default) draws every province's name where its `text_position` puts it,
-  turned by its `text_rotation` and sized by its `text_scale`, once the view is zoomed in as far as
-  the dots need. With it off no name is drawn at all, not even the selected province's, and the grip
+  turned by its `text_rotation` and as tall as its `text_scale` makes it, once the view is zoomed in
+  as far as the dots need. With it off no name is drawn at all, not even the selected province's, and the grip
   that turns the name cannot be grabbed.
 - **Country Colors** (off by default) repaints every province towards the `color` of the country
   that owns it at the start date (the top-level `owner` of its history file; dated blocks are

@@ -2,7 +2,7 @@ import type { PositionKind, PositionsSection, ProvincePositions, PositionPoint }
 import { render } from './canvas.js';
 import { ctx, mapArea, saveAllButton } from './dom.js';
 import { post } from './host.js';
-import { definitionById, COLOR_OF, MARKER_MIN_SCALE, pendingPositions, POSITION_KIND_SPECS, state, type DecodedImage, type Draft, type Point } from './state.js';
+import { definitionById, COLOR_OF, locNameById, MARKER_MIN_SCALE, pendingPositions, POSITION_KIND_SPECS, state, type DecodedImage, type Draft, type Point } from './state.js';
 
 /**
  * The points of map/positions.txt: the file's own, drawn small once the view is
@@ -13,8 +13,22 @@ import { definitionById, COLOR_OF, MARKER_MIN_SCALE, pendingPositions, POSITION_
 /** What the map lets one grab: the province's points, and the grip that turns its name. */
 export type PositionHandle = PositionKind | 'text_rotation';
 
-/** The game draws the name five map pixels to a `text_scale` unit (NCE's `update_province_text_lines`). */
-const LABEL_UNIT = 5;
+/**
+ * Map pixels of letter height a `text_scale` unit buys. The game sizes the name
+ * by the scale alone — a long name is drawn longer, not smaller, so NCE's
+ * fit-into-a-box (`set_province_text_lines`) is its own affair. The number is
+ * measured off the game: the same names over the same provinces, at the same
+ * zoom, come out this tall. The floor of one scale unit is NCE's
+ * `max(1, text_scale)`.
+ */
+const LABEL_HEIGHT_PER_SCALE = 0.85;
+/**
+ * The game breaks a name at twenty characters: the word that would carry the
+ * line past them goes to a second line, and the rest of the name goes with it.
+ */
+const LABEL_WRAP = 25;
+/** How far the second line sits under the first, in letter heights. */
+const LABEL_LINE_STEP = 1.15;
 
 interface LabelLayout {
   readonly x: number;
@@ -22,7 +36,9 @@ interface LabelLayout {
   /** Radians counter-clockwise, as `text_rotation` keeps them. */
   readonly angle: number;
   readonly size: number;
-  readonly name: string;
+  /** The name as it is drawn: one line, or two when it is too long for one. */
+  readonly lines: readonly string[];
+  /** The longest line, which is the room the name takes. */
   readonly width: number;
 }
 
@@ -80,14 +96,14 @@ function drawFileLabels(
   for (const label of state.labels) {
     if (state.draft && label.id === state.selectedId) { continue; }
     if (pendingPositions.has(label.id)) { continue; }
-    const name = provinceName(label.id);
-    const size = sizeOf(label.scale);
     const px = label.x;
     const py = currentImage.height - label.y;
-    // The name runs from its point, so one starting this far out cannot reach the view.
-    const reach = size * name.length;
+    const name = label.name !== '' ? label.name : provinceName(label.id);
+    // No letter is wider than it is tall, so this reach is over the name's own
+    // half-width: a name starting this far out cannot come back into the view.
+    const reach = heightOf(label.scale) * name.length;
     if (px < left - reach || px > right + reach || py < top - reach || py > bottom + reach) { continue; }
-    drawName(name, px, py, label.rotation, size);
+    drawName(layoutOf(name, px, py, label.rotation, label.scale));
   }
 }
 
@@ -113,8 +129,13 @@ function drawPendingLabel(id: number, points: Draft, currentImage: DecodedImage)
   const x = point ? Number(point.x) : NaN;
   const y = point ? Number(point.y) : NaN;
   if (!isFinite(x) || !isFinite(y)) { return; }
-  const scale = draftNumber(points.text_scale) ?? 1;
-  drawName(provinceName(id), x, currentImage.height - y, draftNumber(points.text_rotation) ?? 0, sizeOf(scale));
+  drawName(layoutOf(
+    provinceName(id),
+    x,
+    currentImage.height - y,
+    draftNumber(points.text_rotation) ?? 0,
+    draftNumber(points.text_scale) ?? 1,
+  ));
 }
 
 /** The province being edited: its form's points, with a white rim. */
@@ -143,7 +164,7 @@ function drawDraftMarkers(currentImage: DecodedImage, size: number): void {
 function drawLabel(size: number): void {
   const layout = labelLayout();
   if (!layout) { return; }
-  drawName(layout.name, layout.x, layout.y, layout.angle, layout.size);
+  drawName(layout);
   const grip = labelGrip(layout);
   const rim = 1.5 / state.view.scale;
   ctx.fillStyle = '#fff';
@@ -152,32 +173,67 @@ function drawLabel(size: number): void {
   ctx.fillRect(grip.x, grip.y, size, size);
 }
 
-/** One name on the map: from its point, turned by its angle, in the size its scale asks for. */
-function drawName(name: string, x: number, y: number, angle: number, size: number): void {
+/** One name on the map: sitting on its point, turned by its angle, as tall as its scale makes it. */
+function drawName(layout: LabelLayout): void {
   ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(-angle);
-  ctx.font = fontOf(size);
-  ctx.textBaseline = 'middle';
+  ctx.translate(layout.x, layout.y);
+  ctx.rotate(-layout.angle);
+  ctx.font = fontOf(layout.size);
+  // The game draws the name above the point, not around it: the point is where
+  // the letters stand, in the middle of their length.
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
   ctx.lineJoin = 'round';
-  ctx.lineWidth = size / 8;
+  ctx.lineWidth = layout.size / 10;
   ctx.strokeStyle = 'rgba(0, 0, 0, 0.75)';
-  ctx.strokeText(name, 0, 0);
   ctx.fillStyle = '#fff';
-  ctx.fillText(name, 0, 0);
+  // The overflow goes under the first line, which keeps the point it stands on.
+  for (let index = 0; index < layout.lines.length; index++) {
+    const line = layout.lines[index] ?? '';
+    const y = index * layout.size * LABEL_LINE_STEP;
+    ctx.strokeText(line, 0, y);
+    ctx.fillText(line, 0, y);
+  }
   ctx.restore();
 }
 
+/** The name in the lines the game draws it in: the word that crosses `LABEL_WRAP` takes the rest down with it. */
+function nameLines(name: string): readonly string[] {
+  if (name.length <= LABEL_WRAP) { return [name]; }
+  const words = name.split(' ');
+  let first = words[0] ?? name;
+  let index = 1;
+  while (index < words.length && (first + ' ' + String(words[index])).length <= LABEL_WRAP) {
+    first = first + ' ' + String(words[index]);
+    index += 1;
+  }
+  const rest = words.slice(index).join(' ');
+  return rest === '' ? [first] : [first, rest];
+}
+
+/** The game's map font is a serif, so the names read here as the shape they have there. */
 function fontOf(size: number): string {
-  return String(size) + 'px sans-serif';
+  return String(size) + 'px Georgia, "Times New Roman", serif';
 }
 
-function sizeOf(scale: number): number {
-  return LABEL_UNIT * Math.max(1, scale);
+function heightOf(scale: number): number {
+  return LABEL_HEIGHT_PER_SCALE * Math.max(1, scale);
 }
 
-/** What the map calls a province other than the selected one: definition.csv, else the id. */
+/** Where and how big one name is drawn, from what its province block holds; `width` is what it takes up. */
+function layoutOf(name: string, x: number, y: number, rotation: number, scale: number): LabelLayout {
+  const size = heightOf(scale);
+  ctx.font = fontOf(size);
+  const lines = nameLines(name);
+  let width = 0;
+  for (const line of lines) { width = Math.max(width, ctx.measureText(line).width); }
+  return { x: x, y: y, angle: rotation, size: size, lines: lines, width: width };
+}
+
+/** What the map calls a province other than the selected one: its localisation, else definition.csv, else the id. */
 function provinceName(id: number): string {
+  const localised = locNameById.get(id);
+  if (localised !== undefined && localised !== '') { return localised; }
   const definition = definitionById.get(id);
   return definition?.name !== undefined && definition.name !== '' ? definition.name : String(id);
 }
@@ -197,23 +253,21 @@ function labelLayout(): LabelLayout | null {
   if (!currentImage || !point || !draft) { return null; }
   const name = labelText();
   if (name === '') { return null; }
-  const size = sizeOf(draftNumber(draft.text_scale) ?? 1);
-  ctx.font = fontOf(size);
-  return {
-    x: point.x,
-    y: currentImage.height - point.y,
-    angle: draftNumber(draft.text_rotation) ?? 0,
-    size: size,
-    name: name,
-    width: Math.max(size, ctx.measureText(name).width),
-  };
+  return layoutOf(
+    name,
+    point.x,
+    currentImage.height - point.y,
+    draftNumber(draft.text_rotation) ?? 0,
+    draftNumber(draft.text_scale) ?? 1,
+  );
 }
 
-/** The grip sits at the end of the name, so dragging it swings the whole line around the point. */
+/** The grip sits just past the end of the name, so dragging it swings the whole line around the point. */
 function labelGrip(layout: LabelLayout): Point {
+  const reach = layout.width / 2 + layout.size / 3;
   return {
-    x: layout.x + layout.width * Math.cos(layout.angle),
-    y: layout.y - layout.width * Math.sin(layout.angle),
+    x: layout.x + reach * Math.cos(layout.angle),
+    y: layout.y - reach * Math.sin(layout.angle),
   };
 }
 
@@ -388,6 +442,7 @@ export function replaceMarkers(id: number, positions: PositionsSection | undefin
   if (isFinite(x) && isFinite(y)) {
     state.labels.push({
       id: id,
+      name: provinceName(id),
       x: x,
       y: y,
       rotation: draftNumber(data.text_rotation) ?? 0,

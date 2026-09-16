@@ -203,6 +203,8 @@ export const waterTerrain = new Set<number>();
 // Points moved but not written, province by province. They survive moving to
 // the next province, draw on the map, and go out together on Save all.
 export const pendingPositions = new Map<number, Draft>();
+/** The name the game draws for a province: its localisation, by id. */
+export const locNameById = new Map<number, string>();
 
 /** The pick lists come with the map; a form is only ever built once there is one. */
 export function vocabulary(): Vocabulary {

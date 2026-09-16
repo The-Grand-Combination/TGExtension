@@ -221,6 +221,8 @@ export interface PositionMarker {
 /** Where the game draws one province's name, for the map to draw it too. */
 export interface ProvinceLabel {
   readonly id: number;
+  /** The localisation's `PROV<id>`, which is the name the game draws; empty when the key has none. */
+  readonly name: string;
   readonly x: number;
   readonly y: number;
   /** `text_rotation` in radians counter-clockwise; 0 when the block has none. */

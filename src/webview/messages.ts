@@ -1,4 +1,4 @@
-import type { HostMessage, ProvinceDetails, SaveResult } from '../model/mapEditor.js';
+import type { HostMessage, PositionMarker, ProvinceDetails, ProvinceLabel, SaveResult } from '../model/mapEditor.js';
 import { highlightOf, render } from './canvas.js';
 import { saveAllButton, setStatus, showLoading, targetBox } from './dom.js';
 import { messageOf } from './host.js';
@@ -8,7 +8,7 @@ import { applyUndoLimit, handlePainted, resetPaint, setTool } from './paint.js';
 import { carryForms, failureText, fileNames, finishSave, renderSide, resetPanel, savingParts, showHint, handleTerrainPicture } from './panel/panel.js';
 import { asPositions, capturePending, clonePoints, refreshPending, replaceMarkers } from './positions.js';
 import { handleReferences, resetReferences } from './references.js';
-import { definitionById, idByColor, pendingPositions, seaIds, state, waterTerrain } from './state.js';
+import { definitionById, idByColor, locNameById, pendingPositions, seaIds, state, waterTerrain } from './state.js';
 
 /** What the extension posts, and what each message changes on the page. */
 
@@ -59,9 +59,7 @@ function handleMessage(message: HostMessage): void {
       handleDetails(message.details);
       return;
     case 'positions':
-      state.markers = [...message.markers];
-      state.labels = [...message.labels];
-      render();
+      handlePositions(message.markers, message.labels);
       return;
     case 'settings':
       applyTint(message.countryColorsTint);
@@ -101,6 +99,14 @@ function handleMessage(message: HostMessage): void {
  * terrain picture and all, over the one we are now on. A province that is still
  * only paint has no id to match on, so its colour stands for it.
  */
+/** The file's points, and with them the name the game draws for each province. */
+function handlePositions(markers: readonly PositionMarker[], labels: readonly ProvinceLabel[]): void {
+  state.markers = [...markers];
+  state.labels = [...labels];
+  for (const label of labels) { locNameById.set(label.id, label.name); }
+  render();
+}
+
 function handleDetails(fresh: ProvinceDetails): void {
   const forPaint = state.newColor !== null && fresh.isNew && state.selectedId === null;
   if (state.selectedId !== fresh.id && !forPaint) { return; }
@@ -109,6 +115,8 @@ function handleDetails(fresh: ProvinceDetails): void {
     state.selection = highlightOf(fresh.id, state.newColor ?? undefined);
   }
   state.details = fresh;
+  // A rename reaches the map through here: the drawn name is the localisation's.
+  locNameById.set(fresh.id, fresh.localisation.text);
   replaceMarkers(fresh.id, fresh.positions);
   renderSide(fresh.id);
   setStatus('Province ' + String(fresh.id));

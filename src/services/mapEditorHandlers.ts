@@ -610,7 +610,8 @@ export class MapEditorHandlers {
     if (!file) {
       return { kind: 'unavailable', reason: 'The picked mods have no map/positions.txt.' };
     }
-    return { kind: 'ready', markers: positionMarkersOf(file.document), labels: provinceLabelsOf(file.document) };
+    const labels = provinceLabelsOf(file.document, (id) => readProvinceLoc(target.index, id).text);
+    return { kind: 'ready', markers: positionMarkersOf(file.document), labels };
   }
 
   /** Who owns each province at the start date and the colour of each owner, for the page to tint the map. */
