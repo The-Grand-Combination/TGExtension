@@ -815,9 +815,10 @@ suite('MapEditorHandlers — the terrain a province shows', () => {
   const DEFINITION = ';r;g;b;x;x\n1;10;20;30;One;x\n';
   const TERRAIN_TXT = [
     'terrain = 64',
-    'categories = { arctic = { color = { 1 2 3 } } farmlands = { color = { 4 5 6 } } }',
+    'categories = { arctic = { color = { 1 2 3 } } farmlands = { color = { 4 5 6 } } ocean = { is_water = yes color = { 0 0 255 } } }',
     'text_0 = { type = arctic color = { 0 } priority = 0 }',
     'text_1 = { type = farmlands color = { 1 } priority = 1 }',
+    'ocean1 = { type = ocean color = { 254 } }',
   ].join('\n');
   const HISTORY = 'history/provinces/1 - One.txt';
 
@@ -852,6 +853,12 @@ suite('MapEditorHandlers — the terrain a province shows', () => {
     assert.ok(result.kind === 'details', result.kind === 'unavailable' ? result.reason : '');
     return result.details.terrain;
   }
+
+  test('the map names the terrain.bmp indices that are water, for the Terrain Lock', async () => {
+    const result = await new MapEditorHandlers(terrained('owner = ENG\n')).map(targetParams);
+    assert.ok(result.kind === 'ready', result.kind === 'unavailable' ? result.reason : '');
+    assert.deepStrictEqual(result.waterTerrainIndices, [254]);
+  });
 
   test('a history file with no terrain leaves the province without one, whatever terrain.bmp says', async () => {
     const terrain = await terrainOf('owner = ENG\n');

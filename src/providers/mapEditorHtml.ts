@@ -70,6 +70,7 @@ ${PAGE_STYLE}
             <input id="paintColor" type="color" value="#ff0000" title="The colour the pencil and the bucket paint with">
             <span id="paintColorText">255 0 0</span>
           </div>
+          <label class="lock" title="Paint only where map/terrain.bmp has land: pixels over its water are left as they are"><input type="checkbox" id="terrainLock" checked> Terrain Lock</label>
           <button id="generateColorButton" class="secondary generate" title="Take a colour at random that no province and no pixel of the map is using">Generate Color</button>
           <div class="actions">
             <button id="savePaintButton" class="secondary" title="Write the painted pixels into map/provinces.bmp">Save</button>
@@ -212,6 +213,7 @@ const PAGE_STYLE = String.raw`
   /* Red, green and blue as definition.csv writes them; the hex is on the swatch's tooltip. */
   #tools .tint span { flex: 1 1 0; min-width: 0; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; opacity: 0.85; }
   #tools .generate { padding: 1px 2px; }
+  #tools .lock { display: flex; align-items: center; gap: 5px; cursor: pointer; line-height: 1.3; white-space: nowrap; }
   /* The side panel's Save rows stand apart from the form above them; this one is
      already the last row of a small box, so it drops that margin and its rule. */
   #tools .actions { display: flex; gap: 4px; margin-top: 0; padding-top: 0; border-top: none; }

@@ -1,6 +1,6 @@
 import type { ProvinceDefinition, Rgb } from '../model/mapEditor.js';
 import { stateColorOf } from '../services/stateColors.js';
-import { buildTiles, decodeProvincesBmp, decodeRiversBmp, decodeTerrainBmp, fetchBitmap } from './bitmaps.js';
+import { buildTiles, decodeProvincesBmp, decodeRiversBmp, decodeTerrainBmp, fetchBitmap, terrainRgba, type OverlayPixels, type TerrainPixels } from './bitmaps.js';
 import { fitView, render } from './canvas.js';
 import { h, hideLoading, loading, required, requiredInput, setStatus, showLoading } from './dom.js';
 import { sliderInput, type Field, type SliderRange } from './fields.js';
@@ -29,6 +29,9 @@ const layerRows = new Map<FixedLayer, LayerRow>();
 const fixedLayersBox = required('fixedLayers');
 const layerPositions = requiredInput('layerPositions');
 const tintBoxes: Record<TintMode, HTMLInputElement> = { country: requiredInput('layerCountry'), state: requiredInput('layerState') };
+/** terrain.bmp is fetched once per map, whichever of the Terrain layer and the Terrain Lock asks first. */
+let terrainLoad: Promise<TerrainPixels> | null = null;
+let terrainFailure: string | null = null;
 
 /** One row of the box: thumbnail, name, and the opacity slider under them. */
 export function layerRow(name: string, opacity: number, onOpacity: (value: number) => void): LayerRow {
@@ -108,6 +111,43 @@ export function loadProvinces(bmpUri: string): void {
     });
 }
 
+export function ensureTerrain(): Promise<TerrainPixels> {
+  if (terrainLoad) { return terrainLoad; }
+  const uri = state.overlayUri.terrain;
+  if (!uri) { return Promise.reject(new Error('The picked mods have no map/terrain.bmp.')); }
+  showLoading('Loading terrain.bmp…');
+  const load: Promise<TerrainPixels> = fetchBitmap(uri, 'terrain.bmp')
+    .then(decodeTerrainBmp)
+    .then(function (terrain) {
+      hideLoading();
+      if (terrainLoad === load) { state.terrain = terrain; }
+      return terrain;
+    }, function (error: unknown) {
+      hideLoading();
+      if (terrainLoad === load) { terrainFailure = messageOf(error); }
+      throw error instanceof Error ? error : new Error(messageOf(error));
+    });
+  terrainLoad = load;
+  return load;
+}
+
+/** Why the Terrain Lock has nothing to check against; only asked while `state.terrain` is null. */
+export function terrainAbsence(): string {
+  if (!state.overlayUri.terrain) { return 'the picked mods have no map/terrain.bmp'; }
+  if (terrainFailure) { return 'terrain.bmp could not be read (' + terrainFailure + ')'; }
+  return terrainLoad ? 'terrain.bmp is still loading' : 'terrain.bmp is not loaded yet';
+}
+
+function overlayPixels(kind: Overlay, uri: string): Promise<OverlayPixels> {
+  if (kind === 'terrain') {
+    return ensureTerrain().then(function (terrain) {
+      return { width: terrain.width, height: terrain.height, rgba: terrainRgba(terrain) };
+    });
+  }
+  showLoading('Loading rivers.bmp…');
+  return fetchBitmap(uri, 'rivers.bmp').then(decodeRiversBmp);
+}
+
 /** Fetch and decode an overlay once; it is kept until the map is reloaded. */
 function loadOverlay(kind: Overlay): void {
   const uri = state.overlayUri[kind];
@@ -115,9 +155,7 @@ function loadOverlay(kind: Overlay): void {
   state.overlayLoading[kind] = true;
   const forImage = state.image;
   const name = kind + '.bmp';
-  showLoading('Loading ' + name + '…');
-  fetchBitmap(uri, name)
-    .then(function (buffer) { return kind === 'rivers' ? decodeRiversBmp(buffer) : decodeTerrainBmp(buffer); })
+  overlayPixels(kind, uri)
     .then(function (decoded) {
       const image = state.image;
       if (image && (decoded.width !== image.width || decoded.height !== image.height)) {
@@ -227,6 +265,7 @@ export function resetLayers(riversUri: string | undefined, terrainUri: string | 
   for (const mode of TINT_MODES) { state.tinted[mode] = null; }
   state.overlayUri.rivers = riversUri ?? null; state.overlayUri.terrain = terrainUri ?? null;
   for (const kind of OVERLAYS) { state.overlayTiles[kind] = null; state.overlayLoading[kind] = false; }
+  state.terrain = null; terrainLoad = null; terrainFailure = null;
   syncLayerRows();
 }
 

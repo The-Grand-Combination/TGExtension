@@ -8,7 +8,7 @@ import { applyUndoLimit, handlePainted, resetPaint, setTool } from './paint.js';
 import { carryForms, failureText, fileNames, finishSave, renderSide, resetPanel, savingParts, showHint, handleTerrainPicture } from './panel/panel.js';
 import { asPositions, capturePending, clonePoints, refreshPending, replaceMarkers } from './positions.js';
 import { handleReferences, resetReferences } from './references.js';
-import { definitionById, idByColor, pendingPositions, seaIds, state } from './state.js';
+import { definitionById, idByColor, pendingPositions, seaIds, state, waterTerrain } from './state.js';
 
 /** What the extension posts, and what each message changes on the page. */
 
@@ -18,7 +18,9 @@ function loadFreshMap(message: Extract<HostMessage, { type: 'map' }>): void {
   idByColor.clear();
   definitionById.clear();
   seaIds.clear();
+  waterTerrain.clear();
   for (const id of fresh.seaProvinces) { seaIds.add(id); }
+  for (const index of fresh.waterTerrainIndices) { waterTerrain.add(index); }
   for (const definition of fresh.definitions) {
     idByColor.set(definition.color, definition.id);
     definitionById.set(definition.id, definition);

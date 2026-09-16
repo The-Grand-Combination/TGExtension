@@ -3,10 +3,11 @@ import { DEFAULT_PAINT_UNDO_STEPS } from '../model/mapEditor.js';
 import { enclosedPixels, floodFill, runsOf, strokePixels, unusedColor } from '../services/provincePaint.js';
 import { boxOfHighlight, boxOfPixels, highlightOf, insideImage, provinceAt, render, toImage, unionBox, wholeMap } from './canvas.js';
 import { mapArea, required, requiredButton, requiredInput, setStatus } from './dom.js';
-import { post } from './host.js';
+import { messageOf, post } from './host.js';
 import { clearSelection } from './input.js';
+import { ensureTerrain, terrainAbsence } from './layers.js';
 import { referenceCount } from './references.js';
-import { definitionById, state, TILE, TINT_MODES, type DecodedImage, type Point, type Tile, type Tool } from './state.js';
+import { definitionById, state, TILE, TINT_MODES, waterTerrain, type DecodedImage, type Point, type Tile, type Tool } from './state.js';
 
 // --- Painting provinces -------------------------------------------------------
 // The pencil and the bucket write into the decoded bitmap and into the tiles it
@@ -28,6 +29,7 @@ const brushRow = required('brushRow');
 const paintColorInput = requiredInput('paintColor');
 const paintColorText = required('paintColorText');
 const generateColorButton = requiredButton('generateColorButton');
+const terrainLockInput = requiredInput('terrainLock');
 const savePaintButton = requiredButton('savePaintButton');
 const resetPaintButton = requiredButton('resetPaintButton');
 
@@ -43,6 +45,8 @@ const painted = new Set<number>();
 const undoSteps: Map<number, number>[] = [];
 const redoSteps: Map<number, number>[] = [];
 let stroke: Map<number, number> | null = null;
+/** Pixels of the stroke the Terrain Lock kept off the water, told at its end. */
+let heldBack = 0;
 /** Where the pencil last was, so a fast mouse draws a line and not a dotted one. */
 let brushAt: Point | null = null;
 /** Draw and paint: the line being drawn, kept until the button comes up and it is closed off. */
@@ -125,6 +129,7 @@ export function startPaint(event: MouseEvent): void {
   if (state.tool === 'pick') { pickAt(point); return; }
   const color = brushColor;
   stroke = new Map();
+  heldBack = 0;
   if (state.tool === 'bucket') {
     paintIndices(floodFill(currentImage.packed, currentImage.width, currentImage.height, point.y * currentImage.width + point.x, color), color);
     endStroke();
@@ -178,11 +183,43 @@ function pickAt(point: Point): void {
   if (back !== null) { setTool(back); }
 }
 
+/**
+ * With the Terrain Lock on, only the pixels terrain.bmp has as land; null,
+ * with the reason on the status bar, while there is nothing to check against.
+ * Painting on regardless would be the very accident the lock is for.
+ */
+function landOnly(indices: readonly number[], currentImage: DecodedImage): readonly number[] | null {
+  const terrain = state.terrain;
+  if (!terrain) {
+    prefetchTerrain();
+    setStatus('Terrain Lock: ' + terrainAbsence() + '; untick it to paint anyway.', 'warning');
+    return null;
+  }
+  if (terrain.width !== currentImage.width || terrain.height !== currentImage.height) {
+    setStatus('Terrain Lock: terrain.bmp is ' + String(terrain.width) + ' x ' + String(terrain.height) + ', the map '
+      + String(currentImage.width) + ' x ' + String(currentImage.height) + '; untick it to paint anyway.', 'warning');
+    return null;
+  }
+  const land: number[] = [];
+  for (const index of indices) {
+    if (waterTerrain.has(terrain.indices[index] ?? 0)) { heldBack++; } else { land.push(index); }
+  }
+  return land;
+}
+
+/** terrain.bmp is fetched the moment the lock could need it, not on the first stroke. */
+function prefetchTerrain(): void {
+  if (!state.terrainLock || state.terrain || !state.image || !state.overlayUri.terrain) { return; }
+  ensureTerrain().catch(function (error: unknown) { setStatus('Could not read terrain.bmp: ' + messageOf(error), 'error'); });
+}
+
 function paintIndices(indices: readonly number[], color: number): void {
   const currentImage = state.image;
   if (!currentImage) { return; }
+  const allowed = state.terrainLock ? landOnly(indices, currentImage) : indices;
+  if (!allowed) { return; }
   const pixels = new Map<number, number>();
-  for (const index of indices) {
+  for (const index of allowed) {
     const before = currentImage.packed[index];
     if (before === undefined || before === color) { continue; }
     pixels.set(index, color);
@@ -270,6 +307,8 @@ export function endStroke(): void {
   const step = stroke;
   stroke = null;
   brushAt = null;
+  if (heldBack > 0) { setStatus(String(heldBack) + ' pixel(s) held back by Terrain Lock: no land there in terrain.bmp', 'warning'); }
+  heldBack = 0;
   if (!step || step.size === 0) { return; }
   undoSteps.push(step);
   while (undoSteps.length > undoLimit) { undoSteps.shift(); }
@@ -380,6 +419,7 @@ function pickTool(next: Tool): void {
   // colour; picked up on purpose, or left for another tool, it does not.
   pickReturn = next === 'pick' && state.tool !== 'pick' ? state.tool : null;
   setTool(next);
+  if (paints(next) || next === 'bucket') { prefetchTerrain(); }
   if (next === 'reference') {
     setStatus(referenceCount() === 0
       ? 'No reference pictures yet: Add Reference in the Layers box puts one on the map.'
@@ -431,6 +471,11 @@ export function initPaint(): void {
   paintColorInput.addEventListener('input', function () {
     const color = Number.parseInt(paintColorInput.value.slice(1), 16);
     setBrushColor(Number.isNaN(color) ? 0 : color);
+  });
+  terrainLockInput.checked = state.terrainLock;
+  terrainLockInput.addEventListener('change', function () {
+    state.terrainLock = terrainLockInput.checked;
+    prefetchTerrain();
   });
   resetPaintButton.addEventListener('click', resetPainted);
   savePaintButton.addEventListener('click', savePainted);

@@ -212,8 +212,9 @@ webview tab (`providers/mapEditorPanel.ts` + `mapEditorHtml.ts`). Ten requests
 Country Colors layer, the first state of each province behind State Colors (coloured on the page by a
 hash of the state's name, `services/stateColors.ts`), one province's localisation/history/pops/positions, one section's save, and
 the pixels painted on the map;
-the page fetches and decodes `provinces.bmp` (and, for the Show Rivers layer, `rivers.bmp`) itself
-and tints it by owner in the browser. Saves are text patches
+the page fetches and decodes `provinces.bmp` (and, for the Layers box, `rivers.bmp` and `terrain.bmp`) itself
+and tints it by owner in the browser; the map message also carries the `terrain.bmp` indices `terrain.txt`
+types as water, which the page's Terrain Lock keeps the brush off. Saves are text patches
 computed by `vscode`-free services (`provinceLocEdit.ts`, `provinceHistoryEdit.ts`,
 `provincePopsEdit.ts`, `provincePositionsEdit.ts` over `textPatch.ts`) and
 written only into the top mod of the stack. A province created from a painted colour goes the same

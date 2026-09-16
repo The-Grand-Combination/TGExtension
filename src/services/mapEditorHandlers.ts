@@ -97,6 +97,7 @@ import {
   terrainSpriteTextures,
   terrainTypeByIndex,
   textureCandidates,
+  waterTerrainIndices,
 } from './terrainPictures.js';
 import { unrepresentableIn, type Codepage } from '../io/textCodec.js';
 import { applyPatches } from './textPatch.js';
@@ -124,6 +125,7 @@ const PROVINCES_FOLDER = 'history/provinces';
 const PROVINCES_BMP = 'map/provinces.bmp';
 const RIVERS_BMP = 'map/rivers.bmp';
 const TERRAIN_BMP = 'map/terrain.bmp';
+const TERRAIN_TXT = 'map/terrain.txt';
 const DEFINITION_CSV = 'map/definition.csv';
 const DEFAULT_MAP = 'map/default.map';
 const COUNTRIES_FILE = 'common/countries.txt';
@@ -260,6 +262,7 @@ export class MapEditorHandlers {
     void this.terrainInfo(target.layers);
     const popPaths = this.listRecursive(target.layers, POPS_FOLDER);
     const popDates = popDatesOf(popPaths);
+    const terrainText = await this.scriptFile(target.layers, TERRAIN_TXT);
     return {
       kind: 'ready',
       targetName: this.host.modNameOf(target.root),
@@ -267,6 +270,7 @@ export class MapEditorHandlers {
       provincesBmpPath,
       riversBmpPath: this.resolve(target.layers, RIVERS_BMP),
       terrainBmpPath: this.resolve(target.layers, TERRAIN_BMP),
+      waterTerrainIndices: terrainText ? [...waterTerrainIndices(terrainText.document)].sort((a, b) => a - b) : [],
       definitions: table.definitions,
       lakeColors: table.rows.flatMap((row) => (row.id === undefined ? [row.color] : [])),
       seaProvinces: [...await this.seaProvinces(target)].map(Number).filter((id) => Number.isInteger(id)),
@@ -797,7 +801,7 @@ export class MapEditorHandlers {
   private async dominantTerrains(layers: ModLayers): Promise<Map<number, string>> {
     const provinces = await this.readBitmap(layers, PROVINCES_BMP);
     const terrain = await this.readBitmap(layers, TERRAIN_BMP);
-    const terrainTextPath = this.resolve(layers, 'map/terrain.txt');
+    const terrainTextPath = this.resolve(layers, TERRAIN_TXT);
     const table = await this.definitions(layers);
     if (!provinces || !terrain || terrainTextPath === undefined || table.absolutePath === undefined) {
       return new Map();

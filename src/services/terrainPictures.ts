@@ -64,6 +64,25 @@ export function terrainTypeByIndex(document: Document): Map<number, string> {
   return types;
 }
 
+/** terrain.bmp indices that are water: the ones whose type is a `categories` entry with `is_water = yes`. */
+export function waterTerrainIndices(document: Document): Set<number> {
+  const categories = firstByKey(document.entries, 'categories');
+  const block = categories ? asBlock(categories.value) : undefined;
+  const water = new Set<string>();
+  for (const entry of block?.entries ?? []) {
+    if (entry.kind === 'assignment' && entry.value.kind === 'block' && scalarValueOf(entry.value.entries, 'is_water')?.toLowerCase() === 'yes') {
+      water.add(entry.key.value.toLowerCase());
+    }
+  }
+  const indices = new Set<number>();
+  for (const [index, type] of terrainTypeByIndex(document)) {
+    if (water.has(type.toLowerCase())) {
+      indices.add(index);
+    }
+  }
+  return indices;
+}
+
 /** The declared texture, then the same name with the other extension the game also loads. */
 export function textureCandidates(texturePath: string): string[] {
   const lower = texturePath.toLowerCase();

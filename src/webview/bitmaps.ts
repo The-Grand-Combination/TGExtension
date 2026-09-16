@@ -83,8 +83,16 @@ export function decodeRiversBmp(buffer: ArrayBuffer): OverlayPixels {
   return { width: width, height: height, rgba: rgba };
 }
 
-/** terrain.bmp in the colours its own palette gives each index: what an image editor shows for it. */
-export function decodeTerrainBmp(buffer: ArrayBuffer): OverlayPixels {
+/** terrain.bmp as its palette indices, in the order the rows are drawn, with the palette that colours them. */
+export interface TerrainPixels {
+  readonly width: number;
+  readonly height: number;
+  readonly indices: Uint8Array;
+  readonly palette: Uint8ClampedArray;
+}
+
+/** One decode serves the Terrain layer and the Terrain Lock: a byte per pixel is kept, the colours are made when the layer is shown. */
+export function decodeTerrainBmp(buffer: ArrayBuffer): TerrainPixels {
   const image = readOverlay(buffer, 'terrain.bmp');
   const { width, height, bytes } = image;
   const palette = new Uint8ClampedArray(256 * 3);
@@ -94,16 +102,23 @@ export function decodeTerrainBmp(buffer: ArrayBuffer): OverlayPixels {
     palette[index * 3 + 1] = bytes[entry + 1] ?? 0;
     palette[index * 3 + 2] = bytes[entry] ?? 0;
   }
-  const rgba = new Uint8ClampedArray(new ArrayBuffer(width * height * 4));
+  const indices = new Uint8Array(width * height);
   for (let y = 0; y < height; y++) {
-    let source = decodeRowOffset(image, y);
-    let out = y * width * 4;
-    for (let x = 0; x < width; x++, source++, out += 4) {
-      const index = (bytes[source] ?? 0) * 3;
-      rgba[out] = palette[index] ?? 0; rgba[out + 1] = palette[index + 1] ?? 0; rgba[out + 2] = palette[index + 2] ?? 0; rgba[out + 3] = 255;
-    }
+    const source = decodeRowOffset(image, y);
+    indices.set(bytes.subarray(source, source + width), y * width);
   }
-  return { width: width, height: height, rgba: rgba };
+  return { width: width, height: height, indices: indices, palette: palette };
+}
+
+/** The terrain in the colours its own palette gives each index: what an image editor shows for it. */
+export function terrainRgba(terrain: TerrainPixels): Uint8ClampedArray<ArrayBuffer> {
+  const { indices, palette } = terrain;
+  const rgba = new Uint8ClampedArray(new ArrayBuffer(indices.length * 4));
+  for (let at = 0, out = 0; at < indices.length; at++, out += 4) {
+    const index = (indices[at] ?? 0) * 3;
+    rgba[out] = palette[index] ?? 0; rgba[out + 1] = palette[index + 1] ?? 0; rgba[out + 2] = palette[index + 2] ?? 0; rgba[out + 3] = 255;
+  }
+  return rgba;
 }
 
 /** The response body, with the overlay counting the megabytes as they come; the progress is not logged, a 60 MB file is a thousand chunks. */

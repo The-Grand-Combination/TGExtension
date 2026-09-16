@@ -62,6 +62,8 @@ export interface MapEditorMap {
   /** `map/rivers.bmp` and `map/terrain.bmp` as the game would load them, for the Layers box; undefined when the stack has none. */
   readonly riversBmpPath: string | undefined;
   readonly terrainBmpPath: string | undefined;
+  /** The terrain.bmp palette indices `map/terrain.txt` types as water; the Terrain Lock paints over none of them. */
+  readonly waterTerrainIndices: readonly number[];
   readonly definitions: readonly ProvinceDefinition[];
   readonly seaProvinces: readonly number[];
   /** Start dates found under `history/pops`, earliest first. */

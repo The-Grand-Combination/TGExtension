@@ -11,6 +11,7 @@ import type {
   Vocabulary,
 } from '../model/mapEditor.js';
 import { DEFAULT_COUNTRY_COLORS_TINT } from '../model/mapEditor.js';
+import type { TerrainPixels } from './bitmaps.js';
 
 /**
  * What more than one part of the page reads or writes. ES modules cannot
@@ -144,6 +145,10 @@ export interface State {
   overlayUri: Record<Overlay, string | null>;
   overlayTiles: Record<Overlay, Tile[] | null>;
   overlayLoading: Record<Overlay, boolean>;
+  /** terrain.bmp once fetched: the Terrain layer's pixels and what the Terrain Lock checks against. */
+  terrain: TerrainPixels | null;
+  /** Terrain Lock: the brush leaves the pixels terrain.bmp has as water alone. */
+  terrainLock: boolean;
 }
 
 export const state: State = {
@@ -171,11 +176,15 @@ export const state: State = {
   overlayUri: { rivers: null, terrain: null },
   overlayTiles: { rivers: null, terrain: null },
   overlayLoading: { rivers: false, terrain: false },
+  terrain: null,
+  terrainLock: true,
 };
 
 export const idByColor = new Map<number, number>();
 export const definitionById = new Map<number, ProvinceDefinition>();
 export const seaIds = new Set<number>();
+/** The terrain.bmp indices map/terrain.txt types as water, from the map message. */
+export const waterTerrain = new Set<number>();
 // Points moved but not written, province by province. They survive moving to
 // the next province, draw on the map, and go out together on Save all.
 export const pendingPositions = new Map<number, Draft>();

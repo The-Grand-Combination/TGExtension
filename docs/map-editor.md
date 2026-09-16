@@ -179,6 +179,14 @@ row names is still a blob on the map and painting with it would silently merge t
 walked once, on the first Generate; after that the only colour that can reach the map is the brush's,
 and that one is remembered as it is set.
 
+**Terrain Lock**, above Generate Color and on by default, keeps the brush on land: the pencil, Draw
+and paint and the bucket leave alone every pixel that `map/terrain.bmp` has as water, and the status
+bar counts what a stroke held back. Water is whatever `map/terrain.txt` says it is — the palette
+indices typed as a category with `is_water = yes` (`ocean`, index 254, in the game and in TGC) — so
+a mod's own terrain scheme is honoured. Choosing a painting tool fetches `terrain.bmp` if the Terrain
+layer has not already; until it is in, or when the mods have none, it cannot be read or it is not the
+map's size, the lock paints nothing and says why, and unticking it paints regardless.
+
 Both boxes are **three tool icons wide** and no wider, padding included: they sit over the map, which
 is what is being looked at. Everything in them is sized to that one width — the type is a notch
 smaller, the buttons grow from their own labels to share a row, and a layer name stays on one line

@@ -10,6 +10,7 @@ import {
   terrainSpriteTextures,
   terrainTypeByIndex,
   textureCandidates,
+  waterTerrainIndices,
 } from '../../services/terrainPictures.js';
 import { encodeBmp24, encodeBmp8 } from './bmpFixtures.js';
 
@@ -50,6 +51,20 @@ suite('terrainPictures', () => {
   test('maps terrain.bmp indices to their category', () => {
     const types = terrainTypeByIndex(parseDocument(TERRAIN_TXT).document);
     assert.deepStrictEqual([...types], [[0, 'arctic'], [1, 'farmlands'], [2, 'farmlands']]);
+  });
+
+  test('the water indices are the ones typed as a category with is_water', () => {
+    const text = [
+      'categories = { ocean = { is_water = yes color = { 0 0 255 } } lake = { is_water = no } farmlands = { color = { 4 5 6 } } }',
+      'text_1 = { type = farmlands color = { 1 } priority = 1 }',
+      'ocean1 = { type = ocean color = { 254 } }',
+      'lake1 = { type = lake color = { 253 } }',
+    ].join('\n');
+    assert.deepStrictEqual([...waterTerrainIndices(parseDocument(text).document)], [254]);
+  });
+
+  test('without a categories block nothing is water', () => {
+    assert.deepStrictEqual([...waterTerrainIndices(parseDocument(TERRAIN_TXT).document)], []);
   });
 
   test('offers the other extension the game also loads', () => {
