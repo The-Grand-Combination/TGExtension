@@ -63,9 +63,17 @@ let pickReturn: Tool | null = null;
  */
 let usedColors: Set<number> | null = null;
 
+/** The eraser lives on the pencil's button: it is the pencil, lit, with the other glyph. */
+function isPencilButton(tool: Tool, next: Tool): boolean {
+  return tool === next || (tool === 'pencil' && next === 'eraser');
+}
+
 export function setTool(next: Tool): void {
   state.tool = next;
-  for (const entry of toolButtons) { entry.button.classList.toggle('active', entry.tool === next); }
+  for (const entry of toolButtons) {
+    entry.button.classList.toggle('active', isPencilButton(entry.tool, next));
+    if (entry.tool === 'pencil') { entry.button.classList.toggle('erasing', next === 'eraser'); }
+  }
   brushSize.disabled = !paints(next);
   brushRow.classList.toggle('off', !paints(next));
   mapArea.classList.toggle('painting', next !== 'hand' && next !== 'pick' && next !== 'reference');
@@ -76,7 +84,7 @@ export function setTool(next: Tool): void {
 
 /** The tools the brush width is for. */
 function paints(which: Tool): boolean {
-  return which === 'pencil' || which === 'draw';
+  return which === 'pencil' || which === 'eraser' || which === 'draw';
 }
 
 /**
@@ -213,9 +221,23 @@ function prefetchTerrain(): void {
   ensureTerrain().catch(function (error: unknown) { setStatus('Could not read terrain.bmp: ' + messageOf(error), 'error'); });
 }
 
+/** The eraser only undoes the draft: a pixel still the file's is not its business, so the lock has nothing to say. */
+function eraseIndices(indices: readonly number[], currentImage: DecodedImage): void {
+  const pixels = new Map<number, number>();
+  for (const index of indices) {
+    const original = paintedFrom.get(index);
+    const before = currentImage.packed[index];
+    if (original === undefined || before === undefined || before === original) { continue; }
+    pixels.set(index, original);
+    if (stroke && !stroke.has(index)) { stroke.set(index, before); }
+  }
+  paintPixels(pixels);
+}
+
 function paintIndices(indices: readonly number[], color: number): void {
   const currentImage = state.image;
   if (!currentImage) { return; }
+  if (state.tool === 'eraser') { eraseIndices(indices, currentImage); return; }
   const allowed = state.terrainLock ? landOnly(indices, currentImage) : indices;
   if (!allowed) { return; }
   const pixels = new Map<number, number>();
@@ -413,13 +435,17 @@ export function applyUndoLimit(steps: number): void {
   while (undoSteps.length > undoLimit) { undoSteps.shift(); }
 }
 
-/** A tool button: the eye drop remembers where it came from, the reference tool says what it does. */
-function pickTool(next: Tool): void {
+/** A tool button: the eye drop remembers where it came from, the pencil clicked again is the eraser, the reference tool says what it does. */
+function pickTool(clicked: Tool): void {
+  const next = clicked === 'pencil' && state.tool === 'pencil' ? 'eraser' : clicked;
   // Picked up from the pencil, the eye drop goes back to the pencil after one
   // colour; picked up on purpose, or left for another tool, it does not.
   pickReturn = next === 'pick' && state.tool !== 'pick' ? state.tool : null;
   setTool(next);
-  if (paints(next) || next === 'bucket') { prefetchTerrain(); }
+  if (next === 'pencil' || next === 'draw' || next === 'bucket') { prefetchTerrain(); }
+  if (next === 'eraser') {
+    setStatus('Eraser: drag over what you painted to take it back; the file\'s own pixels stay. Click the pencil again for the pencil.');
+  }
   if (next === 'reference') {
     setStatus(referenceCount() === 0
       ? 'No reference pictures yet: Add Reference in the Layers box puts one on the map.'

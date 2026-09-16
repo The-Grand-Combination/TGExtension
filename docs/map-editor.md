@@ -161,7 +161,12 @@ Layers box ([Reference pictures](#reference-pictures)). The other three paint wi
   one click out of the drawing, not two.
 - the **pencil** paints the pixels it is dragged over, as a square of the brush slider's map pixels
   (1 by default, up to 16; the slider is greyed under the tools that do not draw a line). A fast drag
-  still draws a line, not a dotted one.
+  still draws a line, not a dotted one. Clicking the pencil **while it is the tool** turns it into the
+  **eraser** (the button keeps its place and shows the eraser glyph; clicking again gives the pencil
+  back). The eraser rubs out only the draft: a pixel it passes over goes back to the colour
+  `provinces.bmp` has for it, and a pixel that was never painted is not touched, so the file's own
+  map cannot be erased. It uses the brush width, is one undo step per drag like the pencil, and the
+  Terrain Lock has nothing to say to it.
 - **Draw and paint** grows a province in one gesture: draw a line that leaves a province of the
   chosen colour and comes back into it somewhere else, and everything the line shut in is filled.
   The line and the pixels already holding the colour are one wall; whatever the edge of the map can

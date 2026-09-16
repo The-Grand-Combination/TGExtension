@@ -59,7 +59,8 @@ export interface View {
   y: number;
 }
 
-export type Tool = 'hand' | 'reference' | 'pencil' | 'draw' | 'bucket' | 'pick';
+/** `eraser` is the pencil button clicked a second time: it only takes back the draft's own pixels. */
+export type Tool = 'hand' | 'reference' | 'pencil' | 'eraser' | 'draw' | 'bucket' | 'pick';
 
 /** The two ways the province map can be repainted; both are tints of the same bitmap, so at most one is on. */
 export type TintMode = 'country' | 'state';
