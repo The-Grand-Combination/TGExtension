@@ -358,7 +358,7 @@ export class MapEditorPanel implements vscode.Disposable {
     }
     const result = await request(client, MAP_EDITOR_POSITIONS_REQUEST, this.params);
     if (result.kind === 'ready') {
-      post(panel, { type: 'positions', markers: result.markers });
+      post(panel, { type: 'positions', markers: result.markers, labels: result.labels });
     } else {
       client.outputChannel.appendLine(`Map editor: ${result.reason}`);
     }

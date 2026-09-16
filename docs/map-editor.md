@@ -17,10 +17,10 @@ a province shows and edits five things about it:
    with type, culture, religion and size. A pop's `militancy` / `rebel_type`, when the file has
    them, are kept as they are.
 5. **Positions** — the `<id> = { ... }` block of `map/positions.txt`: where the game draws the
-   province's `unit`, `city` and `factory`, and the `fort`, `railroad` and `naval_base` inside
+   province's name (`text_position`, with the `text_rotation` and `text_scale` it draws it by), its
+   `unit`, `city` and `factory`, and the `fort`, `railroad` and `naval_base` inside
    `building_position`. `y` counts from the bottom of the map. The other entries of the block
-   (`text_position`, `text_rotation`, `text_scale`, construction points, `building_rotation`, ...)
-   are kept as they are.
+   (construction points, `building_rotation`, ...) are kept as they are.
 
 The first three are one tab with **one Save** at the bottom of it: the name, the climate, the states
 and the history file are what a province *is*, and they are written together. Pops and Positions are
@@ -35,6 +35,17 @@ coordinate moves the dot, dragging a dot fills in the coordinates, and the targe
 drops the point on the province's centre of mass (moved to the nearest pixel the province owns, so a
 crescent-shaped one does not send it to a neighbour). Nothing is written until **Save**; **Cancel**,
 next to every Save, puts the whole form back as the file has it.
+
+With the **Text Positions** switch on, every province's **name** is drawn from its **Name** point,
+turned by `text_rotation` and sized by `text_scale` — a guide to the angle and the size, not the
+game's own type. The selected province's name comes from the form and shows at any zoom; the rest
+come from the file and appear with the dots. A second dot sits at the end of the selected province's
+name: dragging it swings the name around the Name point and writes the angle, so the label can be
+aimed without doing trigonometry. The name shown is the localisation's for the selected province and
+the `definition.csv` one for the rest. Under the rows, the **rotation** and **scale** fields hold the same
+two values — the rotation in radians, as the file keeps it, with the degrees beside it in grey — and
+clearing a field takes its line out of the block. The angle grows counter-clockwise from east, the
+way `positions.txt` counts it (0 to 2π).
 
 A **Save** reads back from disk only what it wrote: what the other tabs are holding — the history
 form, the pops table, the climate, the states, the points that were dragged — is kept exactly as it
@@ -126,6 +137,10 @@ the **map switches** and, under them, the **Fit** (whole map in view) and **Relo
 and the mod files) buttons:
 
 - **Positions** (on by default) shows or hides the dots at any zoom; hidden dots cannot be dragged.
+- **Text Positions** (on by default) draws every province's name where its `text_position` puts it,
+  turned by its `text_rotation` and sized by its `text_scale`, once the view is zoomed in as far as
+  the dots need. With it off no name is drawn at all, not even the selected province's, and the grip
+  that turns the name cannot be grabbed.
 - **Country Colors** (off by default) repaints every province towards the `color` of the country
   that owns it at the start date (the top-level `owner` of its history file; dated blocks are
   ignored). Each pixel becomes a mix of the owner's colour and the province's own `definition.csv`
@@ -329,7 +344,8 @@ the search: type a province id or a name and press **Go** or Enter. A name is ma
 one holding it.
 
 A sea province (from `sea_starts`) opens like any other, under the ocean picture, but it can only have
-the two things the game gives it: its name and the `unit` point fleets are drawn at. The history
+the three things the game gives it: its name, where that name is drawn, and the `unit` point fleets
+are drawn at. The history
 form, the State list, the other position kinds and the Buildings, Extra Dates and Pops tabs are
 greyed out and take no input — the Definition tab's Save is not, because the name is still its to
 write, and the server creates no history file for open water whatever the locked form holds. The History and Pops
@@ -431,8 +447,9 @@ mod's own code page — see [encoding.md](encoding.md).
   does not have yet — and the block is appended there. It is greyed out, not taken away, once the
   province has a block of its own.
 - **Positions** (`services/provincePositionsEdit.ts`): a moved point rewrites only the `x` / `y`
-  values that differ (compared as numbers, written with the game's six decimals); a cleared point
-  loses its lines and the blank line after them; a new point is added before the closing brace of
+  values that differ (compared as numbers, written with the game's six decimals); `text_rotation`
+  (six decimals) and `text_scale` (two) are patched the same way, as single values; a cleared point
+  or value loses its lines and the blank line after them; a new point is added before the closing brace of
   the province block, inside `building_position` for the building kinds (created when missing, and
   removed when its last point goes and nothing else is in it). Both the TGC layout
   (`x = 643.710000`, four-space indent) and the game's (`x=711.000000`, braces on their own lines,

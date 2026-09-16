@@ -6,6 +6,7 @@ import {
   type PositionKind,
   type PositionMarker,
   type PositionPoint,
+  type ProvinceLabel,
   type ProvincePositions,
 } from '../model/mapEditor.js';
 import {
@@ -20,24 +21,36 @@ import {
 
 /**
  * `map/positions.txt`: one `<province id> = { ... }` block per province holding
- * where the game draws things. The editor moves `unit`, `city` and `factory`
- * (`<kind> = { x y }` at the top of the block) and `fort`, `railroad` and
- * `naval_base` inside `building_position = { ... }`. Everything else in a block
- * (`text_position`, rotations, construction points, ...) is kept as written.
+ * where the game draws things. The editor moves `text_position`, `unit`, `city`
+ * and `factory` (`<kind> = { x y }` at the top of the block) and `fort`,
+ * `railroad` and `naval_base` inside `building_position = { ... }`, and writes
+ * the name's `text_rotation` and `text_scale`. Everything else in a block
+ * (construction points, `building_rotation`, ...) is kept as written.
  * `y` counts from the bottom of the map.
  */
 
 const BUILDING_POSITION = 'building_position';
 const COORDINATE_DECIMALS = 6;
 const TOP_KINDS: readonly PositionKind[] = POSITION_KINDS.filter((kind) => !BUILDING_POSITION_KINDS.includes(kind));
+/** The name's scalars, each with the decimals the game writes it with. */
+const TEXT_SCALARS: readonly (readonly [PositionScalar, number])[] = [['text_rotation', 6], ['text_scale', 2]];
 
-export const EMPTY_PROVINCE_POSITIONS: ProvincePositions = {
+type PositionScalar = 'text_rotation' | 'text_scale';
+
+const EMPTY_POINTS: Readonly<Record<PositionKind, PositionPoint | undefined>> = {
+  text_position: undefined,
   unit: undefined,
   city: undefined,
   factory: undefined,
   fort: undefined,
   railroad: undefined,
   naval_base: undefined,
+};
+
+export const EMPTY_PROVINCE_POSITIONS: ProvincePositions = {
+  ...EMPTY_POINTS,
+  text_rotation: undefined,
+  text_scale: undefined,
 };
 
 /** The top-level `<id> = { ... }` assignment of a province, if the file has one. */
@@ -48,23 +61,33 @@ export function findPositionsBlock(document: Document, provinceId: number): Assi
 
 export function parseProvincePositions(block: Block): ProvincePositions {
   const buildings = blockOf(block, BUILDING_POSITION);
-  const positions: Record<PositionKind, PositionPoint | undefined> = { ...EMPTY_PROVINCE_POSITIONS };
+  const positions: Record<PositionKind, PositionPoint | undefined> = { ...EMPTY_POINTS };
   for (const kind of POSITION_KINDS) {
     const container = BUILDING_POSITION_KINDS.includes(kind) ? buildings : block;
     positions[kind] = container ? pointOf(container, kind) : undefined;
   }
-  return positions;
+  return {
+    ...positions,
+    text_rotation: scalarValueOf(block.entries, 'text_rotation'),
+    text_scale: scalarValueOf(block.entries, 'text_scale'),
+  };
+}
+
+/** Every `<id> = { ... }` block of the file, by id. */
+function* provinceBlocks(document: Document): Generator<readonly [number, Block]> {
+  for (const entry of document.entries) {
+    if (entry.kind !== 'assignment' || entry.value.kind !== 'block' || !/^\d+$/.test(entry.key.value)) {
+      continue;
+    }
+    yield [Number(entry.key.value), entry.value];
+  }
 }
 
 /** Every editable point of every province block, for the map to draw; points that are not numbers are skipped. */
 export function positionMarkersOf(document: Document): PositionMarker[] {
   const markers: PositionMarker[] = [];
-  for (const entry of document.entries) {
-    if (entry.kind !== 'assignment' || entry.value.kind !== 'block' || !/^\d+$/.test(entry.key.value)) {
-      continue;
-    }
-    const id = Number(entry.key.value);
-    const positions = parseProvincePositions(entry.value);
+  for (const [id, block] of provinceBlocks(document)) {
+    const positions = parseProvincePositions(block);
     for (const kind of POSITION_KINDS) {
       const point = positions[kind];
       const x = point === undefined ? Number.NaN : Number(point.x);
@@ -77,16 +100,53 @@ export function positionMarkersOf(document: Document): PositionMarker[] {
   return markers;
 }
 
+/** Where each province's name is drawn: no `text_position`, no label. */
+export function provinceLabelsOf(document: Document): ProvinceLabel[] {
+  const labels: ProvinceLabel[] = [];
+  for (const [id, block] of provinceBlocks(document)) {
+    const positions = parseProvincePositions(block);
+    const point = positions.text_position;
+    const x = point === undefined ? Number.NaN : Number(point.x);
+    const y = point === undefined ? Number.NaN : Number(point.y);
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      labels.push({
+        id,
+        x,
+        y,
+        rotation: numberOr(positions.text_rotation, 0),
+        scale: numberOr(positions.text_scale, 1),
+      });
+    }
+  }
+  return labels;
+}
+
+function numberOr(value: string | undefined, fallback: number): number {
+  const number = value === undefined ? Number.NaN : Number(value.trim());
+  return Number.isFinite(number) ? number : fallback;
+}
+
 /** A coordinate as the game writes it (six decimals); text that is not a number is kept. */
 export function formatCoordinate(value: string): string {
+  return formatNumber(value, COORDINATE_DECIMALS);
+}
+
+function formatNumber(value: string, decimals: number): string {
   const trimmed = value.trim();
   const number = Number(trimmed);
-  return trimmed !== '' && Number.isFinite(number) ? number.toFixed(COORDINATE_DECIMALS) : trimmed;
+  return trimmed !== '' && Number.isFinite(number) ? number.toFixed(decimals) : trimmed;
 }
 
 /** Whether two coordinates are the same number (`643.71` is `643.710000`). */
 export function sameCoordinate(left: string, right: string): boolean {
   return formatCoordinate(left) === formatCoordinate(right);
+}
+
+/** Whether two written numbers are the same value (`6` is `6.00`); text that is not a number counts as itself. */
+function sameNumber(left: string, right: string): boolean {
+  const one = Number(left.trim());
+  const other = Number(right.trim());
+  return Number.isFinite(one) && Number.isFinite(other) ? one === other : left.trim() === right.trim();
 }
 
 /** `<id> = { ... }` holding only the given points, indented with the file's unit. */
@@ -97,18 +157,19 @@ export function renderPositionsBlock(
   unit: string,
   eol: string,
 ): string {
-  const lines = [`${String(provinceId)} = {`];
+  const body: string[] = [];
   for (const kind of TOP_KINDS) {
     const point = positions[kind];
     if (point) {
-      lines.push(...pointLines(kind, point, unit).map((line) => unit + line));
+      body.push(...pointLines(kind, point, unit));
+    }
+    // The name's scalars follow its point, where the game writes them.
+    if (kind === 'text_position') {
+      body.push(...scalarLines(positions));
     }
   }
-  const buildings = buildingLines(positions, unit);
-  if (buildings.length > 0) {
-    lines.push(...buildings.map((line) => unit + line));
-  }
-  lines.push('}');
+  body.push(...buildingLines(positions, unit));
+  const lines = [`${String(provinceId)} = {`, ...body.map((line) => unit + line), '}'];
   return lines.map((line) => indent + line).join(eol);
 }
 
@@ -143,6 +204,9 @@ export function planPositionsEdit(
   const additions: string[] = [];
   for (const kind of TOP_KINDS) {
     patchPoint(text, block, kind, after[kind], unit, eol, patches, additions);
+  }
+  for (const [key, decimals] of TEXT_SCALARS) {
+    patchScalar(text, block, key, after[key], decimals, patches, additions);
   }
   additions.push(...patchBuildings(text, block, after, unit, eol, patches));
   if (additions.length > 0) {
@@ -231,6 +295,50 @@ function patchPoint(
   if (missing.length > 0) {
     patches.push(insertIntoBlock(text, point, missing, unit, eol));
   }
+}
+
+/**
+ * Make the province block's `text_rotation` / `text_scale` match `wanted`: a
+ * value that differs is rewritten, a cleared one loses its line, and one the
+ * block lacks is rendered into `additions` for the caller to place.
+ */
+function patchScalar(
+  text: string,
+  block: Block,
+  key: PositionScalar,
+  wanted: string | undefined,
+  decimals: number,
+  patches: TextPatch[],
+  additions: string[],
+): void {
+  const value = wanted?.trim() ?? '';
+  const entry = firstByKey(block.entries, key);
+  const scalar = entry?.value.kind === 'scalar' ? entry.value : undefined;
+  if (!entry || !scalar) {
+    if (value !== '') {
+      additions.push(`${key} = ${formatNumber(value, decimals)}`);
+    }
+    return;
+  }
+  if (value === '') {
+    patches.push(deleteEntryPatch(text, entry.range));
+    return;
+  }
+  if (!sameNumber(scalar.value, value)) {
+    patches.push({ ...scalar.range, text: formatNumber(value, decimals) });
+  }
+}
+
+/** `text_rotation = ...` / `text_scale = ...` for the scalars `positions` has. */
+function scalarLines(positions: ProvincePositions): string[] {
+  const lines: string[] = [];
+  for (const [key, decimals] of TEXT_SCALARS) {
+    const value = positions[key]?.trim() ?? '';
+    if (value !== '') {
+      lines.push(`${key} = ${formatNumber(value, decimals)}`);
+    }
+  }
+  return lines;
 }
 
 /** `building_position = { ... }` lines for the building points `positions` has; none when it has none. */

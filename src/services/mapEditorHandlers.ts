@@ -84,6 +84,7 @@ import {
   parseProvincePositions,
   planPositionsEdit,
   positionMarkersOf,
+  provinceLabelsOf,
   renderPositionsFile,
 } from './provincePositionsEdit.js';
 import { planDefaultMapEdit, seaStartsOf } from './mapDefaultEdit.js';
@@ -609,7 +610,7 @@ export class MapEditorHandlers {
     if (!file) {
       return { kind: 'unavailable', reason: 'The picked mods have no map/positions.txt.' };
     }
-    return { kind: 'ready', markers: positionMarkersOf(file.document) };
+    return { kind: 'ready', markers: positionMarkersOf(file.document), labels: provinceLabelsOf(file.document) };
   }
 
   /** Who owns each province at the start date and the colour of each owner, for the page to tint the map. */

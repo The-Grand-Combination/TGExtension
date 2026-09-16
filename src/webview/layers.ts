@@ -28,6 +28,7 @@ export interface LayerRow {
 const layerRows = new Map<FixedLayer, LayerRow>();
 const fixedLayersBox = required('fixedLayers');
 const layerPositions = requiredInput('layerPositions');
+const layerText = requiredInput('layerText');
 const tintBoxes: Record<TintMode, HTMLInputElement> = { country: requiredInput('layerCountry'), state: requiredInput('layerState') };
 /** terrain.bmp is fetched once per map, whichever of the Terrain layer and the Terrain Lock asks first. */
 let terrainLoad: Promise<TerrainPixels> | null = null;
@@ -271,6 +272,7 @@ export function resetLayers(riversUri: string | undefined, terrainUri: string | 
 
 export function initLayers(): void {
   layerPositions.addEventListener('change', function () { state.showPositions = layerPositions.checked; render(); });
+  layerText.addEventListener('change', function () { state.showTextLabels = layerText.checked; render(); });
   for (const mode of TINT_MODES) {
     tintBoxes[mode].addEventListener('change', function () { setTintMode(tintBoxes[mode].checked ? mode : null); });
   }

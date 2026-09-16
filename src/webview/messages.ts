@@ -29,6 +29,7 @@ function loadFreshMap(message: Extract<HostMessage, { type: 'map' }>): void {
   targetBox.textContent = fresh.targetName;
   clearSelectionState();
   state.markers = [];
+  state.labels = [];
   pendingPositions.clear();
   refreshPending();
   resetPanel();
@@ -59,6 +60,7 @@ function handleMessage(message: HostMessage): void {
       return;
     case 'positions':
       state.markers = [...message.markers];
+      state.labels = [...message.labels];
       render();
       return;
     case 'settings':

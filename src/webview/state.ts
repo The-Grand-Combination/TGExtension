@@ -6,6 +6,7 @@ import type {
   PositionMarker,
   PositionPoint,
   ProvinceDefinition,
+  ProvinceLabel,
   ProvinceDetails,
   Rgb,
   Vocabulary,
@@ -50,8 +51,11 @@ export interface Point {
   readonly y: number;
 }
 
-/** A province's points as the form holds them; an absent kind has no block. */
-export type Draft = Partial<Record<PositionKind, PositionPoint | undefined>>;
+/** A province's points as the form holds them, with the name's angle and size; an absent kind has no block. */
+export type Draft = Partial<Record<PositionKind, PositionPoint | undefined>> & {
+  text_rotation?: string | undefined;
+  text_scale?: string | undefined;
+};
 
 export interface View {
   scale: number;
@@ -95,6 +99,7 @@ export interface PositionKindSpec {
 }
 
 export const POSITION_KIND_SPECS: readonly PositionKindSpec[] = [
+  { kind: 'text_position', label: 'Name', color: '#64d2ff' },
   { kind: 'unit', label: 'Unit', color: '#ff3b30' },
   { kind: 'city', label: 'City', color: '#ffd60a' },
   { kind: 'factory', label: 'Factory', color: '#ff9f0a' },
@@ -124,12 +129,18 @@ export interface State {
   // map/positions.txt: every point of the map as the file has it, drawn once
   // the view is close enough; the selected province draws its draft instead.
   markers: PositionMarker[];
+  /** Where the file puts every province's name, for the map to draw them. */
+  labels: ProvinceLabel[];
   draft: Draft | null;
   /** The selected province's points as the file has them. */
   draftBaseline: Draft | null;
   /** Kind -> the Positions tab inputs, kept in step with a drag. */
   positionInputs: Partial<Record<PositionKind, { x: HTMLInputElement; y: HTMLInputElement }>>;
+  /** The Positions tab's rotation field and the degrees beside it, so turning the name on the map shows there too. */
+  labelInputs: { rotation: HTMLInputElement; degrees: HTMLElement } | null;
   showPositions: boolean;
+  /** The Text Positions switch: with it off no name is drawn, not even the selected province's. */
+  showTextLabels: boolean;
   // Country Colors tints every province towards its start-date owner's colour,
   // State Colors towards its first state's; the pixels the clicks read
   // (image.packed) stay the definition colours.
@@ -164,10 +175,13 @@ export const state: State = {
   popDate: '',
   tool: 'hand',
   markers: [],
+  labels: [],
   draft: null,
   draftBaseline: null,
   positionInputs: {},
+  labelInputs: null,
   showPositions: true,
+  showTextLabels: true,
   tintMode: null,
   countryColors: null,
   stateOf: null,

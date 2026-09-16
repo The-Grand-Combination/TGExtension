@@ -219,7 +219,16 @@ function asPositions(value: unknown): ProvincePositions | undefined {
     positions[kind] = point && point.x !== '' && point.y !== '' ? point : undefined;
   }
   // Every kind was assigned just above.
-  return positions as ProvincePositions;
+  return {
+    ...(positions as Readonly<Record<PositionKind, PositionPoint | undefined>>),
+    text_rotation: asWritten(record['text_rotation']),
+    text_scale: asWritten(record['text_scale']),
+  };
+}
+
+/** A value the page sends as it is written; empty or not a string counts as cleared. */
+function asWritten(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() !== '' ? value : undefined;
 }
 
 function asHistory(value: unknown, allowDated: boolean): ProvinceHistory | undefined {

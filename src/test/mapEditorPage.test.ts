@@ -183,7 +183,7 @@ suite('Map Editor panel', () => {
 
 function answerFor(method: string, map: MapEditorMap): MapEditorMap | MapPositionsResult | MapCountryColorsResult {
   if (method === MAP_EDITOR_POSITIONS_REQUEST) {
-    return { kind: 'ready', markers: [] };
+    return { kind: 'ready', markers: [], labels: [] };
   }
   if (method === MAP_EDITOR_COUNTRY_COLORS_REQUEST) {
     return { kind: 'ready', owners: {}, colors: {} };

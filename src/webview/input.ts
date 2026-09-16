@@ -1,12 +1,11 @@
-import type { PositionKind } from '../model/mapEditor.js';
 import { fitView, highlightOf, insideImage, provinceAt, render, toImage, toImageExact, zoomAt } from './canvas.js';
 import { canvas, mapArea, required, requiredInput, saveAllButton, setStatus, tooltip } from './dom.js';
 import { post } from './host.js';
 import { continueStroke, endStroke, hexOf, setTool, startPaint, stepBack, stepForward, strokeInProgress } from './paint.js';
 import { renderSide, resetHeader, showHint } from './panel/panel.js';
-import { capturePending, markerAt, pendingCount, sendPending, setDraftPoint } from './positions.js';
+import { capturePending, handleLabel, markerAt, moveHandle, pendingCount, sendPending, type PositionHandle } from './positions.js';
 import { endReferenceDrag, gripCursor, hasActiveReference, moveReference, pressReference, referenceDragging, selectReference } from './references.js';
-import { definitionById, POSITION_KIND_SPECS, seaIds, state, type Highlight, type Point, type Tool } from './state.js';
+import { definitionById, seaIds, state, type Highlight, type Point, type Tool } from './state.js';
 
 /** The mouse and the keyboard over the map, and what a click on it opens. */
 
@@ -17,7 +16,7 @@ interface Drag {
   readonly viewX: number;
   readonly viewY: number;
   moved: boolean;
-  readonly marker: PositionKind | null;
+  readonly marker: PositionHandle | null;
   /** Only the left button opens a province: the others are here to move the map. */
   readonly select: boolean;
   /** The tool the right button borrowed the hand from, given back when it comes up. */
@@ -57,7 +56,7 @@ function onMouseMove(event: MouseEvent): void {
   if (current?.marker && state.image) {
     current.moved = true;
     const place = toImageExact(event.clientX, event.clientY);
-    setDraftPoint(current.marker, place.x, state.image.height - place.y);
+    moveHandle(current.marker, place.x, state.image.height - place.y);
     return;
   }
   if (current) {
@@ -114,15 +113,14 @@ function onKeyDown(event: KeyboardEvent): void {
 
 function showTooltip(event: MouseEvent): void {
   if (!state.image || event.target !== canvas) { tooltip.hidden = true; mapArea.classList.remove('moving'); return; }
-  const kind = state.tool === 'hand' ? markerAt(event.clientX, event.clientY) : null;
-  mapArea.classList.toggle('moving', kind !== null);
+  const handle = state.tool === 'hand' ? markerAt(event.clientX, event.clientY) : null;
+  mapArea.classList.toggle('moving', handle !== null);
   const place = toImage(event.clientX, event.clientY);
-  const id = kind ? state.selectedId : provinceAt(place);
+  const id = handle ? state.selectedId : provinceAt(place);
   if (id === undefined || id === null) { showColorTooltip(event, place); return; }
   const definition = definitionById.get(id);
-  const kindLabel = POSITION_KIND_SPECS.find(function (spec) { return spec.kind === kind; })?.label ?? String(kind);
-  tooltip.textContent = kind
-    ? kindLabel + ' · ' + String(id) + ' (drag to move)'
+  tooltip.textContent = handle
+    ? handleLabel(handle) + ' · ' + String(id) + (handle === 'text_rotation' ? ' (drag to turn the name)' : ' (drag to move)')
     : String(id) + (definition?.name ? ' · ' + definition.name : '') + (seaIds.has(id) ? ' (sea)' : '');
   placeTooltip(event);
 }

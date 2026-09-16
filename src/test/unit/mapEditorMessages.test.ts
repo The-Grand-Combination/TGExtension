@@ -11,7 +11,7 @@ suite('mapEditorMessages', () => {
     const message = asPageMessage({
       type: 'pending',
       edits: [
-        { provinceId: 42, data: { unit: { x: '1.00', y: '2.00' } } },
+        { provinceId: 42, data: { unit: { x: '1.00', y: '2.00' }, text_rotation: '5.544018', text_scale: ' ' } },
         { provinceId: 7, data: { city: { x: '3.50', y: '4.25' }, fort: { x: '', y: '9' } } },
       ],
     });
@@ -19,7 +19,17 @@ suite('mapEditorMessages', () => {
     assert.strictEqual(message.edits.length, 2);
     assert.deepStrictEqual(message.edits[0], {
       provinceId: 42,
-      data: { unit: { x: '1.00', y: '2.00' }, city: undefined, factory: undefined, fort: undefined, railroad: undefined, naval_base: undefined },
+      data: {
+        text_position: undefined,
+        unit: { x: '1.00', y: '2.00' },
+        city: undefined,
+        factory: undefined,
+        fort: undefined,
+        railroad: undefined,
+        naval_base: undefined,
+        text_rotation: '5.544018',
+        text_scale: undefined,
+      },
     });
     // A kind without both coordinates is a cleared point, not a half-written one.
     assert.strictEqual(message.edits[1]?.data.fort, undefined);

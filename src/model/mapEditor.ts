@@ -181,12 +181,12 @@ export interface PopsSection {
 }
 
 /**
- * The `map/positions.txt` points the editor moves: the three top-level
+ * The `map/positions.txt` points the editor moves: the four top-level
  * `<kind> = { x y }` blocks and the three inside `building_position`. The
- * order is the order of the panel's rows and of the map legend.
+ * order is the order of the file, of the panel's rows and of the map legend.
  */
-export type PositionKind = 'unit' | 'city' | 'factory' | 'fort' | 'railroad' | 'naval_base';
-export const POSITION_KINDS: readonly PositionKind[] = ['unit', 'city', 'factory', 'fort', 'railroad', 'naval_base'];
+export type PositionKind = 'text_position' | 'unit' | 'city' | 'factory' | 'fort' | 'railroad' | 'naval_base';
+export const POSITION_KINDS: readonly PositionKind[] = ['text_position', 'unit', 'city', 'factory', 'fort', 'railroad', 'naval_base'];
 /** The kinds that sit inside `building_position = { ... }` rather than at the top of the province block. */
 export const BUILDING_POSITION_KINDS: readonly PositionKind[] = ['fort', 'railroad', 'naval_base'];
 
@@ -197,7 +197,12 @@ export interface PositionPoint {
 }
 
 /** A province's editable positions; an undefined kind has no block. */
-export type ProvincePositions = Readonly<Record<PositionKind, PositionPoint | undefined>>;
+export interface ProvincePositions extends Readonly<Record<PositionKind, PositionPoint | undefined>> {
+  /** `text_rotation`: the angle in radians the game turns the province name by, as written. */
+  readonly text_rotation: string | undefined;
+  /** `text_scale`: the multiplier on the name's size, as written. */
+  readonly text_scale: string | undefined;
+}
 
 export interface PositionsSection {
   readonly file: FileRef | undefined;
@@ -213,8 +218,19 @@ export interface PositionMarker {
   readonly y: number;
 }
 
+/** Where the game draws one province's name, for the map to draw it too. */
+export interface ProvinceLabel {
+  readonly id: number;
+  readonly x: number;
+  readonly y: number;
+  /** `text_rotation` in radians counter-clockwise; 0 when the block has none. */
+  readonly rotation: number;
+  /** `text_scale`; 1 when the block has none, the game's own floor. */
+  readonly scale: number;
+}
+
 export type MapPositionsResult =
-  | { readonly kind: 'ready'; readonly markers: readonly PositionMarker[] }
+  | { readonly kind: 'ready'; readonly markers: readonly PositionMarker[]; readonly labels: readonly ProvinceLabel[] }
   | { readonly kind: 'unavailable'; readonly reason: string };
 
 /** An identifier with the name the localisation gives it (the identifier itself when it has none). */
@@ -411,7 +427,7 @@ export type HostMessage =
   | { readonly type: 'references'; readonly folderUri: string; readonly layers: readonly ReferenceLayer[] }
   | ({ readonly type: 'revealPixel' } & MapEditorReveal)
   | { readonly type: 'details'; readonly details: ProvinceDetails }
-  | { readonly type: 'positions'; readonly markers: readonly PositionMarker[] }
+  | { readonly type: 'positions'; readonly markers: readonly PositionMarker[]; readonly labels: readonly ProvinceLabel[] }
   | { readonly type: 'settings'; readonly countryColorsTint: number; readonly paintUndoSteps: number }
   | { readonly type: 'countryColors'; readonly owners: Readonly<Record<string, string>>; readonly colors: Readonly<Record<string, Rgb>> }
   | { readonly type: 'stateColors'; readonly states: Readonly<Record<string, string>> }

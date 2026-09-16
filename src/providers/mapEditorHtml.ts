@@ -81,6 +81,7 @@ ${PAGE_STYLE}
           <label><input type="checkbox" id="layerCountry"> Country Colors</label>
           <label><input type="checkbox" id="layerState" title="Every province in the colour of the first map/region.txt state listing it"> State Colors</label>
           <label><input type="checkbox" id="layerPositions" checked> Positions</label>
+          <label><input type="checkbox" id="layerText" checked title="Draw each province's name where map/positions.txt puts it, turned and sized as the game draws it"> Text Positions</label>
           <div class="actions">
             <button id="fitButton" class="secondary" title="Fit the whole map in the view">Fit</button>
             <button id="reloadButton" class="secondary" title="Re-read the map and the mod files">Reload</button>
@@ -358,6 +359,10 @@ const PAGE_STYLE = String.raw`
   .pos-row .pos-label { flex: 0 0 78px; opacity: 0.85; margin-left: 4px; }
   .pos-row input { flex: 1; min-width: 0; width: auto; }
   .pos-head { padding-left: 96px; }
+  /* The name's angle and size belong to the Text point: same columns, no swatch of its own. */
+  .label-row .swatch { visibility: hidden; }
+  .label-row .sub { flex: none; opacity: 0.75; }
+  .label-row .deg { flex: 0 0 52px; font-style: italic; opacity: 0.6; }
   label.check { display: flex; gap: 6px; align-items: center; opacity: 0.9; margin-top: 2px; position: relative; top: 2px; }
   .tabs { display: flex; flex-wrap: wrap; gap: 2px; margin: 10px 0 4px; border-bottom: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, #444)); }
   .tabs button { background: transparent; color: var(--vscode-foreground); opacity: 0.7; border-radius: 0; padding: 6px 10px; border-bottom: 2px solid transparent; }

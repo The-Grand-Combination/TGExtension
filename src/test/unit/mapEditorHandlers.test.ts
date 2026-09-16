@@ -92,6 +92,9 @@ const EMPTY_HISTORY: ProvinceHistory = {
 };
 
 const EMPTY_POSITIONS: ProvincePositions = {
+  text_position: undefined,
+  text_rotation: undefined,
+  text_scale: undefined,
   unit: undefined,
   city: undefined,
   factory: undefined,

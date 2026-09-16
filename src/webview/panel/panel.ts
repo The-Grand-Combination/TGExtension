@@ -137,6 +137,8 @@ function resetDraft(current: ProvinceDetails): void {
     const point = current.positions.data?.[spec.kind];
     fresh[spec.kind] = point ? { x: point.x, y: point.y } : undefined;
   }
+  fresh.text_rotation = current.positions.data?.text_rotation;
+  fresh.text_scale = current.positions.data?.text_scale;
   state.draft = fresh;
   state.draftBaseline = clonePoints(fresh);
   const held = pendingPositions.get(current.id);

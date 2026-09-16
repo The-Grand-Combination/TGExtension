@@ -9,6 +9,7 @@ import {
   parseProvincePositions,
   planPositionsEdit,
   positionMarkersOf,
+  provinceLabelsOf,
   renderPositionsFile,
   sameCoordinate,
 } from '../../services/provincePositionsEdit.js';
@@ -92,6 +93,9 @@ function edit(text: string, provinceId: number, after: ProvincePositions): strin
 suite('provincePositionsEdit', () => {
   test('reads the editable points of a block and leaves the rest alone', () => {
     assert.deepStrictEqual(positionsOf(FILE, 1), {
+      text_position: { x: '643.710000', y: '2491.466667' },
+      text_rotation: '5.544018',
+      text_scale: '6',
       unit: { x: '633.650000', y: '2502.135000' },
       city: { x: '650.975000', y: '2472.840000' },
       factory: { x: '649.820000', y: '2478.195000' },
@@ -101,7 +105,11 @@ suite('provincePositionsEdit', () => {
     });
     assert.deepStrictEqual(positionsOf(FILE, 2), { ...EMPTY_PROVINCE_POSITIONS, unit: { x: '664.687500', y: '2518.958334' } });
     assert.deepStrictEqual(positionsOf(FILE, 2985), EMPTY_PROVINCE_POSITIONS);
-    assert.deepStrictEqual(positionsOf(VANILLA, 1), { ...EMPTY_PROVINCE_POSITIONS, unit: { x: '711.000000', y: '1992.000000' } });
+    assert.deepStrictEqual(positionsOf(VANILLA, 1), {
+      ...EMPTY_PROVINCE_POSITIONS,
+      unit: { x: '711.000000', y: '1992.000000' },
+      text_rotation: '5.323253',
+    });
   });
 
   test('lists every numeric point of the map', () => {
@@ -109,6 +117,7 @@ suite('provincePositionsEdit', () => {
     assert.deepStrictEqual(
       markers.map((marker) => [marker.id, marker.kind, marker.x, marker.y]),
       [
+        [1, 'text_position', 643.71, 2491.466667],
         [1, 'unit', 633.65, 2502.135],
         [1, 'city', 650.975, 2472.84],
         [1, 'factory', 649.82, 2478.195],
@@ -117,6 +126,19 @@ suite('provincePositionsEdit', () => {
         [2, 'unit', 664.6875, 2518.958334],
       ],
     );
+  });
+
+  test('lists where each province name is drawn, filling in what the block leaves out', () => {
+    assert.deepStrictEqual(provinceLabelsOf(parseDocument(FILE).document), [
+      { id: 1, x: 643.71, y: 2491.466667, rotation: 5.544018, scale: 6 },
+    ]);
+    // No angle and no size is the game's own default: upright, and the size of one unit.
+    const bare = FILE.replace('    text_rotation = 5.544018\r\n    text_scale = 6\r\n', '');
+    assert.deepStrictEqual(provinceLabelsOf(parseDocument(bare).document), [
+      { id: 1, x: 643.71, y: 2491.466667, rotation: 0, scale: 1 },
+    ]);
+    // A block with an angle but no point has nowhere to draw a name.
+    assert.deepStrictEqual(provinceLabelsOf(parseDocument(VANILLA).document), []);
   });
 
   test('compares and formats coordinates as numbers', () => {
@@ -140,8 +162,33 @@ suite('provincePositionsEdit', () => {
     assert.strictEqual(patches.length, 1);
     const edited = applyPatches(FILE, patches);
     assert.strictEqual(edited, FILE.replace('y = 2502.135000', 'y = 2510.500000'));
-    const vanilla = edit(VANILLA, 1, { ...EMPTY_PROVINCE_POSITIONS, unit: { x: '700', y: '1992' } });
+    const vanilla = edit(VANILLA, 1, { ...positionsOf(VANILLA, 1), unit: { x: '700', y: '1992' } });
     assert.strictEqual(vanilla, VANILLA.replace('x=711.000000', 'x=700.000000'));
+  });
+
+  test('the name\'s angle and size are rewritten, added and cleared', () => {
+    const before = positionsOf(FILE, 1);
+    const turned = edit(FILE, 1, { ...before, text_rotation: '1.5' });
+    assert.strictEqual(turned, FILE.replace('text_rotation = 5.544018', 'text_rotation = 1.500000'));
+    // The value is compared as a number, so the same angle written differently patches nothing.
+    assert.deepStrictEqual(planPositionsEdit(FILE, parseDocument(FILE).document, 1, { ...before, text_scale: '6.00' }), []);
+    const cleared = edit(FILE, 1, { ...before, text_scale: undefined });
+    assert.strictEqual(cleared, FILE.replace('    text_scale = 6\r\n', ''));
+    const added = edit(FILE, 2, { ...positionsOf(FILE, 2), text_rotation: '0.25', text_scale: '3.75' });
+    assert.ok(added.includes('    }\r\n\r\n    text_rotation = 0.250000\r\n    text_scale = 3.75\r\n} # Kenai'), added);
+  });
+
+  test('a new block writes the name before the points, as the game does', () => {
+    assert.strictEqual(
+      renderPositionsFile(1, {
+        ...EMPTY_PROVINCE_POSITIONS,
+        text_position: { x: '1', y: '2' },
+        text_rotation: '0.5',
+        text_scale: '4',
+        unit: { x: '3', y: '4' },
+      }),
+      '1 = {\r\n\ttext_position = {\r\n\t\tx = 1.000000\r\n\t\ty = 2.000000\r\n\t}\r\n\ttext_rotation = 0.500000\r\n\ttext_scale = 4.00\r\n\tunit = {\r\n\t\tx = 3.000000\r\n\t\ty = 4.000000\r\n\t}\r\n}\r\n',
+    );
   });
 
   test('a cleared point loses its lines and the blank line after them', () => {
