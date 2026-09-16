@@ -12,6 +12,7 @@ import type {
 import type { IdentifierCategory } from '../model/symbols.js';
 import { csvRows } from '../parser/csv.js';
 import { yieldToEventLoop } from './scheduling.js';
+import { seaStartsOf } from './mapDefaultEdit.js';
 import { parseDocument } from './syntaxValidation.js';
 
 /** File access needed to build the index; injected so the service stays testable. */
@@ -166,17 +167,10 @@ interface DefaultMapData {
 
 function readDefaultMap(provider: ModFileProvider): DefaultMapData {
   const document = parseRelative(provider, 'map/default.map');
-  const seaProvinces = new Set<string>();
   if (!document) {
-    return { maxProvinces: undefined, seaProvinces };
+    return { maxProvinces: undefined, seaProvinces: new Set() };
   }
-  const seaStarts = firstByKey(document.entries, 'sea_starts');
-  const seaBlock = seaStarts ? asBlock(seaStarts.value) : undefined;
-  for (const entry of seaBlock?.entries ?? []) {
-    if (entry.kind === 'scalar' && entry.type === 'number') {
-      seaProvinces.add(entry.value);
-    }
-  }
+  const seaProvinces = seaStartsOf(document);
   const maxText = scalarValueOf(document.entries, 'max_provinces');
   const maxProvinces = maxText !== undefined && /^\d+$/.test(maxText) ? Number(maxText) : undefined;
   return { maxProvinces, seaProvinces };
@@ -208,6 +202,23 @@ function assignProvincesToStates(provider: ModFileProvider): Map<string, string>
       for (const id of unassigned) {
         owner.set(id, state.key.value.toLowerCase());
       }
+    }
+  }
+  return owner;
+}
+
+/**
+ * Province id → its climate. A climate names two blocks — its modifiers and its
+ * provinces — and only the second one is a membership; the last block to list a
+ * province is the one the engine keeps.
+ */
+function assignProvincesToClimates(provider: ModFileProvider): Map<string, string> {
+  const owner = new Map<string, string>();
+  const document = parseRelative(provider, 'map/climate.txt');
+  for (const climate of document ? blockKeysOf(document) : []) {
+    const block = asBlock(climate.value);
+    for (const id of block ? provinceIdsOf(block) : []) {
+      owner.set(id, climate.key.value.toLowerCase());
     }
   }
   return owner;
@@ -500,6 +511,7 @@ class IndexBuild {
   private issues: IssueIndex = emptyIssueIndex();
   private defaultMap: DefaultMapData = { maxProvinces: undefined, seaProvinces: new Set() };
   private stateOfProvince = new Map<string, string>();
+  private climateOfProvince = new Map<string, string>();
   private techFolders: string[] = [];
 
   readonly steps: readonly (() => void)[] = [
@@ -529,6 +541,7 @@ class IndexBuild {
       maxProvinces: this.defaultMap.maxProvinces,
       seaProvinces: this.defaultMap.seaProvinces,
       stateOfProvince: this.stateOfProvince,
+      climateOfProvince: this.climateOfProvince,
       techFolders: this.techFolders,
       researchBonusKeys: new Set(this.techFolders.map(researchBonusKey)),
       minBuildKeys: this.minBuildKeys(),
@@ -632,6 +645,7 @@ class IndexBuild {
     this.put('terrain', terrainOccurrences(this.provider));
     this.defaultMap = readDefaultMap(this.provider);
     this.stateOfProvince = assignProvincesToStates(this.provider);
+    this.climateOfProvince = assignProvincesToClimates(this.provider);
   }
 
   private indexTechnology(): void {

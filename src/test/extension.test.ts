@@ -11,7 +11,7 @@ import {
   DEFAULT_SUPPRESS_NULL_TAG_WARNINGS,
 } from '../model/validationOptions.js';
 import { DEFAULT_CODEPAGE } from '../io/textCodec.js';
-import { DEFAULT_COUNTRY_COLORS_TINT, DEFAULT_PROVINCE_FOLDER_PATTERN } from '../model/mapEditor.js';
+import { DEFAULT_COUNTRY_COLORS_TINT, DEFAULT_PAINT_UNDO_STEPS, DEFAULT_PROVINCE_FOLDER_PATTERN } from '../model/mapEditor.js';
 import { qualifiedSettingKey, SETTING, type SettingKey } from '../model/settingsKeys.js';
 import { EXTENSION_ID } from './extensionId.js';
 
@@ -153,6 +153,7 @@ suite('Victorian Tools — integration', () => {
       [SETTING.nullTagSuppress]: DEFAULT_SUPPRESS_NULL_TAG_WARNINGS,
       [SETTING.ignoreMarker]: DEFAULT_IGNORE_MARKER,
       [SETTING.countryColorsTint]: DEFAULT_COUNTRY_COLORS_TINT,
+      [SETTING.paintUndoSteps]: DEFAULT_PAINT_UNDO_STEPS,
       [SETTING.provinceFolderPattern]: DEFAULT_PROVINCE_FOLDER_PATTERN,
     };
     const properties = manifestSettings();

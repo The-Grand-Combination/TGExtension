@@ -4,6 +4,7 @@ import {
   affectsSettingsPage,
   readActiveMods,
   readCountryColorsTint,
+  readPaintUndoSteps,
   readFlagNamePattern,
   readGamePath,
   readIgnoreMarker,
@@ -13,6 +14,7 @@ import {
   readProvinceFolderPattern,
   writeActiveMods,
   writeCountryColorsTint,
+  writePaintUndoSteps,
   writeFlagNamePattern,
   writeGamePath,
   writeIgnoreMarker,
@@ -36,6 +38,7 @@ type SettingsMessage =
   | { readonly type: 'ignoreMarker'; readonly value: string }
   | { readonly type: 'provinceFolderPattern'; readonly value: string }
   | { readonly type: 'countryColorsTint'; readonly value: number }
+  | { readonly type: 'paintUndoSteps'; readonly value: number }
   | { readonly type: 'refresh' };
 
 /**
@@ -139,6 +142,9 @@ export class SettingsPanel implements vscode.Disposable {
       case 'countryColorsTint':
         await writeCountryColorsTint(parsed.value);
         return;
+      case 'paintUndoSteps':
+        await writePaintUndoSteps(parsed.value);
+        return;
       case 'refresh':
         await this.refresh();
         return;
@@ -176,6 +182,7 @@ export class SettingsPanel implements vscode.Disposable {
       ignoreMarker: readIgnoreMarker(),
       provinceFolderPattern: readProvinceFolderPattern(),
       countryColorsTint: readCountryColorsTint(),
+      paintUndoSteps: readPaintUndoSteps(),
     });
   }
 }
@@ -199,7 +206,8 @@ function asMessage(message: unknown): SettingsMessage | undefined {
     case 'nullTagSuppress':
       return typeof record['value'] === 'boolean' ? { type: 'nullTagSuppress', value: record['value'] } : undefined;
     case 'countryColorsTint':
-      return asTintMessage(record['value']);
+    case 'paintUndoSteps':
+      return asNumberMessage(type, record['value']);
     case 'select':
       return Array.isArray(record['mods'])
         ? { type: 'select', mods: record['mods'].filter((item): item is string => typeof item === 'string') }
@@ -223,6 +231,6 @@ function isTextMessage(type: unknown): type is (typeof TEXT_MESSAGES)[number] {
   return typeof type === 'string' && (TEXT_MESSAGES as readonly string[]).includes(type);
 }
 
-function asTintMessage(value: unknown): SettingsMessage | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? { type: 'countryColorsTint', value } : undefined;
+function asNumberMessage(type: 'countryColorsTint' | 'paintUndoSteps', value: unknown): SettingsMessage | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? { type, value } : undefined;
 }

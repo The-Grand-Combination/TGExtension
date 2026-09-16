@@ -68,4 +68,6 @@ export interface ModIndex {
   readonly seaProvinces: ReadonlySet<string>;
   /** Province id → the state (region.txt block) the engine assigns it to. */
   readonly stateOfProvince: ReadonlyMap<string, string>;
+  /** Province id → the climate.txt block listing it; a land province needs one. */
+  readonly climateOfProvince: ReadonlyMap<string, string>;
 }
