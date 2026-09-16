@@ -23,8 +23,8 @@ export type PositionHandle = PositionKind | 'text_rotation';
  */
 const LABEL_HEIGHT_PER_SCALE = 0.85;
 /**
- * The game breaks a name at twenty characters: the word that would carry the
- * line past them goes to a second line, and the rest of the name goes with it.
+ * The game breaks a name at twenty-five characters: the word that would carry
+ * the line past them goes to a second line, and the rest of the name goes with it.
  */
 const LABEL_WRAP = 25;
 /** How far the second line sits under the first, in letter heights. */
@@ -367,7 +367,8 @@ export function draftPoint(kind: PositionKind): { x: number; y: number } | null 
 export function markerAt(clientX: number, clientY: number): PositionHandle | null {
   const currentImage = state.image;
   const view = state.view;
-  if (!state.showPositions || !currentImage || !state.draft || view.scale < MARKER_MIN_SCALE || state.tool !== 'hand') { return null; }
+  // The draft's points are drawn whatever the layer switch says, so they take the hand whatever it says too.
+  if (!currentImage || !state.draft || view.scale < MARKER_MIN_SCALE || state.tool !== 'hand') { return null; }
   const rect = mapArea.getBoundingClientRect();
   const px = clientX - rect.left;
   const py = clientY - rect.top;

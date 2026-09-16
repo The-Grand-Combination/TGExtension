@@ -42,8 +42,8 @@ turned by `text_rotation` and as tall as `text_scale` makes it — a guide to th
 the size, not the game's own type. The name stands on the point, in the middle of its length, the way
 the game draws it above the position; `text_scale` sets the height of the letters (0.85 map pixels a
 scale unit, measured against the game), so the length of the name does not change how big it is
-drawn, and the map font is a serif like the game's. A name longer than twenty characters is drawn
-in two lines, the way the game breaks it: the word that would carry the first line past twenty
+drawn, and the map font is a serif like the game's. A name longer than twenty-five characters is drawn
+in two lines, the way the game breaks it: the word that would carry the first line past twenty-five
 characters goes underneath, and the rest of the name goes with it. The selected province's name comes from the form
 and shows at any zoom; the rest
 come from the file and appear with the dots. A second dot sits at the end of the selected province's

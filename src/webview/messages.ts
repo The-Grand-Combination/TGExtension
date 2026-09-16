@@ -155,6 +155,8 @@ function handleSaved(result: SaveResult): void {
   // the forms of the other tabs are still the user's unsaved work.
   if (savingParts().has('positions')) { pendingPositions.delete(saved.id); } else { capturePending(); }
   refreshPending();
+  // The label is rebuilt from this name, so a rename must land here first.
+  locNameById.set(saved.id, saved.localisation.text);
   replaceMarkers(saved.id, saved.positions);
   if (state.selectedId !== saved.id) { setStatus('Saved province ' + String(saved.id), 'ok'); render(); return; }
   carryForms();

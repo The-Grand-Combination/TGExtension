@@ -77,7 +77,7 @@ function onMouseUp(event: MouseEvent): void {
   const wasClick = !drag.moved && !drag.marker && drag.select;
   const restore = drag.restore;
   drag = null;
-  mapArea.classList.remove('dragging');
+  mapArea.classList.remove('dragging', 'moving');
   if (restore) { setTool(restore); }
   if (wasClick && event.target === canvas) {
     clickAt(toImage(event.clientX, event.clientY));
@@ -104,7 +104,7 @@ function onBlur(): void {
   endReferenceDrag();
   const restore = drag?.restore ?? null;
   drag = null;
-  mapArea.classList.remove('dragging');
+  mapArea.classList.remove('dragging', 'moving');
   if (restore) { setTool(restore); }
 }
 
