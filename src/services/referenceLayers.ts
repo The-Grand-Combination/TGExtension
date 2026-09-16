@@ -22,6 +22,8 @@ export interface ReferenceLayer {
   readonly corners: Quad;
   /** 0-100. */
   readonly opacity: number;
+  /** Switched off for now, its opacity kept for when it comes back; absent means shown. */
+  readonly hidden?: boolean;
 }
 
 export interface Box {
@@ -65,7 +67,8 @@ export function asReference(value: unknown): ReferenceLayer | undefined {
   if (typeof record['file'] !== 'string' || record['file'] === '' || !corners || typeof opacity !== 'number' || !Number.isFinite(opacity)) {
     return undefined;
   }
-  return { file: record['file'], corners, opacity: Math.min(100, Math.max(0, opacity)) };
+  const layer: ReferenceLayer = { file: record['file'], corners, opacity: Math.min(100, Math.max(0, opacity)) };
+  return record['hidden'] === true ? { ...layer, hidden: true } : layer;
 }
 
 function asQuad(value: unknown): Quad | undefined {
@@ -113,6 +116,7 @@ export function renderReferences(layers: readonly ReferenceLayer[]): string {
     file: layer.file,
     corners: layer.corners.map((corner) => [round(corner.x), round(corner.y)]),
     opacity: Math.round(layer.opacity),
+    ...(layer.hidden === true ? { hidden: true } : {}),
   }));
   return JSON.stringify({ references }, null, 2) + '\n';
 }

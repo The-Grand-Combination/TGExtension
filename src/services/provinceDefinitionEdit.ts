@@ -21,16 +21,30 @@ export function rowOfColor(rows: readonly ProvinceRow[], color: number): Provinc
   return rows.find((row) => row.color === color);
 }
 
-/** The new row at the end of the file, in the line ending the file already uses. */
+/**
+ * The new row after the last row that has an id, in the line ending the file
+ * already uses. The lake rows, which have none, sit at the end of the file and
+ * stay there: a province put after them would be the one province among lakes.
+ */
 export function appendDefinitionRow(text: string, definition: ProvinceDefinition): string {
   const ending = lineEndingOf(text);
-  const fields = [
+  const row = [
     String(definition.id),
     String((definition.color >> 16) & 0xff),
     String((definition.color >> 8) & 0xff),
     String(definition.color & 0xff),
     definition.name,
     'x',
-  ];
-  return ensureTrailingNewline(text, ending) + fields.join(';') + ending;
+  ].join(';') + ending;
+  const whole = ensureTrailingNewline(text, ending);
+  const lines = whole.split(ending);
+  let last = -1;
+  for (let index = 0; index < lines.length; index++) {
+    if (/^\s*\d+\s*;/.test(lines[index] ?? '')) { last = index; }
+  }
+  if (last < 0) {
+    return whole + row;
+  }
+  const at = lines.slice(0, last + 1).join(ending).length + ending.length;
+  return whole.slice(0, at) + row + whole.slice(at);
 }

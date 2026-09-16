@@ -33,8 +33,18 @@ suite('provinceDefinitionEdit', () => {
 
   test('the row is appended with the file separator and the trailing column', () => {
     const written = appendDefinitionRow(TABLE, { id: 3, color: (10 << 16) | (20 << 8) | 30, name: 'Nova' });
-    assert.ok(written.startsWith(TABLE), 'the table it had is kept as it was');
-    assert.strictEqual(written.slice(TABLE.length), '3;10;20;30;Nova;x\n');
+    assert.strictEqual(written, TABLE.replace('2;204;179;153;Juneau;x\n', '2;204;179;153;Juneau;x\n3;10;20;30;Nova;x\n'));
+  });
+
+  test('the row goes after the last province, not after the lakes that close the file', () => {
+    const lakes = ';red;green;blue;x;x\n1;1;1;1;One;x\n;1;222;200;Unnamed Lakes;x\n;26;27;255;Dead Sea;x\n';
+    const written = appendDefinitionRow(lakes, { id: 2, color: 0, name: 'Two' });
+    assert.strictEqual(written, ';red;green;blue;x;x\n1;1;1;1;One;x\n2;0;0;0;Two;x\n;1;222;200;Unnamed Lakes;x\n;26;27;255;Dead Sea;x\n');
+  });
+
+  test('a table with only the header and lakes takes the row at the end', () => {
+    const written = appendDefinitionRow(';red;green;blue;x;x\n;1;222;200;Unnamed Lakes;x\n', { id: 1, color: 0, name: 'One' });
+    assert.strictEqual(written, ';red;green;blue;x;x\n;1;222;200;Unnamed Lakes;x\n1;0;0;0;One;x\n');
   });
 
   test('a file with no newline at the end gets one before the row', () => {

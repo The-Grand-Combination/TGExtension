@@ -33,7 +33,18 @@ interface Reference {
   layer: ReferenceLayer;
   bitmap: ImageBitmap | null;
   row: HTMLElement;
+  /** The picture already bent to its corners, kept until they or the zoom change. */
+  warped: Warped | null;
 }
+
+interface Warped {
+  readonly corners: Quad;
+  readonly scale: number;
+  readonly canvas: HTMLCanvasElement;
+}
+
+/** The most pixels a bent picture is drawn with: enough for the screen, bounded for the memory. */
+const WARP_MAX_PIXELS = 4_000_000;
 
 let references: Reference[] = [];
 let referencesFolder = '';
@@ -43,8 +54,6 @@ let referencesTimer: number | null = null;
 /** Cells per side of the mesh a distorted picture is drawn with. */
 const MESH = 8;
 const GRIP_PX = 7;
-/** How far a mesh triangle is drawn past its edge, in map pixels, so the clipped seams do not show. */
-const SEAM = 0.5;
 
 const referenceLayersBox = required('referenceLayers');
 const layersBox = required('layersBox');
@@ -81,7 +90,7 @@ export function handleReferences(folderUri: string, layers: readonly ReferenceLa
   const merged = mergeReferenceLists(references.map(function (item) { return item.layer; }), layers);
   references = merged.map(function (layer) {
     const previous = kept.get(layer.file);
-    return previous ?? { layer: layer, bitmap: null, row: referenceRow(layer) };
+    return previous ?? { layer: layer, bitmap: null, row: referenceRow(layer), warped: null };
   });
   if (activeReference !== null && !referenceOf(activeReference)) { activeReference = null; }
   // A picture just added is the one to place: its frame is up before anything is clicked.
@@ -179,13 +188,27 @@ function referenceRow(layer: ReferenceLayer): HTMLElement {
   row.head.append(remove);
   row.head.title = 'Select this picture on the map (and the reference tool): drag to move, grips to resize (Shift keeps proportions, Ctrl distorts). Esc, or click again, to stop.';
   row.head.addEventListener('click', function () { toggleReference(layer.file); });
+  // The thumbnail is the eye: a click hides the picture, its opacity untouched, and another brings it back.
+  row.thumb.title = 'Show or hide this picture; its opacity is kept';
+  row.thumb.addEventListener('click', function () { toggleHidden(layer.file); });
   return row.node;
+}
+
+function toggleHidden(file: string): void {
+  const item = referenceOf(file);
+  if (!item) { return; }
+  const shown: ReferenceLayer = { file: item.layer.file, corners: item.layer.corners, opacity: item.layer.opacity };
+  item.layer = item.layer.hidden === true ? shown : { ...shown, hidden: true };
+  renderReferenceRows();
+  render();
+  postReferences();
 }
 
 function renderReferenceRows(): void {
   referenceLayersBox.replaceChildren();
   for (const item of references) {
     item.row.classList.toggle('active', item.layer.file === activeReference);
+    item.row.classList.toggle('hidden-picture', item.layer.hidden === true);
     referenceLayersBox.append(item.row);
   }
 }
@@ -206,9 +229,9 @@ export function drawReferences(): void {
   // Pictures are scaled, not pixel art: they are smoothed whatever the map's zoom.
   ctx.imageSmoothingEnabled = true;
   for (const item of references) {
-    if (!item.bitmap || item.layer.opacity <= 0) { continue; }
+    if (!item.bitmap || item.layer.opacity <= 0 || item.layer.hidden === true) { continue; }
     ctx.globalAlpha = item.layer.opacity / 100;
-    drawQuadImage(item.bitmap, item.layer.corners);
+    drawReference(item, item.bitmap);
   }
   ctx.globalAlpha = 1;
   // The frame belongs to the reference tool: under any other it is only in the way of the map.
@@ -216,12 +239,16 @@ export function drawReferences(): void {
   if (active?.bitmap) { drawFrame(boundsOf(active.layer.corners)); }
 }
 
-/** A parallelogram is one transformed drawImage; a bent picture is a mesh of triangles, each drawn under its own map. */
-function drawQuadImage(bitmap: ImageBitmap, quad: Quad): void {
-  const width = bitmap.width;
-  const height = bitmap.height;
+/**
+ * A parallelogram is one transformed drawImage. A bent picture is a mesh of
+ * triangles — but drawn straight onto the map at the layer's opacity, the
+ * triangles show: where two meet the paint doubles. So the mesh is drawn once,
+ * opaque, into a canvas of its own, and that canvas is what goes on the map.
+ */
+function drawReference(item: Reference, bitmap: ImageBitmap): void {
+  const quad = item.layer.corners;
   if (isAffine(quad)) {
-    const matrix = affineFromTriangles([{ x: 0, y: 0 }, { x: width, y: 0 }, { x: 0, y: height }], [quad[0], quad[1], quad[3]]);
+    const matrix = affineFromTriangles([{ x: 0, y: 0 }, { x: bitmap.width, y: 0 }, { x: 0, y: bitmap.height }], [quad[0], quad[1], quad[3]]);
     if (!matrix) { return; }
     ctx.save();
     ctx.transform(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5]);
@@ -229,45 +256,77 @@ function drawQuadImage(bitmap: ImageBitmap, quad: Quad): void {
     ctx.restore();
     return;
   }
+  const box = boundsOf(quad);
+  const scale = warpScale(box);
+  if (item.warped?.corners !== quad || item.warped.scale !== scale) {
+    item.warped = { corners: quad, scale: scale, canvas: warp(bitmap, quad, box, scale) };
+  }
+  ctx.drawImage(item.warped.canvas, box.x, box.y, box.width, box.height);
+}
+
+/** Canvas pixels per map pixel the bent picture is drawn with: what the screen shows, within the pixel budget. */
+function warpScale(box: Box): number {
+  const wanted = state.view.scale * (window.devicePixelRatio || 1);
+  const most = Math.sqrt(WARP_MAX_PIXELS / Math.max(1, box.width * box.height));
+  return Math.min(wanted, most);
+}
+
+function warp(bitmap: ImageBitmap, quad: Quad, box: Box, scale: number): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.ceil(box.width * scale));
+  canvas.height = Math.max(1, Math.ceil(box.height * scale));
+  const target = canvas.getContext('2d');
+  if (!target) { return canvas; }
+  target.setTransform(scale, 0, 0, scale, -box.x * scale, -box.y * scale);
+  target.imageSmoothingEnabled = true;
+  const width = bitmap.width;
+  const height = bitmap.height;
   for (let row = 0; row < MESH; row++) {
     for (let column = 0; column < MESH; column++) {
       const u0 = column / MESH; const u1 = (column + 1) / MESH;
       const v0 = row / MESH; const v1 = (row + 1) / MESH;
       const source = { a: { x: u0 * width, y: v0 * height }, b: { x: u1 * width, y: v0 * height }, c: { x: u1 * width, y: v1 * height }, d: { x: u0 * width, y: v1 * height } };
-      const target = { a: bilinear(quad, u0, v0), b: bilinear(quad, u1, v0), c: bilinear(quad, u1, v1), d: bilinear(quad, u0, v1) };
-      drawTriangle(bitmap, [source.a, source.b, source.c], [target.a, target.b, target.c]);
-      drawTriangle(bitmap, [source.a, source.c, source.d], [target.a, target.c, target.d]);
+      const corner = { a: bilinear(quad, u0, v0), b: bilinear(quad, u1, v0), c: bilinear(quad, u1, v1), d: bilinear(quad, u0, v1) };
+      drawTriangle(target, bitmap, [source.a, source.b, source.c], [corner.a, corner.b, corner.c], scale);
+      drawTriangle(target, bitmap, [source.a, source.c, source.d], [corner.a, corner.c, corner.d], scale);
     }
   }
+  return canvas;
 }
 
-/** The triangle pushed out from its centre by `SEAM`: the clip's anti-aliased edge then lands under the neighbour. */
-function inflated(triangle: readonly [Point, Point, Point]): readonly [Point, Point, Point] {
+/** The triangle pushed out from its centre by one canvas pixel: the clip's anti-aliased edge lands under the neighbour, and the drawing being opaque, nothing doubles. */
+function inflated(triangle: readonly [Point, Point, Point], by: number): readonly [Point, Point, Point] {
   const centreX = (triangle[0].x + triangle[1].x + triangle[2].x) / 3;
   const centreY = (triangle[0].y + triangle[1].y + triangle[2].y) / 3;
   function out(point: Point): Point {
     const dx = point.x - centreX;
     const dy = point.y - centreY;
     const length = Math.hypot(dx, dy) || 1;
-    return { x: point.x + (dx / length) * SEAM, y: point.y + (dy / length) * SEAM };
+    return { x: point.x + (dx / length) * by, y: point.y + (dy / length) * by };
   }
   return [out(triangle[0]), out(triangle[1]), out(triangle[2])];
 }
 
-function drawTriangle(bitmap: ImageBitmap, source: readonly [Point, Point, Point], target: readonly [Point, Point, Point]): void {
-  const matrix = affineFromTriangles(source, target);
+function drawTriangle(
+  target: CanvasRenderingContext2D,
+  bitmap: ImageBitmap,
+  source: readonly [Point, Point, Point],
+  corner: readonly [Point, Point, Point],
+  scale: number,
+): void {
+  const matrix = affineFromTriangles(source, corner);
   if (!matrix) { return; }
-  const clip = inflated(target);
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(clip[0].x, clip[0].y);
-  ctx.lineTo(clip[1].x, clip[1].y);
-  ctx.lineTo(clip[2].x, clip[2].y);
-  ctx.closePath();
-  ctx.clip();
-  ctx.transform(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5]);
-  ctx.drawImage(bitmap, 0, 0);
-  ctx.restore();
+  const clip = inflated(corner, 1 / scale);
+  target.save();
+  target.beginPath();
+  target.moveTo(clip[0].x, clip[0].y);
+  target.lineTo(clip[1].x, clip[1].y);
+  target.lineTo(clip[2].x, clip[2].y);
+  target.closePath();
+  target.clip();
+  target.transform(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5]);
+  target.drawImage(bitmap, 0, 0);
+  target.restore();
 }
 
 /** The frame and its eight grips, in screen pixels whatever the zoom. */

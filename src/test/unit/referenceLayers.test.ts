@@ -36,6 +36,12 @@ suite('referenceLayers — the manifest', () => {
     assert.deepStrictEqual(parseReferences(renderReferences([layer])), [layer]);
   });
 
+  test('a picture switched off is written as such, and one that is shown carries no flag', () => {
+    const off = { ...layer, hidden: true };
+    assert.deepStrictEqual(parseReferences(renderReferences([off, layer])), [off, layer]);
+    assert.ok(!renderReferences([layer]).includes('hidden'));
+  });
+
   test('corners are written to a hundredth and opacity whole, so a diff stays readable', () => {
     const text = renderReferences([{ file: 'a.png', corners: quadOfBox(0.123456, 0, 1, 1), opacity: 59.6 }]);
     assert.ok(text.includes('0.12'), text);

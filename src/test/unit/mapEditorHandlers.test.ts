@@ -341,7 +341,7 @@ suite('MapEditorHandlers — painting the map', () => {
 
 suite('MapEditorHandlers — creating a province from a painted colour', () => {
   const COLOR = (10 << 16) | (20 << 8) | 30;
-  const DEFINITION = ';red;green;blue;x;x\n1;1;1;1;One;x\n2;2;2;2;Two;x\n';
+  const DEFINITION = ';red;green;blue;x;x\n1;1;1;1;One;x\n2;2;2;2;Two;x\n;1;222;200;Unnamed Lakes;x\n';
   const DEFAULT_MAP = 'max_provinces = 3\nsea_starts = {\n\t2\n}\n';
 
   interface Maker {
@@ -410,7 +410,8 @@ suite('MapEditorHandlers — creating a province from a painted colour', () => {
     const { host, written } = maker();
     const result = await new MapEditorHandlers(host).save(createParams(false));
     assert.ok(result.ok, result.ok ? '' : result.reason);
-    assert.strictEqual(written.get(path.join(ROOT, 'map/definition.csv')), DEFINITION + '3;10;20;30;Nova;x\n');
+    // After the last province, not after the lake rows that close the file.
+    assert.strictEqual(written.get(path.join(ROOT, 'map/definition.csv')), DEFINITION.replace('Two;x\n', 'Two;x\n3;10;20;30;Nova;x\n'));
     assert.ok(written.get(path.join(ROOT, 'map/default.map'))?.startsWith('max_provinces = 4'));
     assert.strictEqual(result.written.length, 3, result.written.join(', '));
   });

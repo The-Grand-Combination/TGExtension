@@ -93,7 +93,7 @@ itself and opens the file in an editor before the page sees it; the page still a
 does reach it.) The picture is copied into the target mod's **`map/references/`** under its own name
 (made safe, and numbered when taken), and
 `map/references/references.json` records, in order, each picture's file, its four corners in map
-pixels and its opacity, so the whole set travels with the mod's git. The file is never re-encoded:
+pixels, its opacity and, when it is switched off, `"hidden": true`, so the whole set travels with the mod's git. The file is never re-encoded:
 it stays at the resolution it came in, and lands one picture pixel per map pixel with its top-left
 corner at the middle of the view (or where it was dropped, when a drop gets through), at 60%.
 
@@ -106,7 +106,10 @@ the opposite corner, by the axis pulled further), or hold **Ctrl** on a grip for
 a corner grip moves that corner alone and a side grip slides the whole side, so the picture becomes
 any quadrilateral. Where pictures overlap, the topmost (last in the list) is the one grabbed. A click
 on bare map puts the frame away; so does **Esc**; and under any other tool the frame is simply not
-drawn — the selection is kept, and comes back with the tool. A picture just added comes up selected, with the
+drawn — the selection is kept, and comes back with the tool. Clicking a row's **thumbnail** switches
+the picture off: it leaves the map, the thumbnail greys out, and its opacity slider stays where it
+was, so another click brings it back exactly as it was; the switch is written to the manifest with
+the picture. A picture just added comes up selected, with the
 tool, and clicking a row's name selects one later, switching to the tool as well. The hand and the
 painting tools never mind a reference: the hand opens the province under it, the brushes paint the
 province map straight through it, and the middle and right buttons still pan under the reference
@@ -218,7 +221,8 @@ anything is written, a modal names every file the save will touch:
 
 **Create** writes them; **Cancel** writes nothing at all. What the save does, in order:
 
-1. the row `id;red;green;blue;name;x` goes at the end of `map/definition.csv`, with the name from the
+1. the row `id;red;green;blue;name;x` goes into `map/definition.csv` after the last row that has an
+   id — the lake rows, which have none, close the file and stay there — with the name from the
    localisation field;
 2. `map/default.map` gets room for the id — `max_provinces` is a count, so it has to end up *over*
    the new id, and the engine ignores any province at or past it — and, with **Sea province** ticked,

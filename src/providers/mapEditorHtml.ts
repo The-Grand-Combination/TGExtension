@@ -158,6 +158,10 @@ const PAGE_STYLE = String.raw`
      right padding was what kept eating the names here. */
   #layersBox .layer .caption { display: flex; align-items: center; gap: 3px; min-width: 0; }
   #layersBox .layer .thumb { grid-row: 1 / span 2; align-self: center; width: 20px; height: 20px; border-radius: 2px; background: rgba(255, 255, 255, 0.08) center / cover no-repeat; }
+  #layersBox .references .layer .thumb { cursor: pointer; }
+  /* Switched off: the thumbnail goes grey and the name fades, the slider stays where it was. */
+  #layersBox .layer.hidden-picture .thumb { filter: grayscale(1); opacity: 0.35; }
+  #layersBox .layer.hidden-picture .name { opacity: 0.5; }
   #layersBox .layer .name { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #layersBox .layer .remove { flex: none; padding: 0 3px; line-height: 1.1; }
   #layersBox .layer .slider { height: 14px; min-width: 0; }
