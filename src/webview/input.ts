@@ -11,10 +11,10 @@ import { definitionById, seaIds, state, type Highlight, type Point, type Tool } 
 
 /** A press that is either panning the map or moving one of the selected province's points. */
 interface Drag {
-  readonly startX: number;
-  readonly startY: number;
-  readonly viewX: number;
-  readonly viewY: number;
+  startX: number;
+  startY: number;
+  viewX: number;
+  viewY: number;
   moved: boolean;
   readonly marker: PositionHandle | null;
   /** Only the left button opens a province: the others are here to move the map. */
@@ -82,6 +82,20 @@ function onMouseUp(event: MouseEvent): void {
   if (wasClick && event.target === canvas) {
     clickAt(toImage(event.clientX, event.clientY));
   }
+}
+
+/**
+ * A pan measures from where the map was when the button went down, so a zoom
+ * under it leaves that measure behind: the next move would put the map back
+ * where it was before the zoom, at the new scale, and throw it off the screen.
+ * Zooming therefore starts the pan again from here.
+ */
+function rebaseDrag(clientX: number, clientY: number): void {
+  if (!drag || drag.marker) { return; }
+  drag.startX = clientX;
+  drag.startY = clientY;
+  drag.viewX = state.view.x;
+  drag.viewY = state.view.y;
 }
 
 /** The window lost the mouse with a button down: whatever it was doing ends where it is. */
@@ -289,6 +303,7 @@ export function initInput(): void {
   mapArea.addEventListener('wheel', function (event) {
     event.preventDefault();
     zoomAt(event.clientX, event.clientY, event.deltaY < 0 ? 1.2 : 1 / 1.2);
+    rebaseDrag(event.clientX, event.clientY);
   }, { passive: false });
   new ResizeObserver(function () { render(); }).observe(mapArea);
   required('gotoButton').addEventListener('click', goToProvince);
