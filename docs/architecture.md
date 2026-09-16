@@ -205,16 +205,58 @@ closes. A finding with no pixel gets no link.
 
 The side bar action **Map Editor** (`victorian-tools.openMapEditor`,
 `commands/openMapEditorCommand.ts`) uses the same mod dialog and target resolution, then opens a
-webview tab (`providers/mapEditorPanel.ts` + `mapEditorHtml.ts`). Five requests
+webview tab (`providers/mapEditorPanel.ts` + `mapEditorHtml.ts`). Ten requests
 ([model/mapEditor.ts](../src/model/mapEditor.ts), handled by
-[server/mapEditorHandlers.ts](../src/server/mapEditorHandlers.ts)) carry the map description, the
+[services/mapEditorHandlers.ts](../src/services/mapEditorHandlers.ts)) carry the map description, the
 `map/positions.txt` points drawn over it, the start-date owners and country colours behind the
-Country Colors layer, one province's localisation/history/pops/positions, and one section's save;
-the page fetches and decodes `provinces.bmp` (and, for the Show Rivers layer, `rivers.bmp`) itself
-and tints it by owner in the browser. Saves are text patches
+Country Colors layer, the first state of each province behind State Colors (coloured on the page by a
+hash of the state's name, `services/stateColors.ts`), one province's localisation/history/pops/positions, one section's save, and
+the pixels painted on the map;
+the page fetches and decodes `provinces.bmp` (and, for the Layers box, `rivers.bmp` and `terrain.bmp`) itself
+and tints it by owner in the browser; the map message also carries the `terrain.bmp` indices `terrain.txt`
+types as water, which the page's Terrain Lock keeps the brush off. Saves are text patches
 computed by `vscode`-free services (`provinceLocEdit.ts`, `provinceHistoryEdit.ts`,
 `provincePopsEdit.ts`, `provincePositionsEdit.ts` over `textPatch.ts`) and
-written only into the top mod of the stack. Behaviour and rules in [map-editor.md](map-editor.md).
+written only into the top mod of the stack. A province created from a painted colour goes the same
+route: `provinceDefinitionEdit.ts` appends the `definition.csv` row, `mapDefaultEdit.ts` patches
+`max_provinces` / `sea_starts`, and `provinceGroupEdit.ts` puts the id in its `map/climate.txt` block
+and its `map/region.txt` blocks — the two a land province cannot exist without, which is why no save
+of one goes through while either is missing, and why `modIndex` carries `climateOfProvince` beside
+`stateOfProvince` for the full report to check every `definition.csv` row against — all run from the
+save that creates it — the one Save the Definition tab has, which is also the only one that writes
+the localisation and the states — which can also be asked to
+write nothing and answer with the files it would touch, which is what the confirmation modal lists.
+The reference pictures of the Layers box are the one exception to "everything through the server":
+`providers/referenceStore.ts` copies a dropped picture into the target mod's `map/references/` and
+keeps `references.json` there with `vscode.workspace.fs` — editor data, UTF-8 and raw bytes, that the
+server never reads; `services/referenceLayers.ts` holds the manifest and the frame geometry both
+sides use, and `services/mapThumbnails.ts` samples the three bitmaps for the box's pictures on the
+`victorianTools/mapEditor/thumbnails` request. Those reference messages run through one queue in the
+panel — each reads, changes and writes the same manifest, and two at once would lose one's change —
+while every other message runs as it arrives; and every message runs under one `catch`, which logs
+the error and posts it to the page, so a request that throws never leaves a Save waiting. Painting
+works the same way one level down: `provincePaint.ts` holds the brush, the fill and the run encoding
+the page and the server share, and writes the pixels back into the bitmap's own bytes; what both
+sides know about the bitmaps themselves — storage order, the river palette — is `mapBitmaps.ts`.
+
+The server keeps, per stack, the decoded bitmaps, the parsed `definition.csv`, the three script files
+(`positions`, `climate`, `region`, `default.map`), the terrain sprites and dominant terrains, the
+pops-file index, the `history/provinces` walk, the owners and country colours, and the thumbnails.
+Each is dropped by the files it was read from: the watcher hands `invalidate` the changed paths and a
+`.bmp` under `map/` drops bitmaps, thumbnails and terrain, `definition.csv` the table and the terrain,
+a `map/*.txt` the scripts, `history/provinces/` the walk and the colours, `history/pops/` the pops
+index, `common/countries*` the colours, an `interface/*.gfx` the terrain — and a path none of them
+read drops nothing. A layout change drops everything. The pick lists of every form (`vocabulary`)
+travel once with the map, not with each province.
+
+The page is one esbuild bundle from `src/webview/`, split by what it owns: `state.ts` (what more than
+one module reads — the map, the view, the selection, the layers), `dom.ts` and `fields.ts` (the
+`h` builder and the form controls, each a `Field` found again through `fieldOf`), `bitmaps.ts`
+(decoding and tiles), `canvas.ts` (render, zoom, the selection glow), `layers.ts`, `references.ts`,
+`paint.ts`, `positions.ts`, `input.ts` (mouse and keyboard), `panel/` (the side panel and its
+tabs) and `messages.ts` (what each host message changes). `mapEditorPage.ts` only wires them up.
+Every message out goes through `host.ts`, typed against the same union the extension validates.
+Behaviour and rules in [map-editor.md](map-editor.md).
 
 ## Mod root discovery and file classification
 
@@ -303,5 +345,6 @@ asserts the manifest defaults and `DEFAULT_CONFIG` agree.
 | `victorianTools.nullTags.pattern` | `^(QQQ\|---\|null)$` | Regex matching the tags meaning "no country". A country value that matches warns instead of erroring; matched case-insensitively. Empty allows no exception. Editable from the **Victorian Tools Settings** tab. |
 | `victorianTools.nullTags.suppressWarnings` | `true` | Report nothing at all for a tag `nullTags.pattern` matches: `null-country-tag`, `null-tag-exploit` and the `uncolonize-province` of `secede_province = QQQ` all go quiet, because a script that writes a null tag wrote it on purpose. A tag the pattern misses is untouched, and an empty pattern makes this setting a no-op. Editable from the **Regex Patterns** tab (a checkbox). |
 | `victorianTools.mapEditor.countryColorsTint` | `82` | Percent of the owner's colour in the Map Editor's **Country Colors** layer; the rest is the province's own colour. Client-side only. Editable from the **Victorian Tools Settings** tab (a slider). |
+| `victorianTools.mapEditor.paintUndoSteps` | `20` | How many brush strokes `Ctrl+Z` takes back while painting provinces in the Map Editor; each step holds the pixels of one stroke. Client-side only. Editable from the **Victorian Tools Settings** tab. |
 | `victorianTools.mapEditor.provinceFolderPattern` | `` (empty) | Regex narrowing which subfolders of `history/provinces` the Map Editor reads, matched against the subfolder alone, case-insensitively. Empty uses every folder. It exists for a total conversion that declares the whole vanilla province set as empty placeholders; see [map-editor.md](map-editor.md). A change re-reads the mod stack, so the cached province owners go with it. Editable from the **Regex Patterns** tab of the **Victorian Tools Settings** page. |
 | `victorianTools.trace.server` | `off` | `vscode-languageclient` trace verbosity (client-side).

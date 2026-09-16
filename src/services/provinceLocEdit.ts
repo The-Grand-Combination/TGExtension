@@ -105,9 +105,50 @@ export function pickLocFileForNewKey(candidates: readonly LocFileCandidate[]): s
 
 const FORBIDDEN_FILE_NAME_CHARACTERS = /[<>:"/\\|?*]/g;
 
-/** `<id> - <name>.txt` with the characters Windows forbids in file names dropped. */
+/** Latin letters the NFD decomposition leaves whole, with the ASCII they stand for. */
+const LATIN_LETTER_SHAPES: Readonly<Record<string, string>> = {
+  'Æ': 'AE', 'æ': 'ae', 'Œ': 'OE', 'œ': 'oe', 'ß': 'ss',
+  'Ø': 'O', 'ø': 'o', 'Đ': 'D', 'đ': 'd', 'Ð': 'D', 'ð': 'd',
+  'Ł': 'L', 'ł': 'l', 'Þ': 'TH', 'þ': 'th', 'ı': 'i',
+};
+
+const LATIN_LETTERS = new RegExp(`[${Object.keys(LATIN_LETTER_SHAPES).join('')}]`, 'g');
+
+/** Printable ASCII: what the game reads out of a file name, and nothing else. */
+const NOT_ASCII = /[^\x20-\x7e]/;
+
+/**
+ * The name with its Latin marks dropped, so `São José` keeps its words as
+ * `Sao Jose`. The game reads a file name as plain ASCII and finds nothing where
+ * an accent stands; a letter no ASCII one stands for is left as it is, for
+ * `unfoldableCharacter` to refuse.
+ */
+export function foldToAscii(text: string): string {
+  const shaped = text.replace(LATIN_LETTERS, (character, offset: number, whole: string) =>
+    shapeOf(character, whole.slice(offset + 1)));
+  return shaped.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+/**
+ * A letter's ASCII shape. A capital that stands for two letters keeps only its
+ * own case when a lowercase letter follows it: `Ærø` is `Aero`, not `AEro`,
+ * while `ÆRØ` stays `AERO`.
+ */
+function shapeOf(character: string, rest: string): string {
+  const shape = LATIN_LETTER_SHAPES[character] ?? character;
+  return shape.length > 1 && LOWERCASE_LETTER.test(rest) ? shape.charAt(0) + shape.slice(1).toLowerCase() : shape;
+}
+
+const LOWERCASE_LETTER = /^\p{Ll}/u;
+
+/** The first folded character that is not printable ASCII, or undefined when the whole name folds. */
+export function unfoldableCharacter(text: string): string | undefined {
+  return NOT_ASCII.exec(foldToAscii(text))?.[0];
+}
+
+/** `<id> - <name>.txt`, folded to ASCII and without the characters Windows forbids. */
 export function historyFileNameFor(provinceId: number, name: string): string {
-  const safe = name.replace(FORBIDDEN_FILE_NAME_CHARACTERS, '').replace(/\s+/g, ' ').trim();
+  const safe = foldToAscii(name).replace(FORBIDDEN_FILE_NAME_CHARACTERS, '').replace(/\s+/g, ' ').trim();
   return `${String(provinceId)} - ${safe === '' ? 'Province' : safe}.txt`;
 }
 

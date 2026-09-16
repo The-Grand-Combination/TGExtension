@@ -10,6 +10,15 @@ Codes with a `<category>` placeholder are generated dynamically — one per `Ide
 `unknown-terrain`, `unknown-technology`, `unknown-invention`, `unknown-reformclass`,
 `unknown-reformoption`, `unknown-issue`, `unknown-unit`, `unknown-trait`, `unknown-event-id`.
 
+## File names (`fileValidation.ts`)
+
+Checked on the mod-root-relative path, so it covers the folders as well as the file, and reported
+at the file's first character.
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `non-ascii-file-name` | error | The path carries a character outside printable ASCII. The game loads a file name as plain ASCII, so `history/provinces/3532 - São José.txt` is a file it never reads. The Map Editor folds an accent away when it names a file (`São` becomes `Sao`) and refuses to save a name with no ASCII shape at all — see [map-editor.md](map-editor.md). |
+
 ## Syntax (`parser/lexer.ts`, `parser/parser.ts`)
 
 Always active, even with no mod root found.
@@ -161,6 +170,8 @@ Shared codes reused here with map-specific messages: `unknown-field`, `unknown-m
 | `duplicate-palette-index` | warning | A `terrain.bmp` palette index is mapped by two palette entries. |
 | `csv-too-few-fields` | error | A CSV data row has fewer fields than the engine reads (4 for `definition.csv`, 5 for `adjacencies.csv`). |
 | `duplicate-color` | error | Two `definition.csv` provinces share an RGB color. |
+| `province-without-climate` | error | A land province is in no `map/climate.txt` block. |
+| `province-without-state` | error | A land province is in no `map/region.txt` block, so the engine puts it in no state. |
 | `unknown-adjacency-type` | error | An `adjacencies.csv` `Type` is not `sea`, `land`, `impassable`, or `canal`. |
 | `ignored-adjacency` | warning | A row with `To <= 0` and a type other than `impassable`; the engine skips it. |
 | `invalid-canal` | error | A `canal` row lacks the canal province in `Through` or a canal id above zero in `Data`. |

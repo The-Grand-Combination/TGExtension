@@ -16,6 +16,7 @@ export const SETTING = {
   nullTagPattern: 'nullTags.pattern',
   nullTagSuppress: 'nullTags.suppressWarnings',
   countryColorsTint: 'mapEditor.countryColorsTint',
+  paintUndoSteps: 'mapEditor.paintUndoSteps',
   provinceFolderPattern: 'mapEditor.provinceFolderPattern',
   validationEnabled: 'validation.enable',
   validationDelay: 'validation.delay',

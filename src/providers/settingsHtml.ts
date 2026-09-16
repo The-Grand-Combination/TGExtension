@@ -38,6 +38,8 @@ export interface SettingsState {
   readonly provinceFolderPattern: string;
   /** `victorianTools.mapEditor.countryColorsTint`, 0-100. */
   readonly countryColorsTint: number;
+  /** `victorianTools.mapEditor.paintUndoSteps`, 1-200. */
+  readonly paintUndoSteps: number;
   readonly warning?: string;
 }
 
@@ -51,6 +53,7 @@ export interface CurrentSettings {
   readonly ignoreMarker: string;
   readonly provinceFolderPattern: string;
   readonly countryColorsTint: number;
+  readonly paintUndoSteps: number;
 }
 
 /** The state the page draws for the installed mods, the game folder, the selection and the loc pattern. */
@@ -71,6 +74,7 @@ export function settingsState(installed: ModsResult, current: CurrentSettings): 
     ignoreMarker: current.ignoreMarker,
     provinceFolderPattern: current.provinceFolderPattern,
     countryColorsTint: current.countryColorsTint,
+    paintUndoSteps: current.paintUndoSteps,
     ...(missing.length === 0 ? {} : { warning: `Dependency not installed: ${missing.join(', ')}` }),
   };
 }
@@ -100,7 +104,7 @@ function entryOf(mod: ModDescriptor): ModEntry {
  * that is a regular expression). It holds no data of its own beyond which tab is
  * open: it renders the `state` messages it receives and posts `gamePath`,
  * `browse`, `select`, `locKeyPattern`, `flagNamePattern`, `nullTagPattern`,
- * `provinceFolderPattern`, `ignoreMarker`, `countryColorsTint` or `refresh`.
+ * `provinceFolderPattern`, `ignoreMarker`, `countryColorsTint`, `paintUndoSteps` or `refresh`.
  * Styling uses the editor's theme variables.
  */
 export function settingsHtml(cspSource: string): string {
@@ -188,6 +192,13 @@ export function settingsHtml(cspSource: string): string {
   <input id="tint" type="range" min="0" max="100" step="1">
   <span id="tintValue" class="value"></span>
   <button id="tintDefault" class="secondary">Default</button>
+</div>
+
+<h2>Map Editor: painting undo steps</h2>
+<p class="hint">How many brush strokes <code>Ctrl+Z</code> takes back while painting provinces on the map. Each step holds the pixels of one stroke. Default <code>20</code>. (<code>victorianTools.mapEditor.paintUndoSteps</code>)</p>
+<div class="field">
+  <input id="undoSteps" type="number" min="1" max="200" step="1">
+  <button id="undoStepsDefault" class="secondary">Default</button>
 </div>
 
 <h2>Mods and submods</h2>
@@ -434,6 +445,13 @@ export function settingsHtml(cspSource: string): string {
     showTint();
   }
 
+  const undoSteps = document.getElementById('undoSteps');
+  undoSteps.addEventListener('change', () => vscode.postMessage({ type: 'paintUndoSteps', value: Number(undoSteps.value) }));
+  document.getElementById('undoStepsDefault').addEventListener('click', () => { undoSteps.value = '20'; vscode.postMessage({ type: 'paintUndoSteps', value: 20 }); });
+  function renderUndoSteps(value) {
+    if (document.activeElement !== undoSteps) undoSteps.value = String(value);
+  }
+
   window.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'state') {
       state = event.data;
@@ -446,6 +464,7 @@ export function settingsHtml(cspSource: string): string {
       renderProvinceFolderPattern(state.provinceFolderPattern);
       renderIgnoreMarker(state.ignoreMarker);
       renderTint(state.countryColorsTint);
+      renderUndoSteps(state.paintUndoSteps);
       renderMods();
     }
   });

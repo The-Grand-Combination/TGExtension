@@ -1,13 +1,16 @@
 import {
   POSITION_KINDS,
+  type LocalisationEdit,
+  type NewProvince,
+  type PageSaveParams,
   type PopEntry,
   type PositionKind,
   type PositionPoint,
   type ProvinceHistory,
   type ProvincePositions,
-  type SaveParams,
   type SaveSection,
 } from '../model/mapEditor.js';
+import { asReference, type ReferenceLayer } from './referenceLayers.js';
 
 /** One province's map positions, edited in the page and not yet written. */
 export interface PendingPositions {
@@ -21,10 +24,25 @@ export type PageMessage =
   | { readonly type: 'log'; readonly message: string }
   | { readonly type: 'terrainPicture'; readonly terrain: string }
   | { readonly type: 'select'; readonly provinceId: number; readonly popDate: string }
+  /** A colour with no province: the page asks for a province that does not exist yet. */
+  | { readonly type: 'newProvince'; readonly color: number; readonly popDate: string }
   | { readonly type: 'openFile'; readonly absolutePath: string; readonly line: number }
-  | { readonly type: 'save'; readonly params: SaveParams }
+  | { readonly type: 'save'; readonly params: PageSaveParams }
   | { readonly type: 'pending'; readonly edits: readonly PendingPositions[] }
-  | { readonly type: 'saveAll' };
+  /** Painted pixels as `index, length, colour` triples; see `provincePaint.runsOf`. */
+  | { readonly type: 'paint'; readonly runs: readonly number[] }
+  /** How many painted pixels the page is holding, so closing the tab can say so. */
+  | { readonly type: 'paintPending'; readonly pixels: number }
+  | { readonly type: 'saveAll' }
+  /** A picture dropped from the desktop: its bytes, base64, kept in `map/references` and placed at the drop point. */
+  | { readonly type: 'addReference'; readonly name: string; readonly bytes: string; readonly x: number; readonly y: number }
+  /** A picture dragged from the Explorer: a `file:` URI the extension copies. */
+  | { readonly type: 'addReferencePath'; readonly uri: string; readonly x: number; readonly y: number }
+  /** Open the file picker for a picture, to land at this map point. */
+  | { readonly type: 'pickReference'; readonly x: number; readonly y: number }
+  /** The whole list as the page holds it, written to the manifest. */
+  | { readonly type: 'references'; readonly layers: readonly ReferenceLayer[] }
+  | { readonly type: 'removeReference'; readonly file: string };
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -43,8 +61,16 @@ export function asPageMessage(message: unknown): PageMessage | undefined {
       return asSave(record);
     case 'pending':
       return { type: 'pending', edits: asArray(record['edits'], asPending) };
+    case 'newProvince':
+      return typeof record['color'] === 'number' && typeof record['popDate'] === 'string'
+        ? { type: 'newProvince', color: record['color'], popDate: record['popDate'] }
+        : undefined;
+    case 'paint':
+      return asPaint(record);
+    case 'references':
+      return { type: 'references', layers: asArray(record['layers'], asReference) };
     default:
-      return asFieldMessage(record);
+      return asFieldMessage(record) ?? asReferenceMessage(record);
   }
 }
 
@@ -54,6 +80,8 @@ function asFieldMessage(record: UnknownRecord): PageMessage | undefined {
       return typeof record['message'] === 'string' ? { type: 'log', message: record['message'] } : undefined;
     case 'terrainPicture':
       return typeof record['terrain'] === 'string' ? { type: 'terrainPicture', terrain: record['terrain'] } : undefined;
+    case 'paintPending':
+      return typeof record['pixels'] === 'number' ? { type: 'paintPending', pixels: record['pixels'] } : undefined;
     case 'select':
       return typeof record['provinceId'] === 'number' && typeof record['popDate'] === 'string'
         ? { type: 'select', provinceId: record['provinceId'], popDate: record['popDate'] }
@@ -67,6 +95,62 @@ function asFieldMessage(record: UnknownRecord): PageMessage | undefined {
   }
 }
 
+function asReferenceMessage(record: UnknownRecord): PageMessage | undefined {
+  switch (record['type']) {
+    case 'addReference':
+      return typeof record['name'] === 'string' && typeof record['bytes'] === 'string' && isPoint(record)
+        ? { type: 'addReference', name: record['name'], bytes: record['bytes'], x: record.x, y: record.y }
+        : undefined;
+    case 'addReferencePath':
+      return typeof record['uri'] === 'string' && isPoint(record)
+        ? { type: 'addReferencePath', uri: record['uri'], x: record.x, y: record.y }
+        : undefined;
+    case 'pickReference':
+      return isPoint(record) ? { type: 'pickReference', x: record.x, y: record.y } : undefined;
+    case 'removeReference':
+      return typeof record['file'] === 'string' ? { type: 'removeReference', file: record['file'] } : undefined;
+    default:
+      return undefined;
+  }
+}
+
+function isPoint(record: UnknownRecord): record is UnknownRecord & { x: number; y: number } {
+  return typeof record['x'] === 'number' && typeof record['y'] === 'number' && Number.isFinite(record['x']) && Number.isFinite(record['y']);
+}
+
+/** What a save of a province that is only paint so far carries; anything short of whole is no creation at all. */
+function asCreate(value: unknown): NewProvince | undefined {
+  const record = asRecord(value);
+  if (!record || typeof record['color'] !== 'number' || !Number.isInteger(record['color'])) {
+    return undefined;
+  }
+  return {
+    color: record['color'],
+    isSea: record['isSea'] === true,
+    name: optionalString(record['name']) ?? '',
+    climate: optionalString(record['climate']) ?? '',
+    states: stringList(record['states']),
+  };
+}
+
+/** Only the tab that shows the name carries it; a save without it leaves the localisation alone. */
+function asLocalisation(value: unknown): LocalisationEdit | undefined {
+  const record = asRecord(value);
+  return record && typeof record['text'] === 'string'
+    ? { text: record['text'], renameHistoryFile: record['renameHistoryFile'] === true }
+    : undefined;
+}
+
+/** A triple short of whole, or holding anything but whole numbers, is dropped: it would paint the wrong pixels. */
+function asPaint(record: UnknownRecord): PageMessage | undefined {
+  const value: unknown = record['runs'];
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const runs = numberList(value);
+  return runs.length === value.length && runs.length % 3 === 0 ? { type: 'paint', runs } : undefined;
+}
+
 function asPending(value: unknown): PendingPositions | undefined {
   const record = asRecord(value);
   const data = record ? asPositions(record['data']) : undefined;
@@ -75,26 +159,40 @@ function asPending(value: unknown): PendingPositions | undefined {
     : undefined;
 }
 
-function asSave(record: UnknownRecord): PageMessage | undefined {
-  const section = asSection(record);
-  if (!section || typeof record['provinceId'] !== 'number' || typeof record['popDate'] !== 'string') {
+/** The save's fields ride under `params`, as the page posts them; `section` is the section's own discriminant. */
+function asSave(message: UnknownRecord): PageMessage | undefined {
+  const record = asRecord(message['params']);
+  const section = record ? asSection(record) : undefined;
+  if (!record || !section || typeof record['provinceId'] !== 'number' || typeof record['popDate'] !== 'string') {
     return undefined;
   }
+  const create = asCreate(record['create']);
   return {
     type: 'save',
-    params: { workspaceFolders: [], mods: [], provinceId: record['provinceId'], popDate: record['popDate'], ...section },
+    params: {
+      provinceId: record['provinceId'],
+      popDate: record['popDate'],
+      ...section,
+      ...(create ? { create } : {}),
+    },
   };
 }
 
 function asSection(record: UnknownRecord): SaveSection | undefined {
   switch (record['section']) {
-    case 'localisation':
-      return typeof record['text'] === 'string'
-        ? { section: 'localisation', text: record['text'], renameHistoryFile: record['renameHistoryFile'] === true }
-        : undefined;
     case 'history': {
       const data = asHistory(record['data'], true);
-      return data ? { section: 'history', data, createInFolder: optionalString(record['createInFolder']) } : undefined;
+      const localisation = asLocalisation(record['localisation']);
+      return data
+        ? {
+            section: 'history',
+            data,
+            climate: optionalString(record['climate']) ?? '',
+            createInFolder: optionalString(record['createInFolder']),
+            ...(localisation ? { localisation } : {}),
+            ...(Array.isArray(record['states']) ? { states: stringList(record['states']) } : {}),
+          }
+        : undefined;
     }
     case 'pops': {
       const pops = asPops(record['pops']);
@@ -192,6 +290,10 @@ function asArray<T>(value: unknown, item: (element: unknown) => T | undefined): 
     const converted = item(element);
     return converted === undefined ? [] : [converted];
   }) : [];
+}
+
+function numberList(value: unknown): number[] {
+  return Array.isArray(value) ? value.filter((item): item is number => typeof item === 'number' && Number.isInteger(item)) : [];
 }
 
 function stringList(value: unknown): string[] {

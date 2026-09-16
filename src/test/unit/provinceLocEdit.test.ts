@@ -2,7 +2,9 @@ import * as assert from 'node:assert';
 import {
   appendProvinceLoc,
   countProvinceKeys,
+  foldToAscii,
   historyFileNameFor,
+  unfoldableCharacter,
   locKeyLine,
   newProvinceLocFile,
   patchProvinceLoc,
@@ -83,5 +85,18 @@ suite('provinceLocEdit', () => {
     assert.strictEqual(historyFileNameFor(213, 'Fredericksburg'), '213 - Fredericksburg.txt');
     assert.strictEqual(historyFileNameFor(1, 'St. John\'s / "Harbour"?'), "1 - St. John's Harbour.txt");
     assert.strictEqual(historyFileNameFor(2, '   '), '2 - Province.txt');
+  });
+
+  test('a file name folds its accents away, since the game reads one as plain ASCII', () => {
+    assert.strictEqual(historyFileNameFor(3532, 'São José do Norte'), '3532 - Sao Jose do Norte.txt');
+    assert.strictEqual(historyFileNameFor(1, 'Ærøskøbing'), '1 - Aeroskobing.txt');
+    assert.strictEqual(historyFileNameFor(2, 'Łódź'), '2 - Lodz.txt');
+    assert.strictEqual(foldToAscii('Straße'), 'Strasse');
+  });
+
+  test('a name no ASCII letter stands for is named, so the save can refuse it', () => {
+    assert.strictEqual(unfoldableCharacter('São José do Norte'), undefined);
+    assert.strictEqual(unfoldableCharacter('Москва'), 'М');
+    assert.strictEqual(unfoldableCharacter('東京'), '東');
   });
 });

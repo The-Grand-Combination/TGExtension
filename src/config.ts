@@ -6,7 +6,7 @@ import {
   DEFAULT_NULL_TAG_PATTERN,
   DEFAULT_SUPPRESS_NULL_TAG_WARNINGS,
 } from './model/validationOptions.js';
-import { DEFAULT_COUNTRY_COLORS_TINT, DEFAULT_PROVINCE_FOLDER_PATTERN } from './model/mapEditor.js';
+import { DEFAULT_COUNTRY_COLORS_TINT, DEFAULT_PAINT_UNDO_STEPS, DEFAULT_PROVINCE_FOLDER_PATTERN } from './model/mapEditor.js';
 import { qualifiedSettingKey, SETTING, SETTINGS_SECTION } from './model/settingsKeys.js';
 
 
@@ -138,13 +138,37 @@ export function writeCountryColorsTint(percent: number): Thenable<void> {
     .update(SETTING.countryColorsTint, clamped === DEFAULT_COUNTRY_COLORS_TINT ? undefined : clamped, vscode.ConfigurationTarget.Global);
 }
 
-export function affectsCountryColorsTint(event: vscode.ConfigurationChangeEvent): boolean {
-  return event.affectsConfiguration(qualifiedSettingKey(SETTING.countryColorsTint));
+/**
+ * How many brush strokes the Map Editor can take back, as stored in
+ * `victorianTools.mapEditor.paintUndoSteps`.
+ */
+export function readPaintUndoSteps(): number {
+  const value = vscode.workspace.getConfiguration(SETTINGS_SECTION).get<unknown>(SETTING.paintUndoSteps);
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(PAINT_UNDO_MAX, Math.max(1, Math.round(value)))
+    : DEFAULT_PAINT_UNDO_STEPS;
+}
+
+/** A viewing preference, so it goes to the user settings. */
+export function writePaintUndoSteps(steps: number): Thenable<void> {
+  const clamped = Math.min(PAINT_UNDO_MAX, Math.max(1, Math.round(steps)));
+  return vscode.workspace
+    .getConfiguration(SETTINGS_SECTION)
+    .update(SETTING.paintUndoSteps, clamped === DEFAULT_PAINT_UNDO_STEPS ? undefined : clamped, vscode.ConfigurationTarget.Global);
+}
+
+/** The manifest's own ceiling; every step holds the pixels of a stroke. */
+const PAINT_UNDO_MAX = 200;
+
+/** True when a change touches what the Map Editor page is sent: the tint or the undo depth. */
+export function affectsMapEditorView(event: vscode.ConfigurationChangeEvent): boolean {
+  return event.affectsConfiguration(qualifiedSettingKey(SETTING.countryColorsTint))
+    || event.affectsConfiguration(qualifiedSettingKey(SETTING.paintUndoSteps));
 }
 
 /** True when a configuration change touches anything the settings page shows. */
 export function affectsSettingsPage(event: vscode.ConfigurationChangeEvent): boolean {
-  const keys = [SETTING.activeMods, SETTING.gamePath, SETTING.locKeyPattern, SETTING.flagNamePattern, SETTING.nullTagPattern, SETTING.nullTagSuppress, SETTING.ignoreMarker, SETTING.countryColorsTint, SETTING.provinceFolderPattern];
+  const keys = [SETTING.activeMods, SETTING.gamePath, SETTING.locKeyPattern, SETTING.flagNamePattern, SETTING.nullTagPattern, SETTING.nullTagSuppress, SETTING.ignoreMarker, SETTING.countryColorsTint, SETTING.paintUndoSteps, SETTING.provinceFolderPattern];
   return keys.some((key) => event.affectsConfiguration(qualifiedSettingKey(key)));
 }
 

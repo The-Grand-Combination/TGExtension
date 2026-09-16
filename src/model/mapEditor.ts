@@ -1,4 +1,5 @@
 import { requestDescriptor } from './request.js';
+import type { ReferenceLayer } from '../services/referenceLayers.js';
 /**
  * The Map Editor: a province map the user clicks on to edit one province's
  * localisation, history file, pops and map positions. Custom LSP requests carry
@@ -12,9 +13,16 @@ export const MAP_EDITOR_SAVE_REQUEST = requestDescriptor<SaveParams, SaveResult>
 export const MAP_EDITOR_TERRAIN_PICTURE_REQUEST = requestDescriptor<TerrainPictureParams, TerrainPictureResult>('victorianTools/mapEditor/terrainPicture');
 export const MAP_EDITOR_POSITIONS_REQUEST = requestDescriptor<MapEditorTargetParams, MapPositionsResult>('victorianTools/mapEditor/positions');
 export const MAP_EDITOR_COUNTRY_COLORS_REQUEST = requestDescriptor<MapEditorTargetParams, MapCountryColorsResult>('victorianTools/mapEditor/countryColors');
+export const MAP_EDITOR_PAINT_REQUEST = requestDescriptor<PaintParams, PaintResult>('victorianTools/mapEditor/paint');
+export const MAP_EDITOR_NEW_PROVINCE_REQUEST = requestDescriptor<NewProvinceParams, ProvinceResult>('victorianTools/mapEditor/newProvince');
+export const MAP_EDITOR_THUMBNAILS_REQUEST = requestDescriptor<MapEditorTargetParams, MapThumbnails>('victorianTools/mapEditor/thumbnails');
+export const MAP_EDITOR_STATE_COLORS_REQUEST = requestDescriptor<MapEditorTargetParams, MapStateColorsResult>('victorianTools/mapEditor/stateColors');
 
 /** `victorianTools.mapEditor.countryColorsTint`: percent of the owner's colour in the Country Colors layer. */
 export const DEFAULT_COUNTRY_COLORS_TINT = 82;
+
+/** `victorianTools.mapEditor.paintUndoSteps`: how many brush strokes the page can take back. */
+export const DEFAULT_PAINT_UNDO_STEPS = 20;
 
 /** `victorianTools.mapEditor.provinceFolderPattern`: empty, so every subfolder counts. */
 export const DEFAULT_PROVINCE_FOLDER_PATTERN = '';
@@ -51,16 +59,23 @@ export interface MapEditorMap {
   readonly targetRoot: string;
   /** `map/provinces.bmp` as the game would load it for the target. */
   readonly provincesBmpPath: string;
-  /** `map/rivers.bmp` as the game would load it, for the Show Rivers layer; undefined when the stack has none. */
+  /** `map/rivers.bmp` and `map/terrain.bmp` as the game would load them, for the Layers box; undefined when the stack has none. */
   readonly riversBmpPath: string | undefined;
+  readonly terrainBmpPath: string | undefined;
+  /** The terrain.bmp palette indices `map/terrain.txt` types as water; the Terrain Lock paints over none of them. */
+  readonly waterTerrainIndices: readonly number[];
   readonly definitions: readonly ProvinceDefinition[];
   readonly seaProvinces: readonly number[];
   /** Start dates found under `history/pops`, earliest first. */
   readonly popDates: readonly string[];
+  /** Colours of the lake rows of `definition.csv` (the ones with no id). */
+  readonly lakeColors: readonly number[];
   /** Subfolders of `history/provinces`; `''` when files sit directly in it. */
   readonly historyFolders: readonly string[];
   /** File names under `history/pops/<date>`, per date. */
   readonly popFiles: Readonly<Record<string, readonly string[]>>;
+  /** The pick lists of every form, sent once with the map rather than with every province. */
+  readonly vocabulary: Vocabulary;
 }
 
 export type MapEditorMapResult = MapEditorMap | { readonly kind: 'unavailable'; readonly reason: string };
@@ -144,6 +159,8 @@ export interface HistorySection {
   readonly inTarget: boolean;
   /** Undefined when no layer has a history file for the province. */
   readonly data: ProvinceHistory | undefined;
+  /** The subfolder of `history/provinces` holding the file; `''` for one directly in it. */
+  readonly folder: string | undefined;
 }
 
 export interface PopEntry {
@@ -204,6 +221,8 @@ export type MapPositionsResult =
 export interface NamedIdentifier {
   readonly id: string;
   readonly label: string;
+  /** The localised part of the label, when the label is `id - name`: the pick list shows it apart. */
+  readonly name?: string;
 }
 
 /** Identifier lists the form offers: pick lists with localised labels, plain suggestions for the rest. */
@@ -222,25 +241,47 @@ export interface Vocabulary {
 }
 
 export interface TerrainSection {
-  /** `terrain = x` from the history file, else the category most terrain.bmp pixels of the province carry. */
+  /** `terrain = x` from the history file; undefined when the file names none. */
   readonly name: string | undefined;
-  readonly fromHistory: boolean;
-  /** The category most terrain.bmp pixels carry: what the province falls back to without `terrain = x`. */
+  /** The category most terrain.bmp pixels of the province carry, shown as a note beside the name. */
   readonly dominant: string | undefined;
   /** PNG data URI of the `GFX_terrainimg_<terrain>` picture, when the stack has one. */
   readonly pictureDataUri: string | undefined;
+}
+
+/**
+ * `map/climate.txt`: the one climate whose id list holds the province. Every
+ * land province has exactly one, and a sea province has none.
+ */
+export interface ClimateSection {
+  readonly name: string | undefined;
+  readonly file: FileRef | undefined;
+  readonly inTarget: boolean;
+  /** Every climate the file declares, with its localised name. */
+  readonly options: readonly NamedIdentifier[];
+}
+
+/** `map/region.txt`: the states holding the province. A land province needs at least one. */
+export interface StateSection {
+  readonly names: readonly string[];
+  readonly file: FileRef | undefined;
+  readonly inTarget: boolean;
+  readonly options: readonly NamedIdentifier[];
 }
 
 export interface ProvinceDetails {
   readonly id: number;
   readonly definitionName: string;
   readonly isSea: boolean;
+  /** True while `definition.csv` has no row for the id: a province painted and not created yet. */
+  readonly isNew: boolean;
   readonly localisation: LocSection;
   readonly history: HistorySection;
   readonly pops: PopsSection;
   readonly positions: PositionsSection;
   readonly terrain: TerrainSection;
-  readonly vocabulary: Vocabulary;
+  readonly climate: ClimateSection;
+  readonly state: StateSection;
 }
 
 export interface TerrainPictureParams extends MapEditorTargetParams {
@@ -256,17 +297,63 @@ export type ProvinceResult =
   | { readonly kind: 'details'; readonly details: ProvinceDetails }
   | { readonly kind: 'unavailable'; readonly reason: string };
 
+/** The `PROV<id>` line, written by the Save of the tab that shows it. */
+export interface LocalisationEdit {
+  readonly text: string;
+  readonly renameHistoryFile: boolean;
+}
+
 export type SaveSection =
-  | { readonly section: 'localisation'; readonly text: string; readonly renameHistoryFile: boolean }
-  | { readonly section: 'history'; readonly data: ProvinceHistory; readonly createInFolder: string | undefined }
+  /**
+   * The history file, and with it everything the Definition tab shows: its one
+   * Save carries the localisation and the states as well, so the name, the
+   * climate, the states and the history are written together. The Buildings and
+   * Extra Dates tabs post the same section without them — they show neither.
+   */
+  | {
+      readonly section: 'history';
+      readonly data: ProvinceHistory;
+      readonly climate: string;
+      readonly createInFolder: string | undefined;
+      readonly localisation?: LocalisationEdit;
+      readonly states?: readonly string[];
+    }
   | { readonly section: 'pops'; readonly pops: readonly PopEntry[]; readonly createInFile: string | undefined }
   | { readonly section: 'positions'; readonly data: ProvincePositions };
 
-export type SaveParams = ProvinceRequestParams & SaveSection;
+/** What a province painted in a colour of its own needs before any section can be written. */
+export interface NewProvince {
+  /** Packed `red << 16 | green << 8 | blue`, as the bitmap holds it. */
+  readonly color: number;
+  readonly isSea: boolean;
+  /** The name the `definition.csv` row carries. */
+  readonly name: string;
+  /** A land province cannot be created without one, nor without a state. */
+  readonly climate: string;
+  readonly states: readonly string[];
+}
+
+export interface NewProvinceParams extends MapEditorTargetParams {
+  readonly color: number;
+  readonly popDate: string;
+}
+
+export interface SaveOptions {
+  /** Set while the province is new: the save creates it before writing its own section. */
+  readonly create?: NewProvince;
+  /** Answer with the files the save would write, and write none of them. */
+  readonly dryRun?: boolean;
+}
+
+export type SaveParams = ProvinceRequestParams & SaveSection & SaveOptions;
+
+/** A save as the page posts it: the extension adds the target, which the page never knows. */
+export type PageSaveParams = Pick<ProvinceRequestParams, 'provinceId' | 'popDate'> & SaveSection & SaveOptions;
 
 export type SaveResult =
   | { readonly ok: true; readonly written: readonly string[]; readonly details: ProvinceDetails }
-  | { readonly ok: false; readonly reason: string };
+  /** `written`: what a save that failed half-way had already put on disk — a province created with no section. */
+  | { readonly ok: false; readonly reason: string; readonly written?: readonly string[] };
 
 /** A colour as `common/countries/<file>.txt` writes it: three 0-255 components. */
 export type Rgb = readonly [number, number, number];
@@ -285,18 +372,51 @@ export interface MapCountryColors {
 export type MapCountryColorsResult = MapCountryColors | { readonly kind: 'unavailable'; readonly reason: string };
 
 /**
+ * What the page needs to tint provinces by state: the first `map/region.txt`
+ * block naming each province (ids as strings, JSON keys). The colours are the
+ * page's, hashed from the names (`stateColors.ts`).
+ */
+export interface MapStateColors {
+  readonly kind: 'ready';
+  readonly states: Readonly<Record<string, string>>;
+}
+
+export type MapStateColorsResult = MapStateColors | { readonly kind: 'unavailable'; readonly reason: string };
+
+export interface PaintParams extends MapEditorTargetParams {
+  /** Painted pixels as `index, length, colour` triples; see `provincePaint.runsOf`. */
+  readonly runs: readonly number[];
+}
+
+/** PNG data URIs of the three map bitmaps, small enough for the Layers box; a bitmap the stack lacks or cannot decode is absent. */
+export interface MapThumbnails {
+  readonly provinces?: string;
+  readonly rivers?: string;
+  readonly terrain?: string;
+}
+
+export type PaintResult =
+  | { readonly ok: true; readonly path: string; readonly pixels: number }
+  | { readonly ok: false; readonly reason: string };
+
+/**
  * What the extension posts to the Map Editor page. The page validates nothing:
  * both sides read this one declaration, so a payload that drifts fails to
  * compile. (The other direction is validated at runtime, in mapEditorMessages.)
  */
 export type HostMessage =
-  | { readonly type: 'map'; readonly map: MapEditorMap; readonly bmpUri: string; readonly riversUri: string | undefined }
+  | { readonly type: 'map'; readonly map: MapEditorMap; readonly bmpUri: string; readonly riversUri: string | undefined; readonly terrainUri: string | undefined }
+  | ({ readonly type: 'thumbnails' } & MapThumbnails)
+  /** The reference pictures of the target mod; each file is fetched as `folderUri/file`. */
+  | { readonly type: 'references'; readonly folderUri: string; readonly layers: readonly ReferenceLayer[] }
   | ({ readonly type: 'revealPixel' } & MapEditorReveal)
   | { readonly type: 'details'; readonly details: ProvinceDetails }
   | { readonly type: 'positions'; readonly markers: readonly PositionMarker[] }
-  | { readonly type: 'settings'; readonly countryColorsTint: number }
+  | { readonly type: 'settings'; readonly countryColorsTint: number; readonly paintUndoSteps: number }
   | { readonly type: 'countryColors'; readonly owners: Readonly<Record<string, string>>; readonly colors: Readonly<Record<string, Rgb>> }
+  | { readonly type: 'stateColors'; readonly states: Readonly<Record<string, string>> }
   | { readonly type: 'saved'; readonly result: SaveResult }
+  | { readonly type: 'painted'; readonly result: PaintResult }
   | { readonly type: 'savedAll'; readonly written: readonly number[]; readonly failed: readonly { readonly provinceId: number; readonly reason: string }[] }
   | { readonly type: 'error'; readonly message: string }
   | ({ readonly type: 'terrainPicture' } & TerrainPictureResult);

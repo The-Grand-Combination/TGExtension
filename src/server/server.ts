@@ -50,15 +50,24 @@ import {
 } from '../model/fullReport.js';
 import {
   MAP_EDITOR_COUNTRY_COLORS_REQUEST,
+  MAP_EDITOR_STATE_COLORS_REQUEST,
   MAP_EDITOR_MAP_REQUEST,
+  MAP_EDITOR_NEW_PROVINCE_REQUEST,
+  MAP_EDITOR_PAINT_REQUEST,
   MAP_EDITOR_POSITIONS_REQUEST,
   MAP_EDITOR_PROVINCE_REQUEST,
   MAP_EDITOR_SAVE_REQUEST,
   MAP_EDITOR_TERRAIN_PICTURE_REQUEST,
+  MAP_EDITOR_THUMBNAILS_REQUEST,
   PROVINCE_FOLDER_FLAGS,
   type MapCountryColorsResult,
+  type MapStateColorsResult,
+  type MapThumbnails,
   type MapEditorMapResult,
   type MapEditorTargetParams,
+  type NewProvinceParams,
+  type PaintParams,
+  type PaintResult,
   type MapPositionsResult,
   type ProvinceRequestParams,
   type ProvinceResult,
@@ -530,7 +539,7 @@ function rebuildChangedIndexes(): void {
   for (const fsPath of changed) {
     pictureCache.delete(fsPath);
   }
-  mapEditor.invalidate();
+  mapEditor.invalidate(changed);
   if (changed.some((fsPath) => fsPath.toLowerCase().endsWith('.mod'))) {
     applyLayout();
     return;
@@ -855,6 +864,7 @@ const mapEditor = new MapEditorHandlers({
   // dist/server.js sits one folder below the extension root, next to assets/.
   assetsFolder: path.join(__dirname, '..', 'assets'),
   writeText: writeText,
+  writeBytes: writeModFileBytes,
   rename: renameModFile,
   codepage: (): Codepage => config.encoding,
   historyFolderPattern: provinceFolderPattern,
@@ -864,7 +874,21 @@ onRequest(MAP_EDITOR_MAP_REQUEST, (params: MapEditorTargetParams): Promise<MapEd
 onRequest(MAP_EDITOR_PROVINCE_REQUEST, (params: ProvinceRequestParams): Promise<ProvinceResult> => mapEditor.province(params));
 onRequest(MAP_EDITOR_POSITIONS_REQUEST, (params: MapEditorTargetParams): Promise<MapPositionsResult> => mapEditor.positions(params));
 onRequest(MAP_EDITOR_COUNTRY_COLORS_REQUEST, (params: MapEditorTargetParams): Promise<MapCountryColorsResult> => mapEditor.countryColors(params));
+onRequest(MAP_EDITOR_STATE_COLORS_REQUEST, (params: MapEditorTargetParams): Promise<MapStateColorsResult> => mapEditor.stateColors(params));
 onRequest(MAP_EDITOR_TERRAIN_PICTURE_REQUEST, (params: TerrainPictureParams): Promise<TerrainPictureResult> => mapEditor.terrainPictureFor(params));
+onRequest(MAP_EDITOR_NEW_PROVINCE_REQUEST, (params: NewProvinceParams): Promise<ProvinceResult> => mapEditor.newProvince(params));
+onRequest(MAP_EDITOR_THUMBNAILS_REQUEST, (params: MapEditorTargetParams): Promise<MapThumbnails> => mapEditor.thumbnails(params));
+
+onRequest(MAP_EDITOR_PAINT_REQUEST, async (params: PaintParams): Promise<PaintResult> => {
+  const result = await mapEditor.paint(params);
+  connection.console.log(
+    result.ok
+      ? `Map editor: ${String(result.pixels)} pixel(s) painted into ${result.path}`
+      : `Map editor: the map was not painted: ${result.reason}`,
+  );
+  return result;
+});
+
 onRequest(MAP_EDITOR_SAVE_REQUEST, async (params: SaveParams): Promise<SaveResult> => {
   const result = await mapEditor.save(params);
   connection.console.log(
