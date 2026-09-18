@@ -422,7 +422,7 @@ export interface MapStateColors {
 export type MapStateColorsResult = MapStateColors | { readonly kind: 'unavailable'; readonly reason: string };
 
 export interface PaintParams extends MapEditorTargetParams {
-  /** Painted pixels as `index, length, colour` triples; see `provincePaint.runsOf`. */
+  /** Painted pixels as `index, length, colour` triples; see `provincePaint`. */
   readonly runs: readonly number[];
 }
 

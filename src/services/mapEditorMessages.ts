@@ -32,7 +32,7 @@ export type PageMessage =
   | { readonly type: 'openFile'; readonly absolutePath: string; readonly line: number }
   | { readonly type: 'save'; readonly params: PageSaveParams }
   | { readonly type: 'pending'; readonly edits: readonly PendingPositions[] }
-  /** Painted pixels as `index, length, colour` triples; see `provincePaint.runsOf`. */
+  /** Painted pixels as `index, length, colour` triples; see `provincePaint`. */
   | { readonly type: 'paint'; readonly runs: readonly number[] }
   /** How many painted pixels the page is holding, so closing the tab can say so. */
   | { readonly type: 'paintPending'; readonly pixels: number }

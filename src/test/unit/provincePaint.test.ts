@@ -1,11 +1,21 @@
 import * as assert from 'node:assert';
 import { decodeBmp, type BmpImage } from '../../services/bmpDecoder.js';
-import { applyRuns, enclosedPixels, floodFill, runsOf, strokePixels, unusedColor } from '../../services/provincePaint.js';
+import { applyRuns, changedRuns, enclosedRuns, floodRuns, runsOfIndices, strokePixels, unusedColor } from '../../services/provincePaint.js';
 import { encodeBmp24, packRgb } from './bmpFixtures.js';
 
 const RED = packRgb(255, 0, 0);
 const BLUE = packRgb(0, 0, 255);
 const GREEN = packRgb(0, 255, 0);
+
+/** The pixels a run list covers, in order: what the tests read a fill back as. */
+function pixelsOf(runs: readonly number[]): number[] {
+  const out: number[] = [];
+  for (let at = 0; at < runs.length; at += 3) {
+    const start = runs[at] ?? 0;
+    for (let index = start; index < start + (runs[at + 1] ?? 0); index++) { out.push(index); }
+  }
+  return out.sort((one, other) => one - other);
+}
 
 function image(bytes: Uint8Array): BmpImage {
   const decoded = decodeBmp(bytes);
@@ -24,17 +34,30 @@ function sample(): Uint32Array {
 
 suite('provincePaint', () => {
   test('fills the region that touches the pixel, and leaves the one cut off by another colour', () => {
-    const filled = floodFill(sample(), 4, 3, 0, GREEN).sort((one, other) => one - other);
-    assert.deepStrictEqual(filled, [0, 1, 4, 5]);
+    assert.deepStrictEqual(pixelsOf(floodRuns(sample(), 4, 3, 0, GREEN)), [0, 1, 4, 5]);
+  });
+
+  test('fills a region as one run a row', () => {
+    assert.deepStrictEqual(floodRuns(sample(), 4, 3, 0, GREEN).sort(), [0, 2, GREEN, 4, 2, GREEN].sort());
   });
 
   test('does not leak through a corner', () => {
     const packed = new Uint32Array([RED, BLUE, BLUE, RED]);
-    assert.deepStrictEqual(floodFill(packed, 2, 2, 0, GREEN), [0]);
+    assert.deepStrictEqual(floodRuns(packed, 2, 2, 0, GREEN), [0, 1, GREEN]);
   });
 
   test('fills nothing when the pixel already holds the colour', () => {
-    assert.deepStrictEqual(floodFill(sample(), 4, 3, 0, RED), []);
+    assert.deepStrictEqual(floodRuns(sample(), 4, 3, 0, RED), []);
+  });
+
+  test('never joins a run across the end of a row', () => {
+    const packed = new Uint32Array([RED, RED, RED, RED]);
+    assert.deepStrictEqual(floodRuns(packed, 2, 2, 0, GREEN), [0, 2, GREEN, 2, 2, GREEN]);
+    assert.deepStrictEqual(runsOfIndices([0, 1, 2, 3], GREEN, 2), [0, 2, GREEN, 2, 2, GREEN]);
+    assert.deepStrictEqual(
+      changedRuns(new Uint32Array([RED, RED, RED, RED]), new Uint32Array([BLUE, BLUE, BLUE, BLUE]), 2),
+      [0, 2, RED, 2, 2, RED],
+    );
   });
 
   test('a brush of one pixel draws a line with no holes in it', () => {
@@ -48,8 +71,14 @@ suite('provincePaint', () => {
   });
 
   test('joins neighbouring pixels of one colour into a single run', () => {
-    const pixels = new Map([[5, RED], [4, RED], [6, BLUE], [9, RED]]);
-    assert.deepStrictEqual(runsOf(pixels), [4, 2, RED, 6, 1, BLUE, 9, 1, RED]);
+    assert.deepStrictEqual(runsOfIndices([5, 4, 6, 9], RED, 16), [4, 3, RED, 9, 1, RED]);
+  });
+
+  test('reports only where two pictures of the map differ, carrying the first one colours', () => {
+    const from = new Uint32Array([RED, RED, BLUE, RED]);
+    const against = new Uint32Array([RED, BLUE, BLUE, BLUE]);
+    assert.deepStrictEqual(changedRuns(from, against, 16), [1, 1, RED, 3, 1, RED]);
+    assert.deepStrictEqual(changedRuns(against, from, 16), [1, 1, BLUE, 3, 1, BLUE]);
   });
 
   test('writes the runs into a bottom-up bitmap the way the page reads it', () => {
@@ -99,13 +128,13 @@ suite('provincePaint — what a drawn line closes off', () => {
   const ARC = [3 + 2 * W, 4 + 2 * W, 5 + 2 * W, 5 + 3 * W, 5 + 4 * W, 4 + 4 * W, 3 + 4 * W];
 
   test('fills what the line and the colour shut away from the edge of the map', () => {
-    const filled = enclosedPixels(bay(), W, H, ARC, RED).sort((one, other) => one - other);
+    const filled = pixelsOf(enclosedRuns(bay(), W, H, ARC, RED));
     assert.deepStrictEqual(filled, [3 + 3 * W, 4 + 3 * W]);
   });
 
   test('a line that never comes back closes nothing', () => {
     const open = [3 + 2 * W, 4 + 2 * W, 5 + 2 * W];
-    assert.deepStrictEqual(enclosedPixels(bay(), W, H, open, RED), []);
+    assert.deepStrictEqual(enclosedRuns(bay(), W, H, open, RED), []);
   });
 
   test('a hole the colour has had all along is left alone', () => {
@@ -113,14 +142,14 @@ suite('provincePaint — what a drawn line closes off', () => {
     // A blue pixel walled in by red, far from the line: not what the user drew.
     packed[0 + 0 * W] = RED; packed[1 + 0 * W] = RED; packed[2 + 0 * W] = RED;
     packed[0 + 1 * W] = RED; packed[2 + 1 * W] = RED;
-    const filled = enclosedPixels(packed, W, H, ARC, RED).sort((one, other) => one - other);
+    const filled = pixelsOf(enclosedRuns(packed, W, H, ARC, RED));
     assert.deepStrictEqual(filled, [3 + 3 * W, 4 + 3 * W]);
   });
 
   test('the line itself is a wall even where the colour is not there yet', () => {
     // The same arc over a map with no province at all shuts nothing: the wall is open at the left.
     const plain = new Uint32Array(W * H).fill(BLUE);
-    assert.deepStrictEqual(enclosedPixels(plain, W, H, ARC, RED), []);
+    assert.deepStrictEqual(enclosedRuns(plain, W, H, ARC, RED), []);
   });
 });
 

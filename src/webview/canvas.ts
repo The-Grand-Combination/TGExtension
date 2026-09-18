@@ -131,12 +131,15 @@ export function wholeMap(image: DecodedImage): PixelBox {
   return { minX: 0, minY: 0, maxX: image.width - 1, maxY: image.height - 1 };
 }
 
-export function boxOfPixels(image: DecodedImage, indices: Iterable<number>): PixelBox {
+/** The box a run list fits in, read off the ends of each run rather than every pixel in it. */
+export function boxOfRuns(image: DecodedImage, runs: readonly number[]): PixelBox {
   const box = { minX: image.width, minY: image.height, maxX: -1, maxY: -1 };
-  for (const index of indices) {
-    const x = index % image.width;
-    const y = (index - x) / image.width;
-    if (x < box.minX) { box.minX = x; } if (x > box.maxX) { box.maxX = x; }
+  for (let at = 0; at < runs.length; at += 3) {
+    const start = runs[at] ?? 0;
+    const x = start % image.width;
+    const y = (start - x) / image.width;
+    const last = x + (runs[at + 1] ?? 1) - 1;
+    if (x < box.minX) { box.minX = x; } if (last > box.maxX) { box.maxX = last; }
     if (y < box.minY) { box.minY = y; } if (y > box.maxY) { box.maxY = y; }
   }
   return box;

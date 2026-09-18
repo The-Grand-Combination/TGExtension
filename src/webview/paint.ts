@@ -1,7 +1,7 @@
 import type { PaintResult } from '../model/mapEditor.js';
 import { DEFAULT_PAINT_UNDO_STEPS } from '../model/mapEditor.js';
-import { enclosedPixels, floodFill, runsOf, strokePixels, unusedColor } from '../services/provincePaint.js';
-import { boxOfHighlight, boxOfPixels, highlightOf, insideImage, provinceAt, render, toImage, unionBox, wholeMap } from './canvas.js';
+import { addPixel, changedRuns, enclosedRuns, floodRuns, runPixels, runsOfIndices, strokePixels, unusedColor } from '../services/provincePaint.js';
+import { boxOfHighlight, boxOfRuns, highlightOf, insideImage, provinceAt, render, toImage, unionBox, wholeMap } from './canvas.js';
 import { mapArea, required, requiredButton, requiredInput, setStatus } from './dom.js';
 import { messageOf, post } from './host.js';
 import { clearSelection } from './input.js';
@@ -37,14 +37,20 @@ const resetPaintButton = requiredButton('resetPaintButton');
 let brushColor = 0xff0000;
 let brush = 1;
 let undoLimit = DEFAULT_PAINT_UNDO_STEPS;
-/** Pixel -> the colour provinces.bmp has for it, kept from the first time it was painted. */
-const paintedFrom = new Map<number, number>();
-/** Pixels that no longer hold their file colour: what a Save writes. */
-const painted = new Set<number>();
-/** One stroke, as pixel -> the colour it had before it: undo writes that straight back. */
-const undoSteps: Map<number, number>[] = [];
-const redoSteps: Map<number, number>[] = [];
-let stroke: Map<number, number> | null = null;
+/**
+ * The map as the file has it, copied the first time a stroke lands on it: what
+ * the eraser and Reset put back, and what says which pixels a Save has to
+ * write. One array of the map's own size, not one entry per painted pixel — a
+ * bucket over a large region would fill a Map with millions of them.
+ */
+let fileColorsHeld: Uint32Array | null = null;
+let fileColorsOf: DecodedImage | null = null;
+/** How many pixels no longer hold their file colour: what a Save writes. */
+let paintedCount = 0;
+/** One stroke, as runs of the colours the pixels held before it: undo writes those straight back. */
+const undoSteps: number[][] = [];
+const redoSteps: number[][] = [];
+let stroke: number[] | null = null;
 /** Pixels of the stroke the Terrain Lock kept off the water, told at its end. */
 let heldBack = 0;
 /** Where the pencil last was, so a fast mouse draws a line and not a dotted one. */
@@ -136,10 +142,10 @@ export function startPaint(event: MouseEvent): void {
   if (!insideImage(currentImage, point)) { return; }
   if (state.tool === 'pick') { pickAt(point); return; }
   const color = brushColor;
-  stroke = new Map();
+  stroke = [];
   heldBack = 0;
   if (state.tool === 'bucket') {
-    paintIndices(floodFill(currentImage.packed, currentImage.width, currentImage.height, point.y * currentImage.width + point.x, color), color);
+    paintRuns(floodRuns(currentImage.packed, currentImage.width, currentImage.height, point.y * currentImage.width + point.x, color));
     endStroke();
     return;
   }
@@ -168,13 +174,13 @@ function drawInto(indices: readonly number[], color: number): void {
 function closeLine(line: readonly number[]): void {
   const currentImage = state.image;
   if (!currentImage || line.length === 0) { return; }
-  const inside = enclosedPixels(currentImage.packed, currentImage.width, currentImage.height, line, brushColor);
+  const inside = enclosedRuns(currentImage.packed, currentImage.width, currentImage.height, line, brushColor);
   if (inside.length === 0) {
     setStatus('The line closed nothing off: draw out of the colour and back into it.', 'warning');
     return;
   }
-  paintIndices(inside, brushColor);
-  setStatus('Filled ' + String(inside.length) + ' pixel(s)');
+  paintRuns(inside);
+  setStatus('Filled ' + String(runPixels(inside)) + ' pixel(s)');
 }
 
 /** The eye drop takes the colour the pixel holds, whether or not a province owns it. */
@@ -196,7 +202,7 @@ function pickAt(point: Point): void {
  * with the reason on the status bar, while there is nothing to check against.
  * Painting on regardless would be the very accident the lock is for.
  */
-function landOnly(indices: readonly number[], currentImage: DecodedImage): readonly number[] | null {
+function landOnly(runs: readonly number[], currentImage: DecodedImage): readonly number[] | null {
   const terrain = state.terrain;
   if (!terrain) {
     prefetchTerrain();
@@ -209,8 +215,13 @@ function landOnly(indices: readonly number[], currentImage: DecodedImage): reado
     return null;
   }
   const land: number[] = [];
-  for (const index of indices) {
-    if (waterTerrain.has(terrain.indices[index] ?? 0)) { heldBack++; } else { land.push(index); }
+  for (let at = 0; at < runs.length; at += 3) {
+    const start = runs[at] ?? 0;
+    const color = runs[at + 2] ?? 0;
+    const end = start + (runs[at + 1] ?? 0);
+    for (let index = start; index < end; index++) {
+      if (waterTerrain.has(terrain.indices[index] ?? 0)) { heldBack++; } else { addPixel(land, index, color, currentImage.width); }
+    }
   }
   return land;
 }
@@ -221,104 +232,142 @@ function prefetchTerrain(): void {
   ensureTerrain().catch(function (error: unknown) { setStatus('Could not read terrain.bmp: ' + messageOf(error), 'error'); });
 }
 
-/** The eraser only undoes the draft: a pixel still the file's is not its business, so the lock has nothing to say. */
-function eraseIndices(indices: readonly number[], currentImage: DecodedImage): void {
-  const pixels = new Map<number, number>();
-  for (const index of indices) {
-    const original = paintedFrom.get(index);
-    const before = currentImage.packed[index];
-    if (original === undefined || before === undefined || before === original) { continue; }
-    pixels.set(index, original);
-    if (stroke && !stroke.has(index)) { stroke.set(index, before); }
+/** The map as the file has it, taken before the first stroke touches this image. */
+function fileColors(currentImage: DecodedImage): Uint32Array {
+  if (fileColorsOf !== currentImage || !fileColorsHeld) {
+    fileColorsOf = currentImage;
+    fileColorsHeld = currentImage.packed.slice();
   }
-  paintPixels(pixels);
+  return fileColorsHeld;
+}
+
+/** The eraser only undoes the draft: a pixel still the file's is not its business, so the lock has nothing to say. */
+function eraseRuns(indices: readonly number[], currentImage: DecodedImage): number[] {
+  const file = fileColors(currentImage);
+  const runs: number[] = [];
+  for (const index of [...indices].sort(function (one, other) { return one - other; })) {
+    const original = file[index];
+    if (original !== undefined && currentImage.packed[index] !== original) {
+      addPixel(runs, index, original, currentImage.width);
+    }
+  }
+  return runs;
 }
 
 function paintIndices(indices: readonly number[], color: number): void {
   const currentImage = state.image;
-  if (!currentImage) { return; }
-  if (state.tool === 'eraser') { eraseIndices(indices, currentImage); return; }
-  const allowed = state.terrainLock ? landOnly(indices, currentImage) : indices;
-  if (!allowed) { return; }
-  const pixels = new Map<number, number>();
-  for (const index of allowed) {
-    const before = currentImage.packed[index];
-    if (before === undefined || before === color) { continue; }
-    pixels.set(index, color);
-    if (stroke && !stroke.has(index)) { stroke.set(index, before); }
-  }
-  paintPixels(pixels);
+  if (!currentImage || indices.length === 0) { return; }
+  if (state.tool === 'eraser') { paintRuns(eraseRuns(indices, currentImage), true); return; }
+  paintRuns(runsOfIndices(indices, color, currentImage.width));
 }
 
-/** Put the colours on the map: the pixels the clicks read, and the tiles the eye reads. */
-function paintPixels(pixels: ReadonlyMap<number, number>): void {
+/**
+ * Put the colours on the map: the pixels the clicks read, and the tiles the
+ * eye reads. The eraser has already checked what it is putting back, so it
+ * passes the Terrain Lock by.
+ */
+function paintRuns(runs: readonly number[], erasing = false): void {
   const currentImage = state.image;
-  if (!currentImage || pixels.size === 0) { return; }
-  for (const [index, color] of pixels) {
-    if (!paintedFrom.has(index)) { paintedFrom.set(index, currentImage.packed[index] ?? color); }
-    currentImage.packed[index] = color;
-    if (paintedFrom.get(index) === color) { painted.delete(index); } else { painted.add(index); }
-  }
-  patchTiles(currentImage, pixels);
+  if (!currentImage || runs.length === 0) { return; }
+  const allowed = state.terrainLock && !erasing ? landOnly(runs, currentImage) : runs;
+  if (!allowed) { return; }
+  const applied = writeRuns(currentImage, allowed);
+  if (applied.length === 0) { return; }
+  patchTiles(currentImage, applied);
   render();
 }
 
-function patchTiles(currentImage: DecodedImage, pixels: ReadonlyMap<number, number>): void {
-  const columns = Math.ceil(currentImage.width / TILE);
-  const byTile = new Map<number, number[]>();
-  for (const index of pixels.keys()) {
-    const x = index % currentImage.width;
-    const y = (index - x) / currentImage.width;
-    const at = Math.floor(y / TILE) * columns + Math.floor(x / TILE);
-    const held = byTile.get(at);
-    if (held) { held.push(index); } else { byTile.set(at, [index]); }
-  }
-  for (const [at, indices] of byTile) {
-    patchTile(currentImage.tiles[at], indices, pixels, currentImage.width, null);
-    for (const mode of TINT_MODES) {
-      const tinted = state.tinted[mode];
-      if (tinted) { patchTile(tinted.tiles[at], indices, pixels, currentImage.width, tinted.tintOfColor); }
+/**
+ * Write the runs into the decoded map, answering with the pixels that changed
+ * hands: a run may cross pixels that already hold its colour, and those are
+ * neither drawn again nor taken back by an undo.
+ */
+function writeRuns(currentImage: DecodedImage, runs: readonly number[]): number[] {
+  const file = fileColors(currentImage);
+  const packed = currentImage.packed;
+  const width = currentImage.width;
+  const applied: number[] = [];
+  for (let at = 0; at < runs.length; at += 3) {
+    const start = runs[at] ?? 0;
+    const color = runs[at + 2] ?? 0;
+    const end = start + (runs[at + 1] ?? 0);
+    for (let index = start; index < end; index++) {
+      const before = packed[index];
+      if (before === undefined || before === color) { continue; }
+      countPainted(before, color, file[index] ?? before);
+      packed[index] = color;
+      if (stroke) { addPixel(stroke, index, before, width); }
+      addPixel(applied, index, color, width);
     }
+  }
+  return applied;
+}
+
+/** One pixel changing colour: it starts differing from the file, stops differing, or was already doing either. */
+function countPainted(before: number, color: number, original: number): void {
+  if (before === original) { paintedCount++; } else if (color === original) { paintedCount--; }
+}
+
+function patchTiles(currentImage: DecodedImage, runs: readonly number[]): void {
+  fillRuns(currentImage, runs, currentImage.tiles, null);
+  for (const mode of TINT_MODES) {
+    const tinted = state.tinted[mode];
+    if (tinted) { fillRuns(currentImage, runs, tinted.tiles, tinted.tintOfColor); }
   }
 }
 
-/** One tile's painted pixels, written through the one box that holds them all; `tints` maps each colour to its repaint. */
-function patchTile(
-  tile: Tile | undefined,
-  indices: readonly number[],
-  pixels: ReadonlyMap<number, number>,
-  width: number,
+const cssByColor = new Map<number, string>();
+
+function cssOf(color: number): string {
+  const held = cssByColor.get(color);
+  if (held !== undefined) { return held; }
+  const css = '#' + color.toString(16).padStart(6, '0');
+  cssByColor.set(color, css);
+  return css;
+}
+
+/**
+ * Draw the runs onto the tiles they fall in, one `fillRect` a run. Reading the
+ * tile back with `getImageData` would cost the whole box the runs span, which
+ * for a filled province is most of the map; `tints` maps each colour to its
+ * repaint. A run never crosses a row, so it splits only where a tile ends.
+ */
+function fillRuns(
+  currentImage: DecodedImage,
+  runs: readonly number[],
+  tiles: readonly Tile[],
   tints: ReadonlyMap<number, number> | null,
 ): void {
-  const context = tile?.canvas.getContext('2d');
-  if (!tile || !context) { return; }
-  let minX = tile.canvas.width;
-  let minY = tile.canvas.height;
-  let maxX = -1;
-  let maxY = -1;
-  for (const index of indices) {
-    const x = (index % width) - tile.x;
-    const y = (index - (index % width)) / width - tile.y;
-    if (x < minX) { minX = x; }
-    if (x > maxX) { maxX = x; }
-    if (y < minY) { minY = y; }
-    if (y > maxY) { maxY = y; }
+  const width = currentImage.width;
+  const columns = Math.ceil(width / TILE);
+  let which = -1;
+  let tile: Tile | undefined;
+  let context: CanvasRenderingContext2D | null = null;
+  let style = -1;
+  for (let at = 0; at < runs.length; at += 3) {
+    const start = runs[at] ?? 0;
+    const own = runs[at + 2] ?? 0;
+    const color = (tints ? tints.get(own) : undefined) ?? own;
+    const x = start % width;
+    const y = (start - x) / width;
+    const row = Math.floor(y / TILE) * columns;
+    const end = x + (runs[at + 1] ?? 0);
+    for (let from = x; from < end;) {
+      const column = Math.floor(from / TILE);
+      const to = Math.min(end, (column + 1) * TILE);
+      if (row + column !== which) {
+        which = row + column;
+        tile = tiles[which];
+        context = tile?.canvas.getContext('2d') ?? null;
+        style = -1;
+      }
+      if (tile && context) {
+        if (color !== style) { style = color; context.fillStyle = cssOf(color); }
+        context.fillRect(from - tile.x, y - tile.y, to - from, 1);
+      }
+      from = to;
+    }
   }
-  const boxWidth = maxX - minX + 1;
-  const boxHeight = maxY - minY + 1;
-  const box = context.getImageData(minX, minY, boxWidth, boxHeight);
-  for (const index of indices) {
-    const own = pixels.get(index) ?? 0;
-    const color = tints ? (tints.get(own) ?? own) : own;
-    const x = (index % width) - tile.x - minX;
-    const y = (index - (index % width)) / width - tile.y - minY;
-    const out = (y * boxWidth + x) * 4;
-    box.data[out] = (color >> 16) & 255;
-    box.data[out + 1] = (color >> 8) & 255;
-    box.data[out + 2] = color & 255;
-    box.data[out + 3] = 255;
-  }
-  context.putImageData(box, minX, minY);
 }
 
 export function endStroke(): void {
@@ -331,7 +380,7 @@ export function endStroke(): void {
   brushAt = null;
   if (heldBack > 0) { setStatus(String(heldBack) + ' pixel(s) held back by Terrain Lock: no land there in terrain.bmp', 'warning'); }
   heldBack = 0;
-  if (!step || step.size === 0) { return; }
+  if (!step || step.length === 0) { return; }
   undoSteps.push(step);
   while (undoSteps.length > undoLimit) { undoSteps.shift(); }
   redoSteps.length = 0;
@@ -354,17 +403,25 @@ export function stepForward(): void {
 }
 
 /** The colours those pixels hold right now: the way back from the step about to be applied. */
-function colorsNow(step: ReadonlyMap<number, number>): Map<number, number> {
-  const out = new Map<number, number>();
-  for (const index of step.keys()) { out.set(index, state.image?.packed[index] ?? 0); }
+function colorsNow(step: readonly number[]): number[] {
+  const currentImage = state.image;
+  const out: number[] = [];
+  if (!currentImage) { return out; }
+  for (let at = 0; at < step.length; at += 3) {
+    const start = step[at] ?? 0;
+    const end = start + (step[at + 1] ?? 0);
+    for (let index = start; index < end; index++) {
+      addPixel(out, index, currentImage.packed[index] ?? 0, currentImage.width);
+    }
+  }
   return out;
 }
 
-function applyStep(step: ReadonlyMap<number, number>): void {
+function applyStep(step: readonly number[]): void {
   // What the pixels held before the step is what says whether the outline moved:
   // a step that takes the selected province's colour away leaves nothing of it behind.
   const before = colorsNow(step);
-  paintPixels(step);
+  paintRuns(step, true);
   refreshPainted();
   refreshOutline(before);
 }
@@ -375,25 +432,31 @@ function applyStep(step: ReadonlyMap<number, number>): void {
  * pixel before the change; the map already holds the new one. The province can
  * only be where it was or where the paint went, so only that much is walked.
  */
-function refreshOutline(was: ReadonlyMap<number, number>): void {
+function refreshOutline(was: readonly number[]): void {
   const currentImage = state.image;
   const id = state.selectedId;
   const color = id === null ? undefined : definitionById.get(id)?.color;
   if (id === null || !currentImage || color === undefined) { return; }
-  for (const [index, before] of was) {
-    if (before === color || currentImage.packed[index] === color) {
-      const changed = boxOfPixels(currentImage, was.keys());
-      const within = state.selection ? unionBox(boxOfHighlight(state.selection), changed) : wholeMap(currentImage);
-      state.selection = highlightOf(id, undefined, within);
-      render();
-      return;
+  for (let at = 0; at < was.length; at += 3) {
+    const start = was[at] ?? 0;
+    const end = start + (was[at + 1] ?? 0);
+    const before = was[at + 2];
+    for (let index = start; index < end; index++) {
+      if (before === color || currentImage.packed[index] === color) {
+        const within = state.selection
+          ? unionBox(boxOfHighlight(state.selection), boxOfRuns(currentImage, was))
+          : wholeMap(currentImage);
+        state.selection = highlightOf(id, undefined, within);
+        render();
+        return;
+      }
     }
   }
 }
 
 /** Both buttons stand whether there is anything to write or not, greyed until there is. */
 function refreshPainted(): void {
-  const held = painted.size;
+  const held = paintedCount;
   savePaintButton.disabled = held === 0;
   resetPaintButton.disabled = held === 0;
   savePaintButton.title = held === 0
@@ -405,14 +468,15 @@ function refreshPainted(): void {
   if (paintTimer !== null) { clearTimeout(paintTimer); }
   paintTimer = window.setTimeout(function () {
     paintTimer = null;
-    post({ type: 'paintPending', pixels: painted.size });
+    post({ type: 'paintPending', pixels: paintedCount });
   }, 400);
 }
 
 /** A new map, or one written back: nothing is held any more. */
 export function resetPaint(): void {
-  painted.clear();
-  paintedFrom.clear();
+  paintedCount = 0;
+  fileColorsHeld = null;
+  fileColorsOf = null;
   undoSteps.length = 0;
   redoSteps.length = 0;
   stroke = null;
@@ -428,7 +492,7 @@ export function resetPaint(): void {
  * names a colour the map does not have.
  */
 export function saveNewProvincePaint(): void {
-  if (painted.size > 0) { savePainted(); }
+  if (paintedCount > 0) { savePainted(); }
 }
 
 export function handlePainted(result: PaintResult): void {
@@ -464,14 +528,10 @@ function pickTool(clicked: Tool): void {
 
 function resetPainted(): void {
   const currentImage = state.image;
-  if (!currentImage || painted.size === 0) { return; }
-  const before = new Map<number, number>();
-  const back = new Map<number, number>();
-  for (const index of painted) {
-    before.set(index, currentImage.packed[index] ?? 0);
-    back.set(index, paintedFrom.get(index) ?? currentImage.packed[index] ?? 0);
-  }
-  paintPixels(back);
+  if (!currentImage || paintedCount === 0) { return; }
+  const file = fileColors(currentImage);
+  const before = changedRuns(currentImage.packed, file, currentImage.width);
+  paintRuns(changedRuns(file, currentImage.packed, currentImage.width), true);
   resetPaint();
   refreshOutline(before);
   // The colour a new province was made of is gone with the paint, and so is the province.
@@ -481,12 +541,10 @@ function resetPainted(): void {
 
 function savePainted(): void {
   const currentImage = state.image;
-  if (!currentImage || painted.size === 0) { return; }
-  const pixels = new Map<number, number>();
-  for (const index of painted) { pixels.set(index, currentImage.packed[index] ?? 0); }
+  if (!currentImage || paintedCount === 0) { return; }
   savePaintButton.disabled = true;
-  setStatus('Writing ' + String(painted.size) + ' pixel(s) to provinces.bmp…');
-  post({ type: 'paint', runs: runsOf(pixels) });
+  setStatus('Writing ' + String(paintedCount) + ' pixel(s) to provinces.bmp…');
+  post({ type: 'paint', runs: changedRuns(currentImage.packed, fileColors(currentImage), currentImage.width) });
 }
 
 export function initPaint(): void {

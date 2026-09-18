@@ -3,6 +3,12 @@
  * and how they go back into the file's bytes. The Map Editor page and the
  * server both read this, so a pixel the page painted lands on the byte the
  * server writes.
+ *
+ * Painted pixels travel as **runs** — `index, length, colour` triples — never
+ * one entry per pixel: a bucket over a large region covers millions of pixels
+ * but only thousands of runs, and a container holding one number each could
+ * neither carry nor sort that many. A run never crosses a row, so the page can
+ * draw one as a single horizontal `fillRect`.
  */
 
 import type { BmpImage } from './bmpDecoder.js';
@@ -41,11 +47,11 @@ function stamp(pixels: Set<number>, centerX: number, centerY: number, size: numb
 }
 
 /**
- * The pixels of the region around `start` that share its colour, four
- * neighbours at a time: a bucket fills what touches what was clicked, not
- * every pixel of the province.
+ * The region around `start` that shares its colour, four neighbours at a time:
+ * a bucket fills what touches what was clicked, not every pixel of the
+ * province.
  */
-export function floodFill(
+export function floodRuns(
   packed: Uint32Array,
   width: number,
   height: number,
@@ -56,25 +62,51 @@ export function floodFill(
   if (target === undefined || target === replacement) {
     return [];
   }
-  const seen = new Set<number>([start]);
+  // The colour is tested as the fill goes rather than walled off up front: a
+  // pass over the whole map would cost the same for one province as for an ocean.
+  const seen = new Uint8Array(packed.length);
+  const runs: number[] = [];
   const stack = [start];
   while (stack.length > 0) {
     const index = stack.pop();
-    if (index === undefined) { break; }
-    const x = index % width;
-    const y = (index - x) / width;
-    if (x > 0) { visit(index - 1, target, packed, seen, stack); }
-    if (x < width - 1) { visit(index + 1, target, packed, seen, stack); }
-    if (y > 0) { visit(index - width, target, packed, seen, stack); }
-    if (y < height - 1) { visit(index + width, target, packed, seen, stack); }
+    if (index === undefined || seen[index] !== 0 || packed[index] !== target) { continue; }
+    const rowStart = index - (index % width);
+    const left = reachLeft(packed, seen, target, index, rowStart);
+    const right = reachRight(packed, seen, target, index, rowStart + width - 1);
+    for (let at = left; at <= right; at++) { seen[at] = TAKEN; }
+    runs.push(left, right - left + 1, replacement);
+    const y = rowStart / width;
+    if (y > 0) { pushTargetRuns(stack, seen, packed, target, left - width, right - width); }
+    if (y < height - 1) { pushTargetRuns(stack, seen, packed, target, left + width, right + width); }
   }
-  return [...seen];
+  return runs;
 }
 
-function visit(index: number, target: number, packed: Uint32Array, seen: Set<number>, stack: number[]): void {
-  if (packed[index] === target && !seen.has(index)) {
-    seen.add(index);
-    stack.push(index);
+function reachLeft(packed: Uint32Array, seen: Uint8Array, target: number, from: number, rowStart: number): number {
+  let left = from;
+  while (left > rowStart && seen[left - 1] === 0 && packed[left - 1] === target) { left--; }
+  return left;
+}
+
+function reachRight(packed: Uint32Array, seen: Uint8Array, target: number, from: number, rowEnd: number): number {
+  let right = from;
+  while (right < rowEnd && seen[right + 1] === 0 && packed[right + 1] === target) { right++; }
+  return right;
+}
+
+/** One seed per unvisited run of the neighbouring row that still holds the colour being filled. */
+function pushTargetRuns(
+  stack: number[],
+  seen: Uint8Array,
+  packed: Uint32Array,
+  target: number,
+  from: number,
+  to: number,
+): void {
+  let running = false;
+  for (let at = from; at <= to; at++) {
+    if (seen[at] !== 0 || packed[at] !== target) { running = false; continue; }
+    if (!running) { stack.push(at); running = true; }
   }
 }
 
@@ -90,7 +122,7 @@ const TAKEN = 3;
  * regions touching the line count, so a hole the province has had all along
  * elsewhere on the map is left alone.
  */
-export function enclosedPixels(
+export function enclosedRuns(
   packed: Uint32Array,
   width: number,
   height: number,
@@ -103,9 +135,9 @@ export function enclosedPixels(
   }
   for (const index of line) { state[index] = WALL; }
   spread(edgeSeeds(width, height), state, width, height, OUTSIDE, undefined);
-  const inside: number[] = [];
-  spread(besideLine(line, state, width, height), state, width, height, TAKEN, inside);
-  return inside;
+  const runs: number[] = [];
+  spread(besideLine(line, state, width, height), state, width, height, TAKEN, { runs, color });
+  return runs;
 }
 
 function edgeSeeds(width: number, height: number): number[] {
@@ -129,6 +161,12 @@ function besideLine(line: readonly number[], state: Uint8Array, width: number, h
   return seeds.filter(function (index) { return state[index] === 0; });
 }
 
+/** Where a spread writes what it took: one run per row it swallowed. */
+interface RunSink {
+  readonly runs: number[];
+  readonly color: number;
+}
+
 /** Run-by-run flood fill over the pixels still unmarked; a pixel-at-a-time stack is too deep for a map this size. */
 function spread(
   seeds: readonly number[],
@@ -136,7 +174,7 @@ function spread(
   width: number,
   height: number,
   mark: number,
-  collect: number[] | undefined,
+  collect: RunSink | undefined,
 ): void {
   const stack = [...seeds];
   while (stack.length > 0) {
@@ -148,10 +186,8 @@ function spread(
     while (left > rowStart && state[left - 1] === 0) { left--; }
     let right = index;
     while (right < rowStart + width - 1 && state[right + 1] === 0) { right++; }
-    for (let at = left; at <= right; at++) {
-      state[at] = mark;
-      if (collect) { collect.push(at); }
-    }
+    for (let at = left; at <= right; at++) { state[at] = mark; }
+    if (collect) { collect.runs.push(left, right - left + 1, collect.color); }
     const y = rowStart / width;
     if (y > 0) { pushRuns(stack, state, left - width, right - width); }
     if (y < height - 1) { pushRuns(stack, state, left + width, right + width); }
@@ -167,28 +203,43 @@ function pushRuns(stack: number[], state: Uint8Array, from: number, to: number):
   }
 }
 
-/**
- * Painted pixels as `index, length, colour` triples, neighbours of one colour
- * joined: a fill of a whole province is thousands of pixels and crosses the
- * message channel as a handful of numbers per row.
- */
-export function runsOf(pixels: ReadonlyMap<number, number>): number[] {
-  const indices = [...pixels.keys()].sort(function (one, other) { return one - other; });
+/** Add one pixel to a run list, joining it to the last run when it carries on from it inside the same row. */
+export function addPixel(runs: number[], index: number, color: number, width: number): void {
+  const at = runs.length - 3;
+  const carriesOn = at >= 0
+    && runs[at + 2] === color
+    && (runs[at] ?? 0) + (runs[at + 1] ?? 0) === index
+    && index % width !== 0;
+  if (carriesOn) { runs[at + 1] = (runs[at + 1] ?? 0) + 1; } else { runs.push(index, 1, color); }
+}
+
+/** A brush's scattered pixels as runs, all in the one colour it paints. */
+export function runsOfIndices(indices: readonly number[], color: number, width: number): number[] {
+  const sorted = [...indices].sort(function (one, other) { return one - other; });
   const runs: number[] = [];
-  let start = -1;
-  let color = -1;
-  let length = 0;
-  for (const index of indices) {
-    const pixel = pixels.get(index) ?? 0;
-    if (length > 0 && index === start + length && pixel === color) {
-      length++;
-      continue;
-    }
-    if (length > 0) { runs.push(start, length, color); }
-    start = index; color = pixel; length = 1;
-  }
-  if (length > 0) { runs.push(start, length, color); }
+  for (const index of sorted) { addPixel(runs, index, color, width); }
   return runs;
+}
+
+/**
+ * Where two pictures of the map differ, carrying the first one's colours: what
+ * the page has painted over the file, or the file's own colours back again.
+ */
+export function changedRuns(from: Uint32Array, against: Uint32Array, width: number): number[] {
+  const runs: number[] = [];
+  const count = Math.min(from.length, against.length);
+  for (let index = 0; index < count; index++) {
+    const color = from[index] ?? 0;
+    if (color !== against[index]) { addPixel(runs, index, color, width); }
+  }
+  return runs;
+}
+
+/** How many pixels a run list covers. */
+export function runPixels(runs: readonly number[]): number {
+  let count = 0;
+  for (let at = 1; at < runs.length; at += 3) { count += runs[at] ?? 0; }
+  return count;
 }
 
 export type PaintOutcome =
