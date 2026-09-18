@@ -592,8 +592,7 @@ export class MapEditorPanel implements vscode.Disposable {
     post(panel, { type: 'saved', result });
     if (!result.ok) {
       void vscode.window.showErrorMessage(`Victorian Tools: ${result.reason}`);
-    } else if (params.section === 'history' && result.written.length > 0) {
-      // The owner and the states both come from the Definition tab's one Save.
+    } else if ((params.section === 'history' || params.section === 'all') && result.written.length > 0) {
       await Promise.all([this.sendCountryColors(panel, client), this.sendStateColors(panel, client)]);
     }
   }

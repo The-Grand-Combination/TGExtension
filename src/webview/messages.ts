@@ -94,11 +94,6 @@ function handleMessage(message: HostMessage): void {
   }
 }
 
-/**
- * Two clicks in a row race: a late answer would redraw the province we left,
- * terrain picture and all, over the one we are now on. A province that is still
- * only paint has no id to match on, so its colour stands for it.
- */
 /** The file's points, and with them the name the game draws for each province. */
 function handlePositions(markers: readonly PositionMarker[], labels: readonly ProvinceLabel[]): void {
   state.markers = [...markers];
@@ -107,6 +102,11 @@ function handlePositions(markers: readonly PositionMarker[], labels: readonly Pr
   render();
 }
 
+/**
+ * Two clicks in a row race: a late answer would redraw the province we left,
+ * terrain picture and all, over the one we are now on. A province that is still
+ * only paint has no id to match on, so its colour stands for it.
+ */
 function handleDetails(fresh: ProvinceDetails): void {
   const forPaint = state.newColor !== null && fresh.isNew && state.selectedId === null;
   if (state.selectedId !== fresh.id && !forPaint) { return; }
@@ -145,10 +145,10 @@ function handleSaved(result: SaveResult): void {
     return;
   }
   const saved = result.details;
-  const created = state.newColor !== null && !saved.isNew;
-  if (state.newColor !== null && created) {
-    definitionById.set(saved.id, { id: saved.id, color: state.newColor, name: saved.definitionName });
-    idByColor.set(state.newColor, saved.id);
+  const createdColor = saved.isNew ? null : state.newColor;
+  if (createdColor !== null) {
+    definitionById.set(saved.id, { id: saved.id, color: createdColor, name: saved.definitionName });
+    idByColor.set(createdColor, saved.id);
     if (saved.isSea) { seaIds.add(saved.id); }
     state.newColor = null;
   }
@@ -170,7 +170,7 @@ function handleSaved(result: SaveResult): void {
   }
   // The province now has a row of its own; the paint it was made of goes
   // into provinces.bmp with it.
-  if (created) { saveNewProvincePaint(); }
+  if (createdColor !== null) { saveNewProvincePaint(); }
 }
 
 export function initMessages(): void {

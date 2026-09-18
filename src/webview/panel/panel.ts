@@ -233,7 +233,6 @@ interface SaveBar {
   readonly node: HTMLElement;
   readonly status: HTMLElement;
   readonly button: HTMLButtonElement;
-  readonly cancel: HTMLButtonElement;
   /** A Save the province cannot use yet: it stays off when a save ends. */
   readonly held: boolean;
 }
@@ -264,7 +263,7 @@ export function saveBar(onSave: () => void): HTMLElement {
   } }, 'Cancel');
   // A disabled button takes no pointer events, so the hint sits on the bar around it.
   const node = h('div', { class: 'actions', title: creating ? CREATING_HINT : undefined }, button, cancel, status);
-  const bar: SaveBar = { node: node, status: status, button: button, cancel: cancel, held: creating };
+  const bar: SaveBar = { node: node, status: status, button: button, held: creating };
   activeSaveBars.push(bar);
   return node;
 }
@@ -298,7 +297,7 @@ function renderDock(current: ProvinceDetails): void {
   // The tab Saves are off while the province is being created, so Enter in the
   // name field has to reach this one.
   if (current.isNew) { forms.definitionSave = button; }
-  dock = { node: h('div', { class: 'actions' }, button, cancel, status), status: status, button: button, cancel: cancel, held: false };
+  dock = { node: h('div', { class: 'actions' }, button, cancel, status), status: status, button: button, held: false };
   sideDock.replaceChildren(dock.node);
   sideDock.hidden = false;
   side.classList.add('docked');

@@ -65,7 +65,7 @@ export function asPageMessage(message: unknown): PageMessage | undefined {
     case 'pending':
       return { type: 'pending', edits: asArray(record['edits'], asPending) };
     case 'newProvince':
-      return typeof record['color'] === 'number' && typeof record['popDate'] === 'string'
+      return isWhole(record['color']) && typeof record['popDate'] === 'string'
         ? { type: 'newProvince', color: record['color'], popDate: record['popDate'] }
         : undefined;
     case 'paint':
@@ -86,7 +86,7 @@ function asFieldMessage(record: UnknownRecord): PageMessage | undefined {
     case 'paintPending':
       return typeof record['pixels'] === 'number' ? { type: 'paintPending', pixels: record['pixels'] } : undefined;
     case 'select':
-      return typeof record['provinceId'] === 'number' && typeof record['popDate'] === 'string'
+      return isWhole(record['provinceId']) && typeof record['popDate'] === 'string'
         ? { type: 'select', provinceId: record['provinceId'], popDate: record['popDate'] }
         : undefined;
     case 'openFile':
@@ -117,6 +117,10 @@ function asReferenceMessage(record: UnknownRecord): PageMessage | undefined {
   }
 }
 
+function isWhole(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value);
+}
+
 function isPoint(record: UnknownRecord): record is UnknownRecord & { x: number; y: number } {
   return typeof record['x'] === 'number' && typeof record['y'] === 'number' && Number.isFinite(record['x']) && Number.isFinite(record['y']);
 }
@@ -124,7 +128,7 @@ function isPoint(record: UnknownRecord): record is UnknownRecord & { x: number; 
 /** What a save of a province that is only paint so far carries; anything short of whole is no creation at all. */
 function asCreate(value: unknown): NewProvince | undefined {
   const record = asRecord(value);
-  if (!record || typeof record['color'] !== 'number' || !Number.isInteger(record['color'])) {
+  if (!record || !isWhole(record['color'])) {
     return undefined;
   }
   return {
@@ -157,7 +161,7 @@ function asPaint(record: UnknownRecord): PageMessage | undefined {
 function asPending(value: unknown): PendingPositions | undefined {
   const record = asRecord(value);
   const data = record ? asPositions(record['data']) : undefined;
-  return record && data && typeof record['provinceId'] === 'number'
+  return record && data && isWhole(record['provinceId'])
     ? { provinceId: record['provinceId'], data }
     : undefined;
 }
@@ -166,7 +170,7 @@ function asPending(value: unknown): PendingPositions | undefined {
 function asSave(message: UnknownRecord): PageMessage | undefined {
   const record = asRecord(message['params']);
   const section = record ? asSection(record) : undefined;
-  if (!record || !section || typeof record['provinceId'] !== 'number' || typeof record['popDate'] !== 'string') {
+  if (!record || !section || !isWhole(record['provinceId']) || typeof record['popDate'] !== 'string') {
     return undefined;
   }
   const create = asCreate(record['create']);
@@ -334,7 +338,7 @@ function asArray<T>(value: unknown, item: (element: unknown) => T | undefined): 
 }
 
 function numberList(value: unknown): number[] {
-  return Array.isArray(value) ? value.filter((item): item is number => typeof item === 'number' && Number.isInteger(item)) : [];
+  return Array.isArray(value) ? value.filter(isWhole) : [];
 }
 
 function stringList(value: unknown): string[] {

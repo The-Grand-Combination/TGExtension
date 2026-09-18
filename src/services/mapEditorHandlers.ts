@@ -5,7 +5,6 @@ import {
   type FileRef,
   type HistorySection,
   type LocSection,
-  type MapCountryColors,
   type MapCountryColorsResult,
   type MapEditorMapResult,
   type MapEditorTargetParams,
@@ -182,7 +181,7 @@ export class MapEditorHandlers {
   /** `<layers key>#<date>` → province id → relative path of the pops file holding its block. */
   private readonly popsFilesByDate = new Map<string, Map<number, string>>();
   private readonly terrainByLayers = new Map<string, Promise<TerrainInfo>>();
-  /** Terrain pictures by absolute path, as sent to the page; a miss is remembered too. */
+  /** Terrain pictures by normalised absolute path, as sent to the page; a miss is remembered too. */
   private readonly pictureByPath = new Map<string, string | undefined>();
   /** `<layers key>#<relative path>` → a parsed map file, or undefined when the stack has none. */
   private readonly scriptByLayers = new Map<string, Promise<ScriptFile | undefined>>();
@@ -245,7 +244,7 @@ export class MapEditorHandlers {
     } else if (key.includes('/interface/') && key.endsWith('.gfx')) {
       this.terrainByLayers.clear();
     } else if (key.includes('/gfx/')) {
-      this.pictureByPath.delete(fsPath);
+      this.pictureByPath.delete(key);
     }
   }
 
@@ -339,7 +338,7 @@ export class MapEditorHandlers {
       return withWritten({ ok: false, reason: placed }, created.written, params);
     }
     let written = [...created.written, ...placed];
-    let last: SaveResult & { ok: true } = { ok: true, written: [], details: await this.details(target, params.provinceId, params.popDate) };
+    let last: (SaveResult & { ok: true }) | undefined;
     for (const part of parts) {
       const result = await this.saveSection(target, part);
       if (!result.ok) {
@@ -348,7 +347,9 @@ export class MapEditorHandlers {
       written = [...written, ...result.written];
       last = result;
     }
-    return { ...last, written };
+    return last
+      ? { ...last, written }
+      : { ok: true, written, details: await this.details(target, params.provinceId, params.popDate) };
   }
 
   /**
@@ -781,14 +782,15 @@ export class MapEditorHandlers {
   }
 
   private async pictureAt(absolutePath: string): Promise<string | undefined> {
-    if (!this.pictureByPath.has(absolutePath)) {
+    const key = pathKey(absolutePath);
+    if (!this.pictureByPath.has(key)) {
       const bytes = await this.host.readBytes(absolutePath);
       this.pictureByPath.set(
-        absolutePath,
+        key,
         bytes === undefined ? undefined : terrainPictureDataUri(bytes, path.basename(absolutePath), TERRAIN_PICTURE_MAX_WIDTH),
       );
     }
-    return this.pictureByPath.get(absolutePath);
+    return this.pictureByPath.get(key);
   }
 
   /** A stack whose sprites or bitmaps cannot be read has no terrain pictures, which is an answer, not an error. */
@@ -942,8 +944,7 @@ export class MapEditorHandlers {
         colors[tag] = color;
       }
     }
-    const result: MapCountryColors = { kind: 'ready', owners, colors };
-    return result;
+    return { kind: 'ready', owners, colors };
   }
 
   /** The start-date `owner` of every province history file, read a batch of files at a time. */

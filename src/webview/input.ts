@@ -71,7 +71,7 @@ function onMouseMove(event: MouseEvent): void {
 }
 
 function onMouseUp(event: MouseEvent): void {
-  if (strokeInProgress()) { endStroke(); return; }
+  if (strokeInProgress()) { endStroke(); }
   if (referenceDragging()) { endReferenceDrag(); gripCursor(event.clientX, event.clientY); return; }
   if (!drag) { return; }
   const wasClick = !drag.moved && !drag.marker && drag.select;
