@@ -1,9 +1,12 @@
 import {
   POSITION_KINDS,
+  type HistoryEdit,
   type LocalisationEdit,
   type NewProvince,
   type PageSaveParams,
   type PopEntry,
+  type PopsEdit,
+  type PositionsEdit,
   type PositionKind,
   type PositionPoint,
   type ProvinceHistory,
@@ -181,30 +184,59 @@ function asSave(message: UnknownRecord): PageMessage | undefined {
 function asSection(record: UnknownRecord): SaveSection | undefined {
   switch (record['section']) {
     case 'history': {
-      const data = asHistory(record['data'], true);
-      const localisation = asLocalisation(record['localisation']);
-      return data
-        ? {
-            section: 'history',
-            data,
-            climate: optionalString(record['climate']) ?? '',
-            createInFolder: optionalString(record['createInFolder']),
-            ...(localisation ? { localisation } : {}),
-            ...(Array.isArray(record['states']) ? { states: stringList(record['states']) } : {}),
-          }
-        : undefined;
+      const history = asHistoryEdit(record);
+      return history ? { section: 'history', ...history } : undefined;
     }
     case 'pops': {
-      const pops = asPops(record['pops']);
-      return pops ? { section: 'pops', pops, createInFile: optionalString(record['createInFile']) } : undefined;
+      const pops = asPopsEdit(record);
+      return pops ? { section: 'pops', ...pops } : undefined;
     }
     case 'positions': {
-      const data = asPositions(record['data']);
-      return data ? { section: 'positions', data } : undefined;
+      const positions = asPositionsEdit(record);
+      return positions ? { section: 'positions', ...positions } : undefined;
     }
+    case 'all':
+      return asAllSections(record);
     default:
       return undefined;
   }
+}
+
+/** The panel's one Save: the history and the positions are required, the pops are not. */
+function asAllSections(record: UnknownRecord): SaveSection | undefined {
+  const history = asHistoryEdit(asRecord(record['history']) ?? {});
+  const positions = asPositionsEdit(asRecord(record['positions']) ?? {});
+  if (!history || !positions) {
+    return undefined;
+  }
+  const popsRecord = asRecord(record['pops']);
+  const pops = popsRecord ? asPopsEdit(popsRecord) : undefined;
+  return { section: 'all', history, positions, ...(pops ? { pops } : {}) };
+}
+
+function asHistoryEdit(record: UnknownRecord): HistoryEdit | undefined {
+  const data = asHistory(record['data'], true);
+  if (!data) {
+    return undefined;
+  }
+  const localisation = asLocalisation(record['localisation']);
+  return {
+    data,
+    climate: optionalString(record['climate']) ?? '',
+    createInFolder: optionalString(record['createInFolder']),
+    ...(localisation ? { localisation } : {}),
+    ...(Array.isArray(record['states']) ? { states: stringList(record['states']) } : {}),
+  };
+}
+
+function asPopsEdit(record: UnknownRecord): PopsEdit | undefined {
+  const pops = asPops(record['pops']);
+  return pops ? { pops, createInFile: optionalString(record['createInFile']) } : undefined;
+}
+
+function asPositionsEdit(record: UnknownRecord): PositionsEdit | undefined {
+  const data = asPositions(record['data']);
+  return data ? { data } : undefined;
 }
 
 /** Every kind is present; one without both coordinates as strings counts as cleared. */

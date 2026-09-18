@@ -27,6 +27,16 @@ and the history file are what a province *is*, and they are written together. Po
 their own tabs with their own Saves, and so are Buildings and Extra Dates, which write the same
 history file as the Definition tab.
 
+Over the bottom of the panel, docked there whatever tab is open and reached without scrolling, sit
+**Save All** and **Cancel All**. Save All writes the whole province in one message — the name, the
+climate, the states, the history file, the pops and the positions — so nothing typed in a tab that is
+out of sight is left behind, and Cancel All puts every tab back as the file has it. A province with no
+pops and no file to put them in is saved without them, and a sea province has none to write. While a
+province is still being created the tabs' own Saves are off, greyed, with a hint saying to use Save
+All: there is no `definition.csv` row yet for one tab to be written against. Save All is what creates
+the row, and it writes the painted pixels into `map/provinces.bmp` with it, so the colour the row
+names is on the map as soon as the province exists.
+
 Positions are drawn over the map as one-pixel dots in the colour of their row in the **Positions**
 tab (the round swatch is the legend), once the view is zoomed to at least four screen pixels per map
 pixel. The selected province's dots are the exception: they are what the form holds, so they show at
@@ -57,7 +67,7 @@ way `positions.txt` counts it (0 to 2π).
 
 A **Save** reads back from disk only what it wrote: what the other tabs are holding — the history
 form, the pops table, the climate, the states, the points that were dragged — is kept exactly as it
-was typed. Only **Cancel** puts a tab back to the file. What each Save writes is what its own tab
+was typed. **Save All** wrote all of it, so all of it is read back. Only **Cancel** puts a tab back to the file. What each Save writes is what its own tab
 shows, which for the Definition tab is four files (the localisation CSV, `map/climate.txt`,
 `map/region.txt` and the history file) and for the Buildings and Extra Dates tabs is one: they show
 neither the name nor the climate nor the states, so they touch none of them.

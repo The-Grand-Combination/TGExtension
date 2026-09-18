@@ -1,9 +1,9 @@
-import type { FileRef, MapEditorMap, PageSaveParams, ProvinceDetails, SaveResult, SaveSection } from '../../model/mapEditor.js';
+import type { FileRef, HistoryEdit, MapEditorMap, PageSaveParams, PopsEdit, ProvinceDetails, SaveResult, SaveSection } from '../../model/mapEditor.js';
 import { render } from '../canvas.js';
-import { h, setStatus, side } from '../dom.js';
+import { h, setStatus, side, sideDock } from '../dom.js';
 import { lock } from '../fields.js';
 import { post } from '../host.js';
-import { clonePoints, refreshPending } from '../positions.js';
+import { asPositions, clonePoints, refreshPending } from '../positions.js';
 import { definitionById, pendingPositions, POSITION_KIND_SPECS, state, vocabulary, type Draft } from '../state.js';
 import { forms } from './forms.js';
 import { historySections, localisationSection } from './history.js';
@@ -36,6 +36,8 @@ let saving = false;
 let savingPartsHeld: ReadonlySet<string> = new Set();
 /** The Save bars of the panel as it stands: a failed save frees these, and nothing else. */
 let activeSaveBars: SaveBar[] = [];
+/** The Save All bar docked under the panel, while a province is open. */
+let dock: SaveBar | null = null;
 
 export function savingParts(): ReadonlySet<string> {
   return savingPartsHeld;
@@ -55,6 +57,7 @@ export function resetHeader(): void {
 
 /** The side panel holding one line: what to click, or what it is waiting for. */
 export function showHint(text = 'Click a province on the map to edit it.'): void {
+  hideDock();
   side.replaceChildren(h('p', { class: 'hint' }, text));
 }
 
@@ -150,6 +153,7 @@ export function renderSide(id: number): void {
   if (!currentMap) { return; }
   side.replaceChildren();
   activeSaveBars = [];
+  hideDock();
   const current = state.details;
   side.append(renderHeader(id, current, currentMap));
   if (!current) { side.append(h('p', { class: 'hint' }, 'Loading…')); return; }
@@ -185,6 +189,7 @@ export function renderSide(id: number): void {
   for (const key of TAB_NAMES) { panes[key].hidden = key !== activeTab; }
   side.append(tabs);
   for (const name of TAB_NAMES) { side.append(panes[name]); }
+  renderDock(current);
 }
 
 /** Title, file path (grey, trimmed from the left) and an Open File button on one line. */
@@ -229,12 +234,21 @@ interface SaveBar {
   readonly status: HTMLElement;
   readonly button: HTMLButtonElement;
   readonly cancel: HTMLButtonElement;
+  /** A Save the province cannot use yet: it stays off when a save ends. */
+  readonly held: boolean;
 }
 
+/**
+ * A province that is only paint has no row of its own yet, so no single tab can
+ * be written before the rest: the whole province is created by one save.
+ */
+const CREATING_HINT = "You're creating a new province. Use the Save all button.";
+
 export function saveBar(onSave: () => void): HTMLElement {
+  const creating = state.details?.isNew === true;
   const status = h('span', { class: 'status' });
-  const button = h('button', { onclick: function () {
-    if (saving) { return; }
+  const button = h('button', { disabled: creating || undefined, title: creating ? CREATING_HINT : undefined, onclick: function () {
+    if (saving || creating) { return; }
     saving = true; button.disabled = true; status.textContent = 'Saving…'; status.className = 'status';
     onSave();
   } }, 'Save');
@@ -248,9 +262,11 @@ export function saveBar(onSave: () => void): HTMLElement {
     renderSide(details.id);
     setStatus('Changes dropped; the form is back to the file.');
   } }, 'Cancel');
-  const bar: SaveBar = { node: h('div', { class: 'actions' }, button, cancel, status), status: status, button: button, cancel: cancel };
+  // A disabled button takes no pointer events, so the hint sits on the bar around it.
+  const node = h('div', { class: 'actions', title: creating ? CREATING_HINT : undefined }, button, cancel, status);
+  const bar: SaveBar = { node: node, status: status, button: button, cancel: cancel, held: creating };
   activeSaveBars.push(bar);
-  return bar.node;
+  return node;
 }
 
 /** The Definition tab's Save is the one Enter in the name field reaches: the bar built last for it. */
@@ -259,13 +275,89 @@ export function lastSaveButton(): HTMLButtonElement | null {
 }
 
 /**
+ * The bar docked over the bottom of the panel. A tab's own Save writes that
+ * tab; Save All writes every tab of the province in one message, so nothing
+ * typed in a tab that is out of sight is left behind, and Cancel All reads the
+ * whole province back from the file.
+ */
+function renderDock(current: ProvinceDetails): void {
+  const status = h('span', { class: 'status' });
+  const button = h('button', { title: 'Write every tab of this province', onclick: function () {
+    const section = allSections(current);
+    if (saving || !section) { return; }
+    saving = true; button.disabled = true; status.textContent = 'Saving…'; status.className = 'status';
+    postSave(section);
+  } }, 'Save All');
+  const cancel = h('button', { class: 'secondary', title: 'Put every tab back as the file has it', onclick: function () {
+    if (saving) { return; }
+    pendingPositions.delete(current.id);
+    refreshPending();
+    renderSide(current.id);
+    setStatus('Changes dropped; every tab is back to the file.');
+  } }, 'Cancel All');
+  // The tab Saves are off while the province is being created, so Enter in the
+  // name field has to reach this one.
+  if (current.isNew) { forms.definitionSave = button; }
+  dock = { node: h('div', { class: 'actions' }, button, cancel, status), status: status, button: button, cancel: cancel, held: false };
+  sideDock.replaceChildren(dock.node);
+  sideDock.hidden = false;
+  side.classList.add('docked');
+}
+
+function hideDock(): void {
+  dock = null;
+  sideDock.replaceChildren();
+  sideDock.hidden = true;
+  side.classList.remove('docked');
+}
+
+/** Every tab of the open province, as one save. */
+function allSections(current: ProvinceDetails): SaveSection | undefined {
+  const history = historyEdit();
+  if (!history) { return undefined; }
+  const pops = popsEdit(current);
+  return {
+    section: 'all',
+    history: history,
+    positions: { data: asPositions(state.draft ?? {}) },
+    ...(pops ? { pops: pops } : {}),
+  };
+}
+
+function historyEdit(): HistoryEdit | undefined {
+  const read = forms.historyRead;
+  if (!read) { return undefined; }
+  return {
+    data: read(),
+    climate: forms.climateInput?.value ?? '',
+    createInFolder: forms.historyFolder ? forms.historyFolder() : undefined,
+    localisation: { text: forms.nameInput?.value ?? '', renameHistoryFile: forms.renameInput?.checked === true },
+    states: forms.statesRead ? forms.statesRead() : [],
+  };
+}
+
+/**
+ * A sea province has no pops, and neither has a land province whose table is
+ * empty with no file to put a block in: both are left out of the save rather
+ * than refused for want of a file name.
+ */
+function popsEdit(current: ProvinceDetails): PopsEdit | undefined {
+  const read = forms.popsRead;
+  if (current.isSea || !read) { return undefined; }
+  const pops = read();
+  const createInFile = forms.popsFile ? forms.popsFile() : undefined;
+  if (current.pops.pops === undefined && pops.length === 0 && (createInFile ?? '').trim() === '') { return undefined; }
+  return { pops: pops, createInFile: createInFile };
+}
+
+/**
  * The save in flight is over. A failure gives the Save buttons back and nothing
  * else: what was locked because the province cannot have it stays locked.
  */
 export function finishSave(): void {
   saving = false;
-  for (const bar of activeSaveBars) {
-    bar.button.disabled = false;
+  for (const bar of [...activeSaveBars, ...(dock ? [dock] : [])]) {
+    bar.button.disabled = bar.held;
     bar.status.textContent = '';
   }
 }
@@ -275,6 +367,9 @@ export function finishSave(): void {
  * several files, and only what it writes may be read back from disk after it.
  */
 function partsOf(payload: PageSaveParams): Set<string> {
+  if (payload.section === 'all') {
+    return new Set(['history', 'pops', 'positions', 'climate', 'states', 'localisation']);
+  }
   const parts = new Set<string>([payload.section]);
   if (payload.section === 'history') {
     for (const key of ['climate', 'states', 'localisation'] as const) {

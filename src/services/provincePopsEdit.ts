@@ -1,4 +1,5 @@
 import type { Assignment, Block, Document } from '../model/ast.js';
+import { compareDates } from '../model/gameDate.js';
 import type { PopEntry } from '../model/mapEditor.js';
 import { ensureTrailingNewline, indentAt, indentUnitOf, lineEndingOf, type TextPatch } from './textPatch.js';
 
@@ -146,15 +147,4 @@ export function planPopsEdit(text: string, document: Document, provinceId: numbe
 /** A whole new pops file holding one province. */
 export function renderPopsFile(provinceId: number, pops: readonly PopEntry[]): string {
   return ensureTrailingNewline(renderPopsBlock(provinceId, pops, '', '\t', '\r\n'), '\r\n');
-}
-
-function compareDates(left: string, right: string): number {
-  const [leftParts, rightParts] = [left, right].map((date) => date.split('.').map(Number));
-  for (let index = 0; index < 3; index++) {
-    const difference = (leftParts?.[index] ?? 0) - (rightParts?.[index] ?? 0);
-    if (difference !== 0) {
-      return difference;
-    }
-  }
-  return 0;
 }

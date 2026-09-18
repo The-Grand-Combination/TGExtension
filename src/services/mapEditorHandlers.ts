@@ -316,27 +316,39 @@ export class MapEditorHandlers {
     if (typeof target === 'string') {
       return { ok: false, reason: target };
     }
-    const missing = await this.placementReason(target, params);
+    const parts = sectionsOf(params);
+    // The history part carries the name, the climate and the states, so it is
+    // the one the checks below and the placement read.
+    const lead = parts[0] ?? params;
+    const missing = await this.placementReason(target, lead);
     if (missing !== undefined) {
       return { ok: false, reason: missing };
     }
     // Before createProvince, which writes the definition.csv row: a name the file
     // system would take but the game would not must stop the whole save.
-    const unwritable = fileNameReason(params);
+    const unwritable = fileNameReason(lead);
     if (unwritable !== undefined) {
       return { ok: false, reason: unwritable };
     }
-    const created = params.create ? await this.createProvince(target, params, params.create) : { ok: true as const, written: [] };
+    const created = params.create ? await this.createProvince(target, lead, params.create) : { ok: true as const, written: [] };
     if (!created.ok) {
       return created;
     }
-    const placed = await this.savePlacement(target, params);
+    const placed = await this.savePlacement(target, lead);
     if (typeof placed === 'string') {
       return withWritten({ ok: false, reason: placed }, created.written, params);
     }
-    const result = await this.saveSection(target, params);
-    const written = [...created.written, ...placed];
-    return result.ok ? { ...result, written: [...written, ...result.written] } : withWritten(result, written, params);
+    let written = [...created.written, ...placed];
+    let last: SaveResult & { ok: true } = { ok: true, written: [], details: await this.details(target, params.provinceId, params.popDate) };
+    for (const part of parts) {
+      const result = await this.saveSection(target, part);
+      if (!result.ok) {
+        return withWritten(result, written, params);
+      }
+      written = [...written, ...result.written];
+      last = result;
+    }
+    return { ...last, written };
   }
 
   /**
@@ -455,6 +467,8 @@ export class MapEditorHandlers {
         return this.savePops(target, params, params.pops, params.createInFile);
       case 'positions':
         return this.savePositions(target, params, params.data);
+      case 'all':
+        return Promise.resolve({ ok: false, reason: 'A save of every section is split into its parts before it is written.' });
     }
   }
 
@@ -1264,6 +1278,31 @@ function pathKey(absolutePath: string): string {
 /** A failure after files were written names them; a dry run wrote none. */
 function withWritten(failure: SaveResult & { ok: false }, written: readonly string[], params: SaveParams): SaveResult {
   return written.length === 0 || params.dryRun === true ? failure : { ...failure, written };
+}
+
+/**
+ * The sections one save writes, in the order they reach disk. Every save but the
+ * panel's own writes a single section and is its own only part; `all` is split
+ * here so the rest of the save path never has to know about it.
+ */
+function sectionsOf(params: SaveParams): SaveParams[] {
+  if (params.section !== 'all') {
+    return [params];
+  }
+  const base = {
+    workspaceFolders: params.workspaceFolders,
+    mods: params.mods,
+    provinceId: params.provinceId,
+    popDate: params.popDate,
+    ...(params.create === undefined ? {} : { create: params.create }),
+    ...(params.dryRun === undefined ? {} : { dryRun: params.dryRun }),
+  };
+  const pops = params.pops;
+  return [
+    { ...base, section: 'history' as const, ...params.history },
+    ...(pops === undefined ? [] : [{ ...base, section: 'pops' as const, ...pops }]),
+    { ...base, section: 'positions' as const, ...params.positions },
+  ];
 }
 
 /** The climate this save writes, or undefined when it carries none. */

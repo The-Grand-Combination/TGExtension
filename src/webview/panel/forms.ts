@@ -10,6 +10,10 @@ import type { Field } from '../fields.js';
 export interface Forms {
   historyRead: (() => ProvinceHistory) | null;
   popsRead: (() => PopEntry[]) | null;
+  /** The two pick lists Save All needs and no single tab's Save reads: where a
+   * history file goes, and the pops file a block would be created in. */
+  historyFolder: (() => string) | null;
+  popsFile: (() => string) | null;
   /** The climate box and the states list, also read when a save has to create the province. */
   climateInput: Field | null;
   statesRead: (() => string[]) | null;
@@ -33,6 +37,8 @@ export interface Forms {
 export const forms: Forms = {
   historyRead: null,
   popsRead: null,
+  historyFolder: null,
+  popsFile: null,
   climateInput: null,
   statesRead: null,
   historyRendered: '',

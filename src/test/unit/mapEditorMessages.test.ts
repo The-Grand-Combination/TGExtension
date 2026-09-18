@@ -197,6 +197,31 @@ suite('mapEditorMessages', () => {
     assert.strictEqual(without.params.climate, '');
   });
 
+  test('Save All carries every section under one message, and leaves out the pops it has none of', () => {
+    const message = asPageMessage({
+      type: 'save',
+      params: {
+        section: 'all',
+        provinceId: 9,
+        popDate: '1836.1.1',
+        history: { data: {}, climate: 'mild_climate', states: ['ENG_1', 7] },
+        positions: { data: {} },
+      },
+    });
+    assert.ok(message?.type === 'save' && message.params.section === 'all');
+    assert.strictEqual(message.params.history.climate, 'mild_climate');
+    assert.deepStrictEqual(message.params.history.states, ['ENG_1']);
+    assert.deepStrictEqual(message.params.positions.data.unit, undefined);
+    assert.strictEqual(message.params.pops, undefined);
+  });
+
+  test('Save All without a positions part is dropped: a half-read save would write the wrong file', () => {
+    assert.strictEqual(
+      asPageMessage({ type: 'save', params: { section: 'all', provinceId: 9, popDate: '1836.1.1', history: { data: {} } } }),
+      undefined,
+    );
+  });
+
   test('a creation without a whole colour is no creation: the save goes out on its own', () => {
     const message = asPageMessage({
       type: 'save',

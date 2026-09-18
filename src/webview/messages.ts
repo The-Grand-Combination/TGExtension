@@ -4,7 +4,7 @@ import { saveAllButton, setStatus, showLoading, targetBox } from './dom.js';
 import { messageOf } from './host.js';
 import { applyReveal, clearSelectionState } from './input.js';
 import { applyThumbnails, applyTint, loadProvinces, refreshTint, resetLayers } from './layers.js';
-import { applyUndoLimit, handlePainted, resetPaint, setTool } from './paint.js';
+import { applyUndoLimit, handlePainted, resetPaint, saveNewProvincePaint, setTool } from './paint.js';
 import { carryForms, failureText, fileNames, finishSave, renderSide, resetPanel, savingParts, showHint, handleTerrainPicture } from './panel/panel.js';
 import { asPositions, capturePending, clonePoints, refreshPending, replaceMarkers } from './positions.js';
 import { handleReferences, resetReferences } from './references.js';
@@ -145,7 +145,8 @@ function handleSaved(result: SaveResult): void {
     return;
   }
   const saved = result.details;
-  if (state.newColor !== null && !saved.isNew) {
+  const created = state.newColor !== null && !saved.isNew;
+  if (state.newColor !== null && created) {
     definitionById.set(saved.id, { id: saved.id, color: state.newColor, name: saved.definitionName });
     idByColor.set(state.newColor, saved.id);
     if (saved.isSea) { seaIds.add(saved.id); }
@@ -158,11 +159,18 @@ function handleSaved(result: SaveResult): void {
   // The label is rebuilt from this name, so a rename must land here first.
   locNameById.set(saved.id, saved.localisation.text);
   replaceMarkers(saved.id, saved.positions);
-  if (state.selectedId !== saved.id) { setStatus('Saved province ' + String(saved.id), 'ok'); render(); return; }
-  carryForms();
-  state.details = saved;
-  renderSide(saved.id);
-  setStatus(result.written.length > 0 ? 'Saved ' + fileNames(result.written) : 'Nothing to save', 'ok');
+  if (state.selectedId !== saved.id) {
+    setStatus('Saved province ' + String(saved.id), 'ok');
+    render();
+  } else {
+    carryForms();
+    state.details = saved;
+    renderSide(saved.id);
+    setStatus(result.written.length > 0 ? 'Saved ' + fileNames(result.written) : 'Nothing to save', 'ok');
+  }
+  // The province now has a row of its own; the paint it was made of goes
+  // into provinces.bmp with it.
+  if (created) { saveNewProvincePaint(); }
 }
 
 export function initMessages(): void {

@@ -87,6 +87,7 @@ export function historySections(current: ProvinceDetails): HistoryPanes {
   // A province with no file keeps the first folder the list offers; one with a file opens on its own.
   const folder = selectInput(history.folder ?? known[0], known.map(function (name) { return { id: name, label: name === '' ? ROOT_FOLDER_LABEL : name }; }));
   folder.node.title = folderTitle(history);
+  forms.historyFolder = function (): string { return folder.value; };
   const folderRow = h('div', { class: 'grid lone' }, h('label', null, 'Folder'), folder.node);
   // The Definition tab shows the name, the climate and the states as well, so
   // its one Save carries them; the other two history tabs show none of them.

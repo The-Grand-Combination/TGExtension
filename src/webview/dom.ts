@@ -42,7 +42,9 @@ if (!context) {
 export const ctx = context;
 export const tooltip = required('tooltip');
 export const loading = required('loading');
-export const side = required('side');
+/** The panel's scrolling half; the Save bar is docked over it, not inside it. */
+export const side = required('sideBody');
+export const sideDock = required('sideDock');
 export const saveAllButton = requiredButton('saveAllButton');
 const statusBox = required('status');
 export const targetBox = required('target');

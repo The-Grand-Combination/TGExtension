@@ -422,6 +422,15 @@ export function resetPaint(): void {
   refreshPainted();
 }
 
+/**
+ * The pixels a province was painted out of, written with the Save that
+ * created it: until they are in provinces.bmp the new row in definition.csv
+ * names a colour the map does not have.
+ */
+export function saveNewProvincePaint(): void {
+  if (painted.size > 0) { savePainted(); }
+}
+
 export function handlePainted(result: PaintResult): void {
   if (!result.ok) { refreshPainted(); setStatus(result.reason, 'error'); return; }
   const pixels = result.pixels;

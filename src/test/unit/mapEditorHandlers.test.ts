@@ -112,6 +112,13 @@ function saveParams(section: SaveParams['section']): SaveParams {
       return { ...base, section, pops: [], createInFile: undefined };
     case 'positions':
       return { ...base, section, data: EMPTY_POSITIONS };
+    case 'all':
+      return {
+        ...base,
+        section,
+        history: { data: EMPTY_HISTORY, climate: '', createInFolder: undefined },
+        positions: { data: EMPTY_POSITIONS },
+      };
   }
 }
 
@@ -713,6 +720,34 @@ suite('MapEditorHandlers — climate and state', () => {
     const { host, written } = placed();
     const result = await new MapEditorHandlers(host).save({
       ...base, section: 'history', data: EMPTY_HISTORY, climate: '', createInFolder: '',
+    });
+    assert.ok(!result.ok);
+    assert.ok(result.reason.includes('no climate'), result.reason);
+    assert.strictEqual(written.size, 0);
+  });
+
+  test('Save All writes the history, the placement and the positions in one go', async () => {
+    const { host, written } = placed();
+    const result = await new MapEditorHandlers(host).save({
+      ...base,
+      section: 'all',
+      history: { data: EMPTY_HISTORY, climate: 'mild_climate', createInFolder: '', states: ['ENG_1'] },
+      positions: { data: { ...EMPTY_POSITIONS, unit: { x: '4', y: '5' } } },
+    });
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+    const files = [...written.keys()];
+    assert.ok(files.includes(climateFile), files.join(', '));
+    assert.ok(files.some((file) => file.endsWith('positions.txt')), files.join(', '));
+    assert.ok(files.some((file) => file.includes('provinces')), files.join(', '));
+  });
+
+  test('Save All is refused before anything is written when its history part leaves no climate', async () => {
+    const { host, written } = placed();
+    const result = await new MapEditorHandlers(host).save({
+      ...base,
+      section: 'all',
+      history: { data: EMPTY_HISTORY, climate: '', createInFolder: '' },
+      positions: { data: EMPTY_POSITIONS },
     });
     assert.ok(!result.ok);
     assert.ok(result.reason.includes('no climate'), result.reason);

@@ -96,7 +96,10 @@ ${PAGE_STYLE}
     </div>
     <div id="loading">Loading provinces.bmp…</div>
   </div>
-  <div id="side"><p class="hint">Click a province on the map to edit it.</p></div>
+  <div id="side">
+    <div id="sideBody"><p class="hint">Click a province on the map to edit it.</p></div>
+    <div id="sideDock" hidden></div>
+  </div>
 </div>
 <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
@@ -233,10 +236,20 @@ const PAGE_STYLE = String.raw`
   #mapArea.referencing { cursor: default; }
   /* The middle button pans under every tool, so it shows the hand it would with the hand. */
   #mapArea.dragging.painting, #mapArea.dragging.picking { cursor: grabbing; }
+  /* The panel scrolls inside #sideBody so the Save bar can sit over it rather
+     than in it: docked to the bottom edge, it is reached without scrolling and
+     it writes every tab at once. */
+  #side { width: 420px; flex: none; position: relative; display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, #444)); box-sizing: border-box; }
   /* The scrollbar gutter is always reserved and stands in for the right padding:
      a list growing past the window gets its bar where the margin already was, so
      nothing under it moves and no empty strip is left when there is no bar. */
-  #side { width: 420px; flex: none; overflow-y: auto; scrollbar-gutter: stable; border-left: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, #444)); padding: 14px 0 24px 14px; box-sizing: border-box; }
+  #sideBody { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; padding: 14px 0 24px 14px; box-sizing: border-box; }
+  /* Room under the last field for the bar that covers it. */
+  #sideBody.docked { padding-bottom: 68px; }
+  #sideDock { position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 14px; box-sizing: border-box; border-top: 1px solid var(--vscode-panel-border, var(--vscode-widget-border, #444)); background: var(--vscode-editorWidget-background, var(--vscode-editor-background)); background: color-mix(in srgb, var(--vscode-editorWidget-background, var(--vscode-editor-background)) 88%, transparent); backdrop-filter: blur(8px); box-shadow: 0 -8px 18px rgba(0, 0, 0, 0.28); }
+  #sideDock[hidden] { display: none; }
+  #sideDock .actions { margin: 0; padding: 0; border-top: none; }
+  #sideDock .actions button { min-width: 84px; }
   /* The picture keeps the panel's own margin on every side, so it lines up with
      the text under it and stands the same distance off the top. */
   .header { margin: 0; padding: 0; background-size: cover; background-position: center; }

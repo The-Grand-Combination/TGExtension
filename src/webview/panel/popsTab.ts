@@ -27,6 +27,7 @@ export function popsSection(current: ProvinceDetails): HTMLElement {
   const names = currentMap?.popFiles[state.popDate] ?? [];
   const fileField = selectInput('', names.map(function (name) { return { id: name, label: name }; }), 'Existing or new file name', true);
   const fileRow = h('div', { class: 'grid lone' }, h('label', null, 'File'), fileField.node);
+  forms.popsFile = function (): string { return fileField.value; };
   // Where a block would be created. The row stands whether it is needed or not,
   // greyed once the province has a block, so the panel keeps its height from one
   // province to the next.

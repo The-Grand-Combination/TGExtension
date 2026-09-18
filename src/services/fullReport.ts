@@ -27,6 +27,20 @@ export const REPORT_FOLDERS: readonly string[] = [
   'map',
 ];
 
+/**
+ * Findings about a file the per-file scan cannot reach on its own, because they
+ * depend on what sits next to the file rather than on its text — the flag audit,
+ * which needs `gfx/flags` listed. The text comes with them so the offsets can be
+ * turned into lines, and the uri because the file may come from a lower layer of
+ * the stack than the mod being reported on.
+ */
+export interface ExtraFileFindings {
+  readonly path: string;
+  readonly uri: string;
+  readonly text: string;
+  readonly diagnostics: readonly Diagnostic[];
+}
+
 /** Files read together; also how often the scan yields to other requests. */
 const BATCH_SIZE = 64;
 
@@ -41,6 +55,7 @@ export async function buildModReport(
   provider: ReportFileProvider,
   index: ModIndex,
   options: ValidationOptions = DEFAULT_VALIDATION_OPTIONS,
+  extras: readonly ExtraFileFindings[] = [],
 ): Promise<ModReport> {
   const paths = reportFiles(provider);
   const files: FileReport[] = [];
@@ -61,14 +76,40 @@ export async function buildModReport(
     });
     await yieldToEventLoop();
   }
-  const diagnostics = files.flatMap((file) => file.diagnostics);
+  const merged = withExtras(files, extras);
+  const diagnostics = merged.flatMap((file) => file.diagnostics);
   return {
     root,
     fileCount,
     errorCount: diagnostics.filter((item) => item.severity === 'error').length,
     warningCount: diagnostics.filter((item) => item.severity === 'warning').length,
-    files: errorsFirst(files),
+    files: errorsFirst(merged),
   };
+}
+
+/**
+ * Fold the extra findings into the scanned files. A file the scan already
+ * reported on keeps its entry and its uri, and its findings are re-sorted with
+ * the new ones; a file the scan never read gets an entry of its own.
+ */
+function withExtras(files: readonly FileReport[], extras: readonly ExtraFileFindings[]): FileReport[] {
+  if (extras.length === 0) {
+    return [...files];
+  }
+  const byPath = new Map(files.map((file) => [file.path, file]));
+  for (const extra of extras) {
+    if (extra.diagnostics.length === 0) {
+      continue;
+    }
+    const found = toReportDiagnostics(extra.text, extra.diagnostics);
+    const existing = byPath.get(extra.path);
+    byPath.set(extra.path, {
+      path: extra.path,
+      uri: existing?.uri ?? extra.uri,
+      diagnostics: sortFindings([...(existing?.diagnostics ?? []), ...found]),
+    });
+  }
+  return [...byPath.values()];
 }
 
 /** Severity order for the report: what breaks the game comes before what smells. */
@@ -109,17 +150,21 @@ function reportFiles(provider: ReportFileProvider): string[] {
 /** Errors first inside a file too, each severity then in source order. */
 function toReportDiagnostics(text: string, diagnostics: readonly Diagnostic[]): ReportDiagnostic[] {
   const lineStarts = lineStartsOf(text);
-  return diagnostics
-    .map((item) => {
+  return sortFindings(
+    diagnostics.map((item) => {
       const { line, character } = positionAt(lineStarts, item.range.start);
       return { line, character, severity: item.severity, code: item.code, message: item.message };
-    })
-    .sort(
-      (a, b) =>
-        SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] ||
-        a.line - b.line ||
-        a.character - b.character,
-    );
+    }),
+  );
+}
+
+function sortFindings(findings: readonly ReportDiagnostic[]): ReportDiagnostic[] {
+  return [...findings].sort(
+    (a, b) =>
+      SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] ||
+      a.line - b.line ||
+      a.character - b.character,
+  );
 }
 
 function lineStartsOf(text: string): number[] {

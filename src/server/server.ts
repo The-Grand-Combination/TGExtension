@@ -823,6 +823,8 @@ const fullReportHost: FullReportHost = {
   ensureIndex: (layers: ModLayers): Promise<ModIndex | undefined> => modCache.ensureIndex(layers),
   listFilesRecursive,
   fileUri: (absolutePath: string): string => URI.file(absolutePath).toString(),
+  fileSystem: layerFileSystem,
+  descriptorOf: (root: string): ModDescriptor | undefined => layout.mods.find((mod) => mod.folder === root),
   validationOptions,
 };
 

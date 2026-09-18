@@ -202,6 +202,61 @@ the top-left corner). See [map-images.md](map-images.md).
 | `river-over-sea` | warning | River pixels on sea provinces (river mouths drawn into the sea); one line. |
 | `river-sea-over-land` / `river-land-over-sea` | warning | `rivers.bmp` sea (254) on a land province / land (255) on a sea province; one line each. |
 
+## Flags (`flagValidation.ts`) — Full Report only
+
+Cross-file, so it needs the whole stack rather than one file's text: a government block in
+`common/governments.txt` carrying `flagType = x` makes the engine look for
+`gfx/flags/<TAG>_x.tga` for every tag in `common/countries.txt`, and a government with no
+`flagType` uses the default `gfx/flags/<TAG>.tga`. Flags are resolved over the stack, so one the
+game files already provide counts as present. Dynamic tags (below `dynamic_tags = yes`) are left
+out: a released dominion flies the flag of the country that released it.
+
+| Code | Severity | Reported on | Meaning |
+|---|---|---|---|
+| `missing-flag` | error | the tag in `common/countries.txt` | The tag has no flag for one or more flag types (the default `<TAG>.tga` included). One finding per tag, listing every file it lacks. |
+| `flag-name-case` | warning | the tag in `common/countries.txt` | The flag is on disk under another spelling (`SUA_Communist.tga` for `SUA_communist.tga`). Windows opens it anyway, but the name no longer matches the tag and the flag type. |
+| `flag-type-without-art` | error | the `flagType` value in `common/governments.txt` | Not one tag has a flag for that flag type — a flag type with no art at all, reported once instead of once per tag. |
+
+## Pops (`popsValidation.ts`) — Full Report only
+
+The engine reads a province's starting pops from `history/pops/<date>/`, and a province left with
+pops but no owner crashes the game. A mod that hides the base game's copy with `replace_path`, or
+that blanks it file by file, therefore owns the whole set: every file the base game ships for that
+date has to be there, under exactly that name. An empty file is enough — that is what a total
+conversion ships for the countries it does not use.
+
+Matching is by **file name**, not by id: a pops file holds many provinces and its name carries
+nothing the engine reads, so only a file of the same name takes the base game's copy out of play.
+The base game's list lives in [`src/data/vanillaPops.ts`](../src/data/vanillaPops.ts): 179 files in
+each of `1836.1.1` and `1861.4.14`, generated from a clean Heart of Darkness install.
+
+The check reads the **stack**, which is what makes it right in all three cases with no special
+casing: a mod that does not replace `history` still has the base game's files underneath it, a
+submod has whatever the mod it depends on provides, and a mod that replaces `history` is on its own.
+A date folder the stack does not have at all is not judged — the base game ships pops for a second
+bookmark that a mod with one bookmark drops, and those mods run.
+
+| Code | Severity | Reported on | Meaning |
+|---|---|---|---|
+| `missing-pops-file` | error | the `replace_path` line of the mod's `.mod` file, or its first line | A date folder the stack has is missing some of the base game's pops files. One finding per date folder; the message counts them and names the first few. |
+
+## Great powers (`greatPowerValidation.ts`) — Full Report only
+
+`GREAT_NATIONS_COUNT` in `common/defines.lua` is how many great powers the game seats at start,
+and it seats them from the countries that qualify: `civilized = yes` in `history/countries`, and
+provinces in at least two state regions of `map/region.txt`. With fewer qualifying countries than
+seats, the game crashes on load. The world is read at the `start_date` of `defines.lua`, dated
+blocks up to that date included, over the whole stack; a tag is matched to its history file by the
+three characters the file name starts with (`ENG - United Kingdom.txt`), the way the engine does
+it, not by the path in `common/countries.txt` — that one points at `common/countries/`.
+
+| Code | Severity | Reported on | Meaning |
+|---|---|---|---|
+| `too-few-great-powers` | error | the count in `common/defines.lua` | Fewer countries qualify than `GREAT_NATIONS_COUNT` seats. The message names the countries closest to qualifying and the count the world would support. |
+
+Silent when `defines.lua` carries no `GREAT_NATIONS_COUNT` (the engine then uses its own default)
+or when the stack has no `common/countries.txt` to read a world from.
+
 ## Index-time duplicates (`modIndex.ts`)
 
 | Code | Severity | Meaning |

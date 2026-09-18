@@ -321,23 +321,43 @@ export interface LocalisationEdit {
   readonly renameHistoryFile: boolean;
 }
 
+/**
+ * The history file, and with it everything the Definition tab shows: the
+ * localisation and the states ride along, so the name, the climate, the states
+ * and the history are written together.
+ */
+export interface HistoryEdit {
+  readonly data: ProvinceHistory;
+  readonly climate: string;
+  readonly createInFolder: string | undefined;
+  readonly localisation?: LocalisationEdit;
+  readonly states?: readonly string[];
+}
+
+export interface PopsEdit {
+  readonly pops: readonly PopEntry[];
+  readonly createInFile: string | undefined;
+}
+
+export interface PositionsEdit {
+  readonly data: ProvincePositions;
+}
+
 export type SaveSection =
+  | ({ readonly section: 'history' } & HistoryEdit)
+  | ({ readonly section: 'pops' } & PopsEdit)
+  | ({ readonly section: 'positions' } & PositionsEdit)
   /**
-   * The history file, and with it everything the Definition tab shows: its one
-   * Save carries the localisation and the states as well, so the name, the
-   * climate, the states and the history are written together. The Buildings and
-   * Extra Dates tabs post the same section without them — they show neither.
+   * Every tab at once: the panel has one Save, so one message carries the whole
+   * province. The parts are written in this order, and `pops` is left out when
+   * the province has none and no file to put them in.
    */
   | {
-      readonly section: 'history';
-      readonly data: ProvinceHistory;
-      readonly climate: string;
-      readonly createInFolder: string | undefined;
-      readonly localisation?: LocalisationEdit;
-      readonly states?: readonly string[];
-    }
-  | { readonly section: 'pops'; readonly pops: readonly PopEntry[]; readonly createInFile: string | undefined }
-  | { readonly section: 'positions'; readonly data: ProvincePositions };
+      readonly section: 'all';
+      readonly history: HistoryEdit;
+      readonly pops?: PopsEdit;
+      readonly positions: PositionsEdit;
+    };
 
 /** What a province painted in a colour of its own needs before any section can be written. */
 export interface NewProvince {
