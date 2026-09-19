@@ -204,7 +204,8 @@ Layers box ([Reference pictures](#reference-pictures)). The other three paint wi
   one click out of the drawing, not two.
 - the **pencil** paints the pixels it is dragged over, as a square of the brush slider's map pixels
   (1 by default, up to 16; the slider is greyed under the tools that do not draw a line). A fast drag
-  still draws a line, not a dotted one. Clicking the pencil **while it is the tool** turns it into the
+  still draws a line, not a dotted one. The pointer is the pencil itself, its tip on the pixel it
+  paints, and the eraser the same. Clicking the pencil **while it is the tool** turns it into the
   **eraser** (the button keeps its place and shows the eraser glyph; clicking again gives the pencil
   back). The eraser rubs out only the draft: a pixel it passes over goes back to the colour
   the file of the layer being edited has for it, and a pixel that was never painted is not touched, so its own
@@ -404,7 +405,10 @@ rewritten — a slider is never capped below the value it came with, so it can o
 and the total is marked until it is.
 
 The rows are drawn in the order the file stores them, which is how the game reads them: the map
-appears flipped vertically compared with an image editor. Hovering shows the id and the `definition.csv` name. The box in the bottom-left corner of the map
+appears flipped vertically compared with an image editor. Hovering shows the id and the `definition.csv` name,
+and what the layer being edited holds there when it is not the province map. Under the pencil and the
+eraser, and while any stroke is being drawn, nothing pops up at all: what is wanted there is the pixel,
+not a note over it. The box in the bottom-left corner of the map
 holds the layer switches, **Fit** (the whole map), **Reload** (re-read the map and the mod files) and
 the search: type a province id or a name and press **Go** or Enter. A name is matched against
 `definition.csv`, ignoring case — the whole name first, then one starting with what was typed, then

@@ -218,20 +218,18 @@ const PAGE_STYLE = String.raw`
      outright. The swatch is the whole row — it says the colour better than its
      hex did, and the hex is on the tooltip for when the number is what is wanted. */
   #tools .tint { display: flex; align-items: center; gap: 4px; position: relative; min-width: 0; }
+  #tools .tint[hidden], #tools .palette-row[hidden] { display: none; }
   /* The colour picker and the palette have to read as the same control, so the
-     picker is stripped of its own chrome and given the swatch box's frame. */
-  #tools .tint input { flex: 0 0 var(--tool); min-width: 0; height: 18px; padding: 0; border: 1px solid var(--vscode-input-border, rgba(255, 255, 255, 0.25)); border-radius: 2px; cursor: pointer; background: transparent; }
-  #tools .tint input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
-  #tools .tint input[type=color]::-webkit-color-swatch { border: none; border-radius: 1px; }
+     picker keeps the shape it has always had and the palette is given it. */
+  #tools .tint input, #tools .tint > .swatch-box { flex: 0 0 var(--tool); min-width: 0; height: 18px; padding: 0 1px; border-radius: 2px; cursor: pointer; background-clip: padding-box; }
+  #tools .tint > .swatch-box { border: 1px solid var(--vscode-input-border, rgba(255, 255, 255, 0.25)); }
   /* Red, green and blue as definition.csv writes them; the hex is on the swatch's tooltip. */
   #tools .tint > span { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; opacity: 0.85; }
-  #tools .tint > .swatch-box { flex: 0 0 var(--tool); height: 18px; padding: 0; border: 1px solid var(--vscode-input-border, rgba(255, 255, 255, 0.25)); border-radius: 2px; cursor: pointer; background-clip: padding-box; }
   #tools .tint > .value { cursor: pointer; }
   #tools .generate { padding: 1px 2px; }
   #tools .palette-row { display: flex; min-width: 0; }
   #tools .palette-row > .palette { flex: 1 1 0; min-width: 0; }
-  #tools .palette-row[hidden] { display: none; }
-  .swatch { flex: none; display: inline-block; width: 10px; height: 10px; border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
+  .combo-item .swatch { display: inline-block; border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 2px; vertical-align: -1px; margin-right: 6px; }
   #tools .mode { padding: 1px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #tools .mode.off { opacity: 0.6; }
   /* The side panel's Save rows stand apart from the form above them; this one is
@@ -241,6 +239,10 @@ const PAGE_STYLE = String.raw`
      long ones, and two equal halves would clip them at this width. */
   #tools .actions button { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 1px 2px; }
   #mapArea.painting { cursor: crosshair; }
+  /* The pencil and the eraser are about one pixel at a time, so the cursor is
+     the tool itself with its tip on that pixel rather than a cross over it. */
+  #mapArea.cursor-pencil { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='-1 -1 14 14'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M9.62999 0C10.9399 9.73611e-05 12.0098 1.07 12.0099 2.37988C12.0099 3.00987 11.7594 3.60957 11.3194 4.05957L10.6896 4.67969L4.50988 10.8604C4.2899 11.0803 3.99948 11.2396 3.68956 11.3096L0.620227 11.9902C0.620227 11.9902 0.549888 12 0.509876 12H0.50011C0.37011 12 0.239524 11.9496 0.149524 11.8496C0.0297368 11.7296 -0.0203258 11.5595 0.0196415 11.3896L0.699329 8.32031C0.769311 8.01039 0.919624 7.72997 1.14952 7.5L7.94933 0.700195C8.39933 0.250195 8.99999 0 9.62999 0ZM1.83995 8.20996C1.74995 8.29996 1.69027 8.41004 1.66027 8.54004L1.14952 10.8398L3.44933 10.3301C3.56914 10.3001 3.68946 10.2402 3.77941 10.1504L9.60949 4.32031L7.67003 2.37988L1.83995 8.20996ZM9.62023 1C9.25023 1 8.90952 1.14039 8.64952 1.40039L8.38488 1.66504L10.3341 3.61426L10.5997 3.34961C10.8596 3.08962 11.0001 2.73981 11.0001 2.37988C11 1.62007 10.38 1.00022 9.62023 1Z' fill='%23fff' stroke='%23000' stroke-width='1.2' stroke-linejoin='round' paint-order='stroke'/%3E%3C/svg%3E") 2 15, crosshair; }
+  #mapArea.cursor-eraser { cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='-1 -1 18 18'%3E%3Cpath d='M14.5 6C14.5 5.6 14.344 5.223 14.061 4.939L11.062 1.939C10.496 1.372 9.504 1.372 8.94 1.939L1.439 9.439C1.156 9.722 1 10.099 1 10.5C1 10.901 1.156 11.277 1.439 11.561L3.439 13.561C3.722 13.844 4.099 14 4.5 14H11.5C11.776 14 12 13.776 12 13.5C12 13.224 11.776 13 11.5 13H8.121L14.06 7.061C14.343 6.778 14.499 6.401 14.499 6H14.5ZM4.146 12.854L2.146 10.854C2.051 10.759 2 10.634 2 10.5C2 10.366 2.052 10.241 2.146 10.146L4.293 8L8 11.707L6.707 13H4.5C4.366 13 4.241 12.948 4.146 12.854ZM13.354 6.354L8.708 11L5.001 7.293L9.648 2.646C9.742 2.552 9.867 2.5 10.001 2.5C10.135 2.5 10.26 2.552 10.355 2.646L13.355 5.646C13.45 5.741 13.501 5.866 13.501 6C13.501 6.134 13.448 6.259 13.354 6.354Z' fill='%23fff' stroke='%23000' stroke-width='1.2' stroke-linejoin='round' paint-order='stroke'/%3E%3C/svg%3E") 3 14, crosshair; }
   /* Over the active reference: the frame's grips say what a drag would do. */
   #mapArea.grip-move { cursor: move; }
   #mapArea.grip-nw, #mapArea.grip-se { cursor: nwse-resize; }

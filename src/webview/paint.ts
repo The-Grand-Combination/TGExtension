@@ -89,6 +89,8 @@ export function setTool(next: Tool): void {
   brushSize.disabled = !paints(next);
   brushRow.classList.toggle('off', !paints(next));
   mapArea.classList.toggle('painting', next !== 'hand' && next !== 'pick' && next !== 'reference');
+  mapArea.classList.toggle('cursor-pencil', next === 'pencil');
+  mapArea.classList.toggle('cursor-eraser', next === 'eraser');
   mapArea.classList.toggle('picking', next === 'pick');
   mapArea.classList.toggle('referencing', next === 'reference');
   render();

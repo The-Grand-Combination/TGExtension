@@ -34,6 +34,8 @@ function requiredCanvas(id: string): HTMLCanvasElement {
 }
 
 export const mapArea = required('mapArea');
+/** The boxes drawn over the map: what the mouse does there is theirs, not the map's. */
+export const mapControls = required('mapControls');
 export const canvas = requiredCanvas('canvas');
 const context = canvas.getContext('2d');
 if (!context) {

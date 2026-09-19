@@ -1,5 +1,5 @@
 import { fitView, highlightOf, insideImage, provinceAt, render, toImage, toImageExact, zoomAt } from './canvas.js';
-import { canvas, mapArea, required, requiredInput, saveAllButton, setStatus, tooltip } from './dom.js';
+import { canvas, mapArea, mapControls, required, requiredInput, saveAllButton, setStatus, tooltip } from './dom.js';
 import { post } from './host.js';
 import { continueStroke, endStroke, setTool, startPaint, stepBack, stepForward, strokeInProgress } from './paint.js';
 import { hexOf, reservedKind, valueName } from './paintColor.js';
@@ -126,8 +126,17 @@ function onKeyDown(event: KeyboardEvent): void {
   }
 }
 
+/**
+ * The pencil and the eraser are about the pixel under the point, not the
+ * province it belongs to, and a note following the tip while a stroke is being
+ * drawn is in the way of the very thing being drawn.
+ */
+function tooltipQuiet(): boolean {
+  return state.tool === 'pencil' || state.tool === 'eraser' || strokeInProgress();
+}
+
 function showTooltip(event: MouseEvent): void {
-  if (!state.image || event.target !== canvas) { tooltip.hidden = true; mapArea.classList.remove('moving'); return; }
+  if (!state.image || event.target !== canvas || tooltipQuiet()) { tooltip.hidden = true; mapArea.classList.remove('moving'); return; }
   const handle = state.tool === 'hand' ? markerAt(event.clientX, event.clientY) : null;
   mapArea.classList.toggle('moving', handle !== null);
   const place = toImage(event.clientX, event.clientY);
@@ -319,6 +328,9 @@ export function initInput(): void {
   mapArea.addEventListener('contextmenu', function (event) { event.preventDefault(); });
   mapArea.addEventListener('mouseleave', function () { tooltip.hidden = true; });
   mapArea.addEventListener('wheel', function (event) {
+    // The boxes sit over the map, and a list inside one of them scrolls: the
+    // wheel is the map's only where the map itself is under it.
+    if (event.target instanceof Node && mapControls.contains(event.target)) { return; }
     event.preventDefault();
     zoomAt(event.clientX, event.clientY, event.deltaY < 0 ? 1.2 : 1 / 1.2);
     rebaseDrag(event.clientX, event.clientY);
