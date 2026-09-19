@@ -286,10 +286,10 @@ suite('MapEditorHandlers — painting the map', () => {
     readonly written: { path: string; bytes: Uint8Array }[];
   }
 
-  /** A host whose only file is provinces.bmp, in the root the last argument names. */
-  function paintHost(holder: string, layers: ModLayers = LAYERS): Painter {
-    const bitmap = path.join(holder, 'map/provinces.bmp');
-    const bytes = encodeBmp24(2, 1, [RED, BLUE]);
+  /** A host whose only file is one map bitmap, in the root the second argument names. */
+  function paintHost(holder: string, layers: ModLayers = LAYERS, file = 'map/provinces.bmp', content?: Uint8Array): Painter {
+    const bitmap = path.join(holder, file);
+    const bytes = content ?? encodeBmp24(2, 1, [RED, BLUE]);
     const written: { path: string; bytes: Uint8Array }[] = [];
     const host: MapEditorHost = {
       targets: (): readonly FileLocation[] => [{ root: ROOT, layers }],
@@ -318,8 +318,8 @@ suite('MapEditorHandlers — painting the map', () => {
 
   test('writes the painted pixels into the target mod', async () => {
     const { host, written } = paintHost(ROOT);
-    const result = await new MapEditorHandlers(host).paint({ ...targetParams, runs: [0, 1, BLUE] });
-    assert.deepStrictEqual(result, { ok: true, path: path.join(ROOT, 'map/provinces.bmp'), pixels: 1 });
+    const result = await new MapEditorHandlers(host).paint({ ...targetParams, layer: 'provinces', runs: [0, 1, BLUE] });
+    assert.deepStrictEqual(result, { ok: true, layer: 'provinces', path: path.join(ROOT, 'map/provinces.bmp'), pixels: 1 });
     assert.strictEqual(written.length, 1);
     const painted = decodeBmp(written[0]?.bytes ?? new Uint8Array());
     assert.ok(painted.kind === 'image');
@@ -329,23 +329,53 @@ suite('MapEditorHandlers — painting the map', () => {
   test('a bitmap that comes from a layer below is written into the target as its own copy', async () => {
     const layers: ModLayers = { key: 'game+mod', gameRoot: GAME, roots: [GAME, ROOT], hiddenFolders: [], caseInsensitivePaths: false };
     const { host, written } = paintHost(GAME, layers);
-    const result = await new MapEditorHandlers(host).paint({ ...targetParams, runs: [0, 1, BLUE] });
+    const result = await new MapEditorHandlers(host).paint({ ...targetParams, layer: 'provinces', runs: [0, 1, BLUE] });
     assert.strictEqual(result.ok, true);
     assert.strictEqual(written[0]?.path, path.join(ROOT, 'map/provinces.bmp'));
   });
 
   test('says so when the picked mods have no provinces.bmp', async () => {
     const { host, written } = paintHost('/elsewhere');
-    const result = await new MapEditorHandlers(host).paint({ ...targetParams, runs: [0, 1, BLUE] });
+    const result = await new MapEditorHandlers(host).paint({ ...targetParams, layer: 'provinces', runs: [0, 1, BLUE] });
     assert.deepStrictEqual(result, { ok: false, reason: 'The picked mods have no map/provinces.bmp.' });
     assert.strictEqual(written.length, 0);
   });
 
   test('pixels outside the map are refused, and nothing is written', async () => {
     const { host, written } = paintHost(ROOT);
-    const result = await new MapEditorHandlers(host).paint({ ...targetParams, runs: [5, 1, BLUE] });
-    assert.deepStrictEqual(result, { ok: false, reason: 'painted pixels fall outside the map' });
+    const result = await new MapEditorHandlers(host).paint({ ...targetParams, layer: 'provinces', runs: [5, 1, BLUE] });
+    assert.deepStrictEqual(result, { ok: false, reason: 'map/provinces.bmp painted pixels fall outside the map.' });
     assert.strictEqual(written.length, 0);
+  });
+
+  test('writes palette indices into rivers.bmp', async () => {
+    const { host, written } = paintHost(ROOT, LAYERS, 'map/rivers.bmp', encodeBmp8(2, 1, [255, 254], grayPalette()));
+    const result = await new MapEditorHandlers(host).paint({ ...targetParams, layer: 'rivers', runs: [0, 1, 2] });
+    assert.deepStrictEqual(result, { ok: true, layer: 'rivers', path: path.join(ROOT, 'map/rivers.bmp'), pixels: 1 });
+    const painted = decodeBmp(written[0]?.bytes ?? new Uint8Array());
+    assert.ok(painted.kind === 'image');
+    assert.strictEqual(painted.image.indexAt(0, 0), 2);
+  });
+
+  test('a rivers.bmp from a layer below is written into the target as its own copy', async () => {
+    const layers: ModLayers = { key: 'game+mod', gameRoot: GAME, roots: [GAME, ROOT], hiddenFolders: [], caseInsensitivePaths: false };
+    const { host, written } = paintHost(GAME, layers, 'map/rivers.bmp', encodeBmp8(2, 1, [255, 254], grayPalette()));
+    const result = await new MapEditorHandlers(host).paint({ ...targetParams, layer: 'rivers', runs: [0, 1, 2] });
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(written[0]?.path, path.join(ROOT, 'map/rivers.bmp'));
+  });
+
+  test('a terrain.bmp the game could not read as indices is refused', async () => {
+    const { host, written } = paintHost(ROOT, LAYERS, 'map/terrain.bmp');
+    const result = await new MapEditorHandlers(host).paint({ ...targetParams, layer: 'terrain', runs: [0, 1, 5] });
+    assert.deepStrictEqual(result, { ok: false, reason: 'map/terrain.bmp is 24-bit; the game reads an 8-bit one.' });
+    assert.strictEqual(written.length, 0);
+  });
+
+  test('says so when the picked mods have no terrain.bmp', async () => {
+    const { host } = paintHost(ROOT);
+    const result = await new MapEditorHandlers(host).paint({ ...targetParams, layer: 'terrain', runs: [0, 1, 5] });
+    assert.deepStrictEqual(result, { ok: false, reason: 'The picked mods have no map/terrain.bmp.' });
   });
 });
 
@@ -898,6 +928,13 @@ suite('MapEditorHandlers — the terrain a province shows', () => {
     assert.deepStrictEqual(result.waterTerrainIndices, [254]);
   });
 
+  test('the map names every terrain index, and the one Multi Draw makes land out of', async () => {
+    const result = await new MapEditorHandlers(terrained('owner = ENG\n')).map(targetParams);
+    assert.ok(result.kind === 'ready', result.kind === 'unavailable' ? result.reason : '');
+    assert.deepStrictEqual(result.terrainNames, { '0': 'arctic', '1': 'farmlands' });
+    assert.strictEqual(result.plainsTerrainIndex, 0);
+  });
+
   test('a history file with no terrain leaves the province without one, whatever terrain.bmp says', async () => {
     const terrain = await terrainOf('owner = ENG\n');
     assert.strictEqual(terrain.name, undefined);
@@ -1010,7 +1047,7 @@ suite('MapEditorHandlers — the Layers box thumbnails', () => {
     await handlers.thumbnails(targetParams);
     const before = reads.length;
     assert.strictEqual(before, 3);
-    assert.strictEqual((await handlers.paint({ ...targetParams, runs: [0, 1, BLUE] })).ok, true);
+    assert.strictEqual((await handlers.paint({ ...targetParams, layer: 'provinces', runs: [0, 1, BLUE] })).ok, true);
     await handlers.thumbnails(targetParams);
     assert.ok(reads.length > before + 1, String(reads.length));
   });

@@ -66,11 +66,12 @@ ${PAGE_STYLE}
             <span class="range"><input id="brushSize" type="range" min="1" max="16" step="1" value="1"></span>
             <span id="brushSizeValue" class="readout">1</span>
           </label>
-          <div class="tint">
+          <div id="colorRow" class="tint">
             <input id="paintColor" type="color" value="#ff0000" title="The colour the pencil and the bucket paint with">
             <span id="paintColorText">255 0 0</span>
           </div>
-          <label class="lock" title="Paint only where map/terrain.bmp has land: pixels over its water are left as they are"><input type="checkbox" id="terrainLock" checked> Terrain Lock</label>
+          <div id="paletteRow" class="palette-row" hidden></div>
+          <button id="paintModeButton" class="secondary mode">Terrain Lock</button>
           <button id="generateColorButton" class="secondary generate" title="Take a colour at random that no province and no pixel of the map is using">Generate Color</button>
           <div class="actions">
             <button id="savePaintButton" class="secondary" title="Write the painted pixels into map/provinces.bmp">Save</button>
@@ -163,6 +164,9 @@ const PAGE_STYLE = String.raw`
   /* Not .head: that class is the side panel's column headings, and its 30px of
      right padding was what kept eating the names here. */
   #layersBox .layer .caption { display: flex; align-items: center; gap: 3px; min-width: 0; }
+  #layersBox #fixedLayers .layer .caption { cursor: pointer; }
+  #layersBox #fixedLayers .layer.editing { background: rgba(255, 255, 255, 0.14); }
+  #layersBox #fixedLayers .layer.editing .name { font-weight: 600; }
   #layersBox .layer .thumb { grid-row: 1 / span 2; align-self: center; width: 20px; height: 20px; border-radius: 2px; background: rgba(255, 255, 255, 0.08) center / cover no-repeat; }
   #layersBox .references .layer .thumb { cursor: pointer; }
   /* Switched off: the thumbnail goes grey and the name fades, the slider stays where it was. */
@@ -213,12 +217,23 @@ const PAGE_STYLE = String.raw`
   /* The colour the brush writes: picked from the map with the eye drop, or chosen
      outright. The swatch is the whole row — it says the colour better than its
      hex did, and the hex is on the tooltip for when the number is what is wanted. */
-  #tools .tint { display: flex; align-items: center; gap: 4px; }
-  #tools .tint input { flex: 0 0 var(--tool); min-width: 0; height: 18px; padding: 0 1px; }
+  #tools .tint { display: flex; align-items: center; gap: 4px; position: relative; min-width: 0; }
+  /* The colour picker and the palette have to read as the same control, so the
+     picker is stripped of its own chrome and given the swatch box's frame. */
+  #tools .tint input { flex: 0 0 var(--tool); min-width: 0; height: 18px; padding: 0; border: 1px solid var(--vscode-input-border, rgba(255, 255, 255, 0.25)); border-radius: 2px; cursor: pointer; background: transparent; }
+  #tools .tint input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+  #tools .tint input[type=color]::-webkit-color-swatch { border: none; border-radius: 1px; }
   /* Red, green and blue as definition.csv writes them; the hex is on the swatch's tooltip. */
-  #tools .tint span { flex: 1 1 0; min-width: 0; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; opacity: 0.85; }
+  #tools .tint > span { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; opacity: 0.85; }
+  #tools .tint > .swatch-box { flex: 0 0 var(--tool); height: 18px; padding: 0; border: 1px solid var(--vscode-input-border, rgba(255, 255, 255, 0.25)); border-radius: 2px; cursor: pointer; background-clip: padding-box; }
+  #tools .tint > .value { cursor: pointer; }
   #tools .generate { padding: 1px 2px; }
-  #tools .lock { display: flex; align-items: center; gap: 5px; cursor: pointer; line-height: 1.3; white-space: nowrap; }
+  #tools .palette-row { display: flex; min-width: 0; }
+  #tools .palette-row > .palette { flex: 1 1 0; min-width: 0; }
+  #tools .palette-row[hidden] { display: none; }
+  .swatch { flex: none; display: inline-block; width: 10px; height: 10px; border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
+  #tools .mode { padding: 1px 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #tools .mode.off { opacity: 0.6; }
   /* The side panel's Save rows stand apart from the form above them; this one is
      already the last row of a small box, so it drops that margin and its rule. */
   #tools .actions { display: flex; gap: 4px; margin-top: 0; padding-top: 0; border-top: none; }
@@ -335,6 +350,7 @@ const PAGE_STYLE = String.raw`
   .combo-display[hidden] { display: none; }
   .combo-display > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .combo.named > input { color: transparent; }
+  .combo-list.up { top: auto; bottom: 100%; }
   .combo-list { position: absolute; top: 100%; left: 0; min-width: 100%; max-width: 380px; z-index: 10; max-height: 240px; overflow-y: auto; background: var(--vscode-editorSuggestWidget-background, var(--vscode-editorWidget-background, #252526)); color: var(--vscode-editorSuggestWidget-foreground, var(--vscode-foreground)); border: 1px solid var(--vscode-editorSuggestWidget-border, var(--vscode-widget-border, #454545)); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); }
   .combo-item { padding: 3px 8px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .combo-item.active, .combo-item:hover { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }

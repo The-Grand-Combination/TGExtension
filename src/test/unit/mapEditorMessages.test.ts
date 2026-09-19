@@ -58,12 +58,14 @@ suite('mapEditorMessages', () => {
   });
 
   test('paint carries whole triples, and anything else is refused outright', () => {
-    assert.deepStrictEqual(asPageMessage({ type: 'paint', runs: [4, 2, 255] }), { type: 'paint', runs: [4, 2, 255] });
-    assert.deepStrictEqual(asPageMessage({ type: 'paint', runs: [] }), { type: 'paint', runs: [] });
+    assert.deepStrictEqual(asPageMessage({ type: 'paint', runs: [4, 2, 255] }), { type: 'paint', layer: 'provinces', runs: [4, 2, 255] });
+    assert.deepStrictEqual(asPageMessage({ type: 'paint', runs: [] }), { type: 'paint', layer: 'provinces', runs: [] });
     // A dropped number would shift every run after it onto the wrong pixels.
     assert.strictEqual(asPageMessage({ type: 'paint', runs: [4, 2] }), undefined);
     assert.strictEqual(asPageMessage({ type: 'paint', runs: [4, 2, '255'] }), undefined);
     assert.strictEqual(asPageMessage({ type: 'paint', runs: [4, 1.5, 255] }), undefined);
+    assert.deepStrictEqual(asPageMessage({ type: 'paint', layer: 'terrain', runs: [4, 2, 5] }), { type: 'paint', layer: 'terrain', runs: [4, 2, 5] });
+    assert.strictEqual(asPageMessage({ type: 'paint', layer: 'lakes', runs: [4, 2, 5] }), undefined);
     assert.strictEqual(asPageMessage({ type: 'paint' }), undefined);
   });
 

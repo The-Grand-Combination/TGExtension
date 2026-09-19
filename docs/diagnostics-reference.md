@@ -190,6 +190,7 @@ the top-left corner). See [map-images.md](map-images.md).
 | `nonstandard-palette` | error | `terrain.bmp` or `rivers.bmp` does not carry the standard palette; Enforce Colormaps rewrites it. |
 | `unknown-color` | error | A `provinces.bmp` color has no `definition.csv` row (lake rows with an empty id excepted); the engine makes it province 0. |
 | `province-without-pixels` | warning | A `definition.csv` province has no pixel. |
+| `province-too-big` | error | A province covers more than 200,000 pixels in `provinces.bmp`; the engine logs it as `Too big`. Reported at the province's first pixel. For scale: the largest province in the base game covers 69,522, and in TGC 171,927. |
 | `terrain-index-unmapped` | error | A land pixel's terrain index is ≥ 64 (painted as plains) or has no `color = { N }` entry in `terrain.txt`. |
 | `land-over-ocean-terrain` | warning | Land province pixels painted ocean (254) in `terrain.bmp`. |
 | `terrain-over-sea` | warning | Sea province pixels painted with a land terrain index. |

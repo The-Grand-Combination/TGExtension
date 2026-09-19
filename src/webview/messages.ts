@@ -5,10 +5,11 @@ import { messageOf } from './host.js';
 import { applyReveal, clearSelectionState } from './input.js';
 import { applyThumbnails, applyTint, loadProvinces, refreshTint, resetLayers } from './layers.js';
 import { applyUndoLimit, handlePainted, resetPaint, saveNewProvincePaint, setTool } from './paint.js';
+import { dropReserved } from './paintColor.js';
 import { carryForms, failureText, fileNames, finishSave, renderSide, resetPanel, savingParts, showHint, handleTerrainPicture } from './panel/panel.js';
 import { asPositions, capturePending, clonePoints, refreshPending, replaceMarkers } from './positions.js';
 import { handleReferences, resetReferences } from './references.js';
-import { definitionById, idByColor, locNameById, pendingPositions, seaIds, state, waterTerrain } from './state.js';
+import { definitionById, idByColor, locNameById, pendingPositions, seaColors, seaIds, state, waterTerrain } from './state.js';
 
 /** What the extension posts, and what each message changes on the page. */
 
@@ -18,12 +19,15 @@ function loadFreshMap(message: Extract<HostMessage, { type: 'map' }>): void {
   idByColor.clear();
   definitionById.clear();
   seaIds.clear();
+  seaColors.clear();
   waterTerrain.clear();
   for (const id of fresh.seaProvinces) { seaIds.add(id); }
   for (const index of fresh.waterTerrainIndices) { waterTerrain.add(index); }
+  for (const color of fresh.lakeColors) { seaColors.add(color); }
   for (const definition of fresh.definitions) {
     idByColor.set(definition.color, definition.id);
     definitionById.set(definition.id, definition);
+    if (seaIds.has(definition.id)) { seaColors.add(definition.color); }
   }
   state.popDate = fresh.popDates[0] ?? '';
   targetBox.textContent = fresh.targetName;
@@ -149,7 +153,8 @@ function handleSaved(result: SaveResult): void {
   if (createdColor !== null) {
     definitionById.set(saved.id, { id: saved.id, color: createdColor, name: saved.definitionName });
     idByColor.set(createdColor, saved.id);
-    if (saved.isSea) { seaIds.add(saved.id); }
+    if (saved.isSea) { seaIds.add(saved.id); seaColors.add(createdColor); } else { seaColors.delete(createdColor); }
+    dropReserved(createdColor);
     state.newColor = null;
   }
   // Only the section that was saved is read back from the file; the points and

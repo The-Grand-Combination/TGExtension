@@ -6,6 +6,8 @@ import { parseDocument } from '../../services/syntaxValidation.js';
 import {
   cropCenter,
   dominantTerrainByProvince,
+  plainsTerrainIndex,
+  terrainNamesOf,
   terrainPictureDataUri,
   terrainSpriteTextures,
   terrainTypeByIndex,
@@ -61,6 +63,22 @@ suite('terrainPictures', () => {
       'lake1 = { type = lake color = { 253 } }',
     ].join('\n');
     assert.deepStrictEqual([...waterTerrainIndices(parseDocument(text).document)], [254]);
+  });
+
+  test('the terrain names are the indices the engine reads, and nothing above them', () => {
+    const types = new Map([[0, 'arctic'], [5, 'plains'], [64, 'beyond'], [254, 'ocean']]);
+    assert.deepStrictEqual(terrainNamesOf(types), { '0': 'arctic', '5': 'plains' });
+  });
+
+  test('Multi Draw makes land out of plains where the mod has it', () => {
+    const types = new Map([[0, 'arctic'], [5, 'plains'], [8, 'grasslands']]);
+    assert.strictEqual(plainsTerrainIndex(types, new Set()), 5);
+  });
+
+  test('without plains it takes the lowest land index, and without land it takes none', () => {
+    assert.strictEqual(plainsTerrainIndex(new Map([[8, 'grasslands'], [3, 'hills']]), new Set()), 3);
+    assert.strictEqual(plainsTerrainIndex(new Map([[254, 'ocean']]), new Set([254])), undefined);
+    assert.strictEqual(plainsTerrainIndex(new Map(), new Set()), undefined);
   });
 
   test('without a categories block nothing is water', () => {

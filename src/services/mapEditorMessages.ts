@@ -1,9 +1,11 @@
 import {
+  isPaintLayer,
   POSITION_KINDS,
   type HistoryEdit,
   type LocalisationEdit,
   type NewProvince,
   type PageSaveParams,
+  type PaintLayer,
   type PopEntry,
   type PopsEdit,
   type PositionsEdit,
@@ -33,7 +35,7 @@ export type PageMessage =
   | { readonly type: 'save'; readonly params: PageSaveParams }
   | { readonly type: 'pending'; readonly edits: readonly PendingPositions[] }
   /** Painted pixels as `index, length, colour` triples; see `provincePaint`. */
-  | { readonly type: 'paint'; readonly runs: readonly number[] }
+  | { readonly type: 'paint'; readonly layer: PaintLayer; readonly runs: readonly number[] }
   /** How many painted pixels the page is holding, so closing the tab can say so. */
   | { readonly type: 'paintPending'; readonly pixels: number }
   | { readonly type: 'saveAll' }
@@ -151,11 +153,12 @@ function asLocalisation(value: unknown): LocalisationEdit | undefined {
 /** A triple short of whole, or holding anything but whole numbers, is dropped: it would paint the wrong pixels. */
 function asPaint(record: UnknownRecord): PageMessage | undefined {
   const value: unknown = record['runs'];
-  if (!Array.isArray(value)) {
+  const layer: unknown = record['layer'] ?? 'provinces';
+  if (!Array.isArray(value) || !isPaintLayer(layer)) {
     return undefined;
   }
   const runs = numberList(value);
-  return runs.length === value.length && runs.length % 3 === 0 ? { type: 'paint', runs } : undefined;
+  return runs.length === value.length && runs.length % 3 === 0 ? { type: 'paint', layer, runs } : undefined;
 }
 
 function asPending(value: unknown): PendingPositions | undefined {

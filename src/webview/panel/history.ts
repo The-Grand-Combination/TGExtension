@@ -19,6 +19,7 @@ import {
   type SliderRange,
 } from '../fields.js';
 import { state, vocabulary } from '../state.js';
+import { reservedKind } from '../paintColor.js';
 import { forms } from './forms.js';
 import { lastSaveButton, layerNote, postSave, saveBar, sectionHeader, showTerrain, type MissingNote } from './panel.js';
 
@@ -31,7 +32,8 @@ export function localisationSection(current: ProvinceDetails): HTMLElement {
   const input = textInput(loc.text);
   // The name a save writes into definition.csv, and whether the id joins sea_starts.
   forms.nameInput = input;
-  const sea = checkRow('Sea province (the id joins sea_starts in default.map)', false);
+  // Multi Draw made the colour out of water in the other files, so the province it becomes is a sea one.
+  const sea = checkRow('Sea province (the id joins sea_starts in default.map)', reservedKind(state.newColor ?? -1) === 'sea');
   forms.seaInput = current.isNew ? sea.box : null;
   const seaRow = current.isNew ? sea.node : null;
   // A base-game province keeps the name vanilla gave its file, and other tools match

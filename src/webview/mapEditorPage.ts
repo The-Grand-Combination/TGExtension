@@ -16,6 +16,7 @@ import { initInput } from './input.js';
 import { initLayers } from './layers.js';
 import { initMessages } from './messages.js';
 import { initPaint } from './paint.js';
+import { initPaintColor } from './paintColor.js';
 import { initReferences } from './references.js';
 
 window.addEventListener('error', function (event) { showLoading('Page error: ' + event.message); });
@@ -23,6 +24,7 @@ window.addEventListener('unhandledrejection', function (event) { showLoading('Pa
 
 initLayers();
 initReferences();
+initPaintColor();
 initPaint();
 initInput();
 initMessages();

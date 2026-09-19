@@ -1,3 +1,4 @@
+import { TERRAIN_INDEX_LIMIT } from '../data/mapPalettes.js';
 import type { Document } from '../model/ast.js';
 import { asBlock, firstByKey, scalarValueOf } from '../model/astQuery.js';
 import type { BmpImage } from './bmpDecoder.js';
@@ -19,7 +20,6 @@ const SPRITE_PREFIX = 'gfx_terrainimg_';
 /** The size of the game's and TGC's terrain pictures; a larger picture is cropped to it, so the header never changes shape. */
 export const TERRAIN_PICTURE_WIDTH = 374;
 export const TERRAIN_PICTURE_HEIGHT = 94;
-const TERRAIN_INDEX_LIMIT = 64;
 const NO_PROVINCE = 0;
 const LAKE = 0xffff;
 const ROWS_PER_CHUNK = 128;
@@ -81,6 +81,38 @@ export function waterTerrainIndices(document: Document): Set<number> {
     }
   }
   return indices;
+}
+
+/** terrain.bmp index -> the type that draws it, as the Terrain layer's colour list shows them; only the indices the engine reads. */
+export function terrainNamesOf(typeByIndex: ReadonlyMap<number, string>): Record<string, string> {
+  const names: Record<string, string> = {};
+  for (const [index, type] of typeByIndex) {
+    if (index < TERRAIN_INDEX_LIMIT) {
+      names[String(index)] = type;
+    }
+  }
+  return names;
+}
+
+/**
+ * What Multi Draw gives a pixel whose terrain has to become land: the mod's own
+ * plains, or failing that the lowest land index it does have. Undefined when
+ * terrain.txt types nothing but water, and then the terrain is left alone.
+ */
+export function plainsTerrainIndex(typeByIndex: ReadonlyMap<number, string>, water: ReadonlySet<number>): number | undefined {
+  let lowest: number | undefined;
+  for (const [index, type] of typeByIndex) {
+    if (index >= TERRAIN_INDEX_LIMIT || water.has(index)) {
+      continue;
+    }
+    if (type.toLowerCase() === 'plains') {
+      return index;
+    }
+    if (lowest === undefined || index < lowest) {
+      lowest = index;
+    }
+  }
+  return lowest;
 }
 
 /** The declared texture, then the same name with the other extension the game also loads. */

@@ -29,6 +29,12 @@ const ROWS_PER_CHUNK = 128;
 /** Province id given to pixels whose color is a lake row of definition.csv (empty id). */
 const LAKE = 0xffff;
 const NO_PROVINCE = 0;
+/**
+ * Pixels a province may cover before the engine calls it too big. Past this it
+ * logs the province as `Too big` and the province is not drawn the way it was
+ * painted; split it, or give part of it to a neighbour.
+ */
+const MAX_PROVINCE_PIXELS = 200_000;
 
 /**
  * Check provinces.bmp, terrain.bmp and rivers.bmp against each other and
@@ -169,13 +175,19 @@ async function provinceMapOf(image: BmpImage, table: ProvinceTable, out: Finding
   const { width, height } = image;
   const ids = new Uint16Array(width * height);
   const pixelCounts = new Uint32Array(LAKE + 1);
+  // Where each province was first seen, so a finding about one can be opened at it.
+  const firstPixels = new Int32Array(LAKE + 1).fill(-1);
   const unknown = new Tallies();
   await forEachRowChunk(height, (y) => {
     for (let x = 0; x < width; x++) {
       const color = image.rgbAt(x, y);
       const id = table.idByColor[color] ?? NO_PROVINCE;
-      ids[y * width + x] = id;
+      const offset = y * width + x;
+      ids[offset] = id;
       pixelCounts[id] = (pixelCounts[id] ?? 0) + 1;
+      if (firstPixels[id] === -1) {
+        firstPixels[id] = offset;
+      }
       if (id === NO_PROVINCE) {
         unknown.count(color, x, y);
       }
@@ -185,11 +197,21 @@ async function provinceMapOf(image: BmpImage, table: ProvinceTable, out: Finding
     out.add(PROVINCES_BMP, 'error', 'unknown-color', `Color ${formatRgb(color)} covers ${pixels(tally.count)} (first at ${at(tally.first)}) and is not in map/definition.csv; the engine treats them as no province.`);
   }
   for (const [id] of table.names) {
-    if (pixelCounts[id] === 0) {
+    const count = pixelCounts[id] ?? 0;
+    if (count === 0) {
       out.add(PROVINCES_BMP, 'warning', 'province-without-pixels', `Province ${describeProvince(table, id)} has no pixel in ${PROVINCES_BMP}; the engine places it at (0, 0) and gives it no terrain.`);
+      continue;
+    }
+    if (count > MAX_PROVINCE_PIXELS) {
+      out.add(PROVINCES_BMP, 'error', 'province-too-big', `Province ${describeProvince(table, id)} covers ${pixels(count)}, over the ${pixels(MAX_PROVINCE_PIXELS)} the engine accepts; it logs the province as 'Too big'. Split it, or give part of it to a neighbour.`, pixelAt(firstPixels[id] ?? -1, width));
     }
   }
   return { ids, width, height };
+}
+
+/** A row-major offset back as a pixel position. */
+function pixelAt(offset: number, width: number): Pixel {
+  return { x: offset % width, y: Math.floor(offset / width) };
 }
 
 // --- terrain.bmp --------------------------------------------------------------------

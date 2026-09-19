@@ -117,3 +117,55 @@ suite('mapImageAudit', () => {
     assert.ok(findings[4]?.message.includes('5x4') && findings[4].message.includes('6x4'));
   });
 });
+
+// A province may cover 200,000 pixels; past that the engine logs it as too big.
+const WIDE = 1440;
+const TALL = 144;
+const BIG_DEFINITION = ';r;g;b;x;x\n1;10;0;0;Huge;x\n2;0;10;0;Rest;x\n';
+
+/** A map whose province 1 covers `huge` pixels and province 2 the remainder. */
+function mapWithHugeProvince(huge: number): Uint8Array {
+  const pixels = Array.from({ length: WIDE * TALL }, (_unused, offset) => (offset < huge ? LAND : COAST));
+  return encodeBmp24(WIDE, TALL, pixels);
+}
+
+async function bigMapFindings(huge: number): Promise<MapFinding[]> {
+  return auditMapImages(
+    source({ 'map/provinces.bmp': mapWithHugeProvince(huge) }, { 'map/definition.csv': BIG_DEFINITION }),
+    buildTestIndex(),
+  );
+}
+
+suite('mapImageAudit — provinces that are too big', () => {
+  test('a province over 200,000 pixels is an error, at its first pixel', async () => {
+    const findings = await bigMapFindings(200_001);
+    const tooBig = findings.filter((finding) => finding.code === 'province-too-big');
+    assert.deepStrictEqual(summary(tooBig), ['provinces.bmp error province-too-big@0,0']);
+    assert.strictEqual(
+      tooBig[0]?.message,
+      "Province 1 (Huge) covers 200001 pixels, over the 200000 pixels the engine accepts; it logs the province as 'Too big'. Split it, or give part of it to a neighbour.",
+    );
+  });
+
+  test('exactly 200,000 pixels is still accepted', async () => {
+    const findings = await bigMapFindings(200_000);
+    assert.deepStrictEqual(findings.filter((finding) => finding.code === 'province-too-big'), []);
+  });
+
+  test('the finding points at where the province starts, not at the origin', async () => {
+    // Province 2 takes the tail of the image, so its first pixel is partway in:
+    // offset 7359 of a 1440-wide map is x 159 of row 5.
+    const findings = await bigMapFindings(WIDE * TALL - 200_001);
+    const tooBig = findings.filter((finding) => finding.code === 'province-too-big');
+    assert.deepStrictEqual(summary(tooBig), ['provinces.bmp error province-too-big@159,5']);
+  });
+
+  test('a province with no pixels at all is still the warning, not this error', async () => {
+    const findings = await auditMapImages(
+      source({ 'map/provinces.bmp': PROVINCES }, { 'map/definition.csv': DEFINITION }),
+      buildTestIndex(),
+    );
+    const codes = findings.filter((finding) => finding.code.startsWith('province-')).map((finding) => finding.code);
+    assert.deepStrictEqual(codes, ['province-without-pixels']);
+  });
+});

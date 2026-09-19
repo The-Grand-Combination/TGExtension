@@ -214,7 +214,10 @@ hash of the state's name, `services/stateColors.ts`), one province's localisatio
 the pixels painted on the map;
 the page fetches and decodes `provinces.bmp` (and, for the Layers box, `rivers.bmp` and `terrain.bmp`) itself
 and tints it by owner in the browser; the map message also carries the `terrain.bmp` indices `terrain.txt`
-types as water, which the page's Terrain Lock keeps the brush off. Saves are text patches
+types as water, the name of each terrain index and the one the page treats as plains, which the three
+painting modes read (`services/layerPaint.ts` decides what a stroke writes in each file, away from the DOM).
+Any of the three bitmaps can be the one painted: the paint request names its layer, and `provincePaint.ts`
+writes a colour a pixel into the 24-bit map or a palette index into the 8-bit ones. Saves are text patches
 computed by `vscode`-free services (`provinceLocEdit.ts`, `provinceHistoryEdit.ts`,
 `provincePopsEdit.ts`, `provincePositionsEdit.ts` over `textPatch.ts`) and
 written only into the top mod of the stack. A province created from a painted colour goes the same

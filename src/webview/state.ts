@@ -1,6 +1,7 @@
 import type {
   MapCountryColors,
   MapEditorMap,
+  PaintLayer,
   MapEditorReveal,
   PositionKind,
   PositionMarker,
@@ -12,7 +13,8 @@ import type {
   Vocabulary,
 } from '../model/mapEditor.js';
 import { DEFAULT_COUNTRY_COLORS_TINT } from '../model/mapEditor.js';
-import type { TerrainPixels } from './bitmaps.js';
+import type { PaintMode } from '../services/layerPaint.js';
+import type { PixelArray } from '../services/provincePaint.js';
 
 /**
  * What more than one part of the page reads or writes. ES modules cannot
@@ -27,13 +29,35 @@ export interface Tile {
   readonly canvas: HTMLCanvasElement;
 }
 
-export interface DecodedImage {
+/**
+ * One map bitmap as the page holds it: the pixels the tools read and write,
+ * and the tiles it is drawn from once it is on screen. An overlay the Terrain
+ * Lock reads but nobody shows has no tiles.
+ */
+export interface PixelLayer {
   readonly width: number;
   readonly height: number;
-  readonly tiles: Tile[];
+  readonly packed: PixelArray;
+  tiles: Tile[] | null;
+}
+
+export interface DecodedImage extends PixelLayer {
   /** `red << 16 | green << 8 | blue` per pixel, in the order the rows are drawn. */
   readonly packed: Uint32Array;
+  tiles: Tile[];
 }
+
+/** rivers.bmp or terrain.bmp: a palette index per pixel, and the palette the file itself carries. */
+export interface IndexedImage extends PixelLayer {
+  readonly packed: Uint8Array;
+  /** 256 RGB triples, as the file has them. */
+  readonly palette: Uint8ClampedArray;
+  /** How the tiles were drawn, so the rivers mask can be built again as the file's own colours. */
+  shown: OverlayLook | null;
+}
+
+/** rivers.bmp is a blue mask over nothing while it is only being looked at, and its own magenta and white while it is edited. */
+export type OverlayLook = 'mask' | 'palette';
 
 /** The outline drawn over the selected province, as its own canvas at an offset. */
 export interface Highlight {
@@ -76,11 +100,12 @@ export interface Tinted {
   readonly tintOfColor: Map<number, number>;
 }
 
-// The Layers box: the three map bitmaps, each at its own opacity. provinces.bmp
-// is what is painted and drawn first; rivers.bmp (8-bit, every index below 254
-// is river, drawn blue over nothing) and terrain.bmp (8-bit, shown through its
-// own palette) go over it, and are only fetched once their slider leaves 0.
-export type FixedLayer = 'provinces' | 'rivers' | 'terrain';
+// The Layers box: the three map bitmaps, each at its own opacity, one of them
+// the one being edited. provinces.bmp is drawn first; rivers.bmp (8-bit, every
+// index below 254 is river, drawn blue over nothing) and terrain.bmp (8-bit,
+// shown through its own palette) go over it, and are only fetched once their
+// slider leaves 0 or the brush needs them.
+export type FixedLayer = PaintLayer;
 export type Overlay = Exclude<FixedLayer, 'provinces'>;
 export const FIXED_LAYERS: readonly FixedLayer[] = ['provinces', 'rivers', 'terrain'];
 export const OVERLAYS: readonly Overlay[] = ['rivers', 'terrain'];
@@ -155,12 +180,13 @@ export interface State {
   layerOpacity: Record<FixedLayer, number>;
   /** Webview URIs of the two overlays, or null when the stack has none. */
   overlayUri: Record<Overlay, string | null>;
-  overlayTiles: Record<Overlay, Tile[] | null>;
   overlayLoading: Record<Overlay, boolean>;
-  /** terrain.bmp once fetched: the Terrain layer's pixels and what the Terrain Lock checks against. */
-  terrain: TerrainPixels | null;
-  /** Terrain Lock: the brush leaves the pixels terrain.bmp has as water alone. */
-  terrainLock: boolean;
+  /** Each overlay once fetched: what the Terrain Lock and Multi Draw read, and what the layer is drawn from. */
+  indexed: Record<Overlay, IndexedImage | null>;
+  /** Which bitmap the tools paint; the other two are only looked at. */
+  editLayer: FixedLayer;
+  /** What the brush is allowed to do where the three files disagree; none of them paints wherever it is put. */
+  paintMode: PaintMode | null;
 }
 
 export const state: State = {
@@ -189,15 +215,22 @@ export const state: State = {
   tintWeight: DEFAULT_COUNTRY_COLORS_TINT / 100,
   layerOpacity: { provinces: 100, rivers: 20, terrain: 0 },
   overlayUri: { rivers: null, terrain: null },
-  overlayTiles: { rivers: null, terrain: null },
   overlayLoading: { rivers: false, terrain: false },
-  terrain: null,
-  terrainLock: true,
+  indexed: { rivers: null, terrain: null },
+  editLayer: 'provinces',
+  paintMode: 'lock',
 };
+
+/** The bitmap a layer is painted on, or null while it is not loaded. */
+export function layerImage(kind: FixedLayer): PixelLayer | null {
+  return kind === 'provinces' ? state.image : state.indexed[kind];
+}
 
 export const idByColor = new Map<number, number>();
 export const definitionById = new Map<number, ProvinceDefinition>();
 export const seaIds = new Set<number>();
+/** The colours of the sea provinces and the lakes: what tells water from land on the province map. */
+export const seaColors = new Set<number>();
 /** The terrain.bmp indices map/terrain.txt types as water, from the map message. */
 export const waterTerrain = new Set<number>();
 // Points moved but not written, province by province. They survive moving to

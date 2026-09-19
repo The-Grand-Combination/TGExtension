@@ -1,13 +1,14 @@
 import type { ProvinceDefinition, Rgb } from '../model/mapEditor.js';
 import { stateColorOf } from '../services/stateColors.js';
-import { buildTiles, decodeProvincesBmp, decodeRiversBmp, decodeTerrainBmp, fetchBitmap, terrainRgba, type OverlayPixels, type TerrainPixels } from './bitmaps.js';
+import { buildTiles, decodeIndexedBmp, decodeProvincesBmp, fetchBitmap, paletteRgba, riverMaskRgba } from './bitmaps.js';
 import { fitView, render } from './canvas.js';
 import { h, hideLoading, loading, required, requiredInput, setStatus, showLoading } from './dom.js';
 import { sliderInput, type Field, type SliderRange } from './fields.js';
 import { log, messageOf } from './host.js';
 import { applyReveal } from './input.js';
 import { placeReferences } from './references.js';
-import { definitionById, FIXED_LAYERS, OVERLAYS, SEA_TINT, seaIds, state, TINT_MODES, UNOWNED_TINT, type FixedLayer, type Overlay, type TintMode } from './state.js';
+import { definitionById, FIXED_LAYERS, OVERLAYS, SEA_TINT, seaIds, state, TINT_MODES, UNOWNED_TINT, type FixedLayer, type IndexedImage, type Overlay, type OverlayLook, type TintMode } from './state.js';
+import { refreshColorControl } from './paintColor.js';
 
 /**
  * The map's own layers: provinces.bmp, which everything else sits on, the two
@@ -30,9 +31,9 @@ const fixedLayersBox = required('fixedLayers');
 const layerPositions = requiredInput('layerPositions');
 const layerText = requiredInput('layerText');
 const tintBoxes: Record<TintMode, HTMLInputElement> = { country: requiredInput('layerCountry'), state: requiredInput('layerState') };
-/** terrain.bmp is fetched once per map, whichever of the Terrain layer and the Terrain Lock asks first. */
-let terrainLoad: Promise<TerrainPixels> | null = null;
-let terrainFailure: string | null = null;
+/** Each overlay is fetched once per map, whichever of its layer, the brush and the Terrain Lock asks first. */
+const indexedLoad: Record<Overlay, Promise<IndexedImage> | null> = { rivers: null, terrain: null };
+const indexedFailure: Record<Overlay, string | null> = { rivers: null, terrain: null };
 
 /** One row of the box: thumbnail, name, and the opacity slider under them. */
 export function layerRow(name: string, opacity: number, onOpacity: (value: number) => void): LayerRow {
@@ -51,28 +52,31 @@ function buildFixedRows(): void {
   for (const kind of FIXED_LAYERS) {
     const row = layerRow(LAYER_LABELS[kind], state.layerOpacity[kind], function (value) {
       state.layerOpacity[kind] = value;
-      if (kind !== 'provinces' && value > 0) { loadOverlay(kind); }
+      if (kind !== 'provinces' && value > 0) { showOverlay(kind); }
       render();
     });
+    row.head.title = 'Edit ' + LAYER_LABELS[kind].toLowerCase() + ': the brush paints this file';
+    row.head.addEventListener('click', function () { setEditLayer(kind); });
     layerRows.set(kind, row);
     fixedLayersBox.append(row.node);
   }
   syncLayerRows();
 }
 
-/** A layer the stack does not have is greyed with its slider at 0; a failed load puts it back there. */
-function syncLayerRow(kind: Overlay): void {
+/** A layer the stack does not have is greyed with its slider at 0; the one being edited is lit. */
+function syncLayerRow(kind: FixedLayer): void {
   const row = layerRows.get(kind);
   if (!row) { return; }
-  const missing = state.overlayUri[kind] === null;
+  const missing = kind !== 'provinces' && state.overlayUri[kind] === null;
   row.node.classList.toggle('off', missing);
+  row.node.classList.toggle('editing', state.editLayer === kind);
   row.node.title = missing ? 'The picked mods have no map/' + kind + '.bmp' : '';
   row.slider.value = String(state.layerOpacity[kind]);
   for (const input of row.node.querySelectorAll('input')) { input.disabled = missing; }
 }
 
 export function syncLayerRows(): void {
-  for (const kind of OVERLAYS) { syncLayerRow(kind); }
+  for (const kind of FIXED_LAYERS) { syncLayerRow(kind); }
 }
 
 export function applyThumbnails(pictures: Record<FixedLayer, string | undefined>): void {
@@ -99,7 +103,7 @@ export function loadProvinces(bmpUri: string): void {
         fitView();
         render();
         if (state.tintMode) { buildTintedTiles(state.tintMode); }
-        for (const kind of OVERLAYS) { if (state.layerOpacity[kind] > 0) { loadOverlay(kind); } }
+        for (const kind of OVERLAYS) { if (state.layerOpacity[kind] > 0 || state.editLayer === kind) { showOverlay(kind); } }
         placeReferences();
         setStatus(String(decoded.width) + ' x ' + String(decoded.height) + ', ' + String(definitionById.size) + ' provinces');
         // The integration test reads this line: the map is up and the overlay is gone.
@@ -112,72 +116,120 @@ export function loadProvinces(bmpUri: string): void {
     });
 }
 
-export function ensureTerrain(): Promise<TerrainPixels> {
-  if (terrainLoad) { return terrainLoad; }
-  const uri = state.overlayUri.terrain;
-  if (!uri) { return Promise.reject(new Error('The picked mods have no map/terrain.bmp.')); }
-  showLoading('Loading terrain.bmp…');
-  const load: Promise<TerrainPixels> = fetchBitmap(uri, 'terrain.bmp')
-    .then(decodeTerrainBmp)
-    .then(function (terrain) {
+/**
+ * An overlay as pixels, fetched and decoded once per map. The indices are what
+ * the brush and the locks read; the tiles are built from them separately, so a
+ * layer nobody looks at costs a byte a pixel and no canvas.
+ */
+export function ensureIndexed(kind: Overlay): Promise<IndexedImage> {
+  const held = indexedLoad[kind];
+  if (held) { return held; }
+  const name = kind + '.bmp';
+  const uri = state.overlayUri[kind];
+  if (!uri) { return Promise.reject(new Error('The picked mods have no map/' + name + '.')); }
+  showLoading('Loading ' + name + '…');
+  const load: Promise<IndexedImage> = fetchBitmap(uri, name)
+    .then(function (buffer) { return decodeIndexedBmp(buffer, name); })
+    .then(function (pixels) {
       hideLoading();
-      if (terrainLoad === load) { state.terrain = terrain; }
-      return terrain;
+      const image: IndexedImage = {
+        width: pixels.width, height: pixels.height, packed: pixels.indices, palette: pixels.palette, tiles: null, shown: null,
+      };
+      if (indexedLoad[kind] === load) { state.indexed[kind] = image; }
+      return image;
     }, function (error: unknown) {
       hideLoading();
-      if (terrainLoad === load) { terrainFailure = messageOf(error); }
+      if (indexedLoad[kind] === load) { indexedFailure[kind] = messageOf(error); }
       throw error instanceof Error ? error : new Error(messageOf(error));
     });
-  terrainLoad = load;
+  indexedLoad[kind] = load;
   return load;
 }
 
-/** Why the Terrain Lock has nothing to check against; only asked while `state.terrain` is null. */
-export function terrainAbsence(): string {
-  if (!state.overlayUri.terrain) { return 'the picked mods have no map/terrain.bmp'; }
-  if (terrainFailure) { return 'terrain.bmp could not be read (' + terrainFailure + ')'; }
-  return terrainLoad ? 'terrain.bmp is still loading' : 'terrain.bmp is not loaded yet';
-}
-
-function overlayPixels(kind: Overlay, uri: string): Promise<OverlayPixels> {
-  if (kind === 'terrain') {
-    return ensureTerrain().then(function (terrain) {
-      return { width: terrain.width, height: terrain.height, rgba: terrainRgba(terrain) };
-    });
-  }
-  showLoading('Loading rivers.bmp…');
-  return fetchBitmap(uri, 'rivers.bmp').then(decodeRiversBmp);
-}
-
-/** Fetch and decode an overlay once; it is kept until the map is reloaded. */
-function loadOverlay(kind: Overlay): void {
-  const uri = state.overlayUri[kind];
-  if (state.overlayLoading[kind] || state.overlayTiles[kind] || !uri || !state.image) { return; }
-  state.overlayLoading[kind] = true;
-  const forImage = state.image;
+/** Why a layer the brush wanted to read is not there; only asked while the page holds none of it. */
+export function layerAbsence(kind: Overlay): string {
   const name = kind + '.bmp';
-  overlayPixels(kind, uri)
-    .then(function (decoded) {
-      const image = state.image;
-      if (image && (decoded.width !== image.width || decoded.height !== image.height)) {
-        setStatus(name + ' is ' + String(decoded.width) + ' x ' + String(decoded.height) + ', the map ' + String(image.width) + ' x ' + String(image.height), 'error');
-      }
-      return buildTiles(decoded.rgba, decoded.width, decoded.height, 'Drawing ' + kind);
-    })
+  if (!state.overlayUri[kind]) { return 'the picked mods have no map/' + name; }
+  const failure = indexedFailure[kind];
+  if (failure) { return name + ' could not be read (' + failure + ')'; }
+  return indexedLoad[kind] ? name + ' is still loading' : name + ' is not loaded yet';
+}
+
+/** rivers.bmp is a blue mask over nothing until it is the layer being edited, and then it is its own colours. */
+function lookOf(kind: Overlay): OverlayLook {
+  return kind === 'rivers' && state.editLayer !== 'rivers' ? 'mask' : 'palette';
+}
+
+/** Fetch an overlay and draw it; a layer at zero that is not being edited is never fetched. */
+export function showOverlay(kind: Overlay): void {
+  if (!state.overlayUri[kind] || !state.image) { return; }
+  ensureIndexed(kind)
+    .then(function (image) { warnSize(kind, image); buildOverlayTiles(kind); })
+    .catch(function (error: unknown) {
+      state.layerOpacity[kind] = 0;
+      if (state.editLayer === kind) { state.editLayer = 'provinces'; }
+      syncLayerRows();
+      setStatus('Could not show ' + kind + '.bmp: ' + messageOf(error), 'error');
+    });
+}
+
+function warnSize(kind: Overlay, image: IndexedImage): void {
+  const map = state.image;
+  if (map && (image.width !== map.width || image.height !== map.height)) {
+    setStatus(kind + '.bmp is ' + String(image.width) + ' x ' + String(image.height)
+      + ', the map ' + String(map.width) + ' x ' + String(map.height), 'error');
+  }
+}
+
+/** The canvases a layer is drawn from, built when it is first shown and again when rivers changes its looks. */
+export function buildOverlayTiles(kind: Overlay): void {
+  const image = state.indexed[kind];
+  const forImage = state.image;
+  const look = lookOf(kind);
+  const wanted = state.layerOpacity[kind] > 0 || state.editLayer === kind;
+  if (!image || !forImage || !wanted || state.overlayLoading[kind] || (image.tiles !== null && image.shown === look)) { return; }
+  state.overlayLoading[kind] = true;
+  const rgba = look === 'mask' ? riverMaskRgba(image.packed) : paletteRgba(image.packed, image.palette);
+  buildTiles(rgba, image.width, image.height, 'Drawing ' + kind)
     .then(function (tiles) {
       state.overlayLoading[kind] = false;
-      if (state.image !== forImage) { return; }
-      state.overlayTiles[kind] = tiles;
+      if (state.image !== forImage || state.indexed[kind] !== image) { return; }
+      image.tiles = tiles;
+      image.shown = look;
       hideLoading();
       render();
     })
     .catch(function (error: unknown) {
       state.overlayLoading[kind] = false;
       hideLoading();
-      state.layerOpacity[kind] = 0;
-      syncLayerRow(kind);
-      setStatus('Could not show ' + name + ': ' + messageOf(error), 'error');
+      setStatus('Could not draw ' + kind + '.bmp: ' + messageOf(error), 'error');
     });
+}
+
+/**
+ * Which bitmap the tools paint. The one being edited is drawn over the rest in
+ * its own colours, whatever its slider says, so what the brush lands on is
+ * what the file holds.
+ */
+export function setEditLayer(kind: FixedLayer): void {
+  if (state.editLayer === kind) { return; }
+  if (kind !== 'provinces' && state.overlayUri[kind] === null) {
+    setStatus('The picked mods have no map/' + kind + '.bmp.', 'warning');
+    return;
+  }
+  if (kind !== 'provinces' && state.paintMode === 'sea') {
+    setStatus('Sea Province Mode paints the province map alone; pick another mode to edit ' + kind + '.bmp.', 'warning');
+    return;
+  }
+  const was = state.editLayer;
+  state.editLayer = kind;
+  for (const overlay of OVERLAYS) {
+    if (overlay === kind) { showOverlay(overlay); } else if (overlay === was) { buildOverlayTiles(overlay); }
+  }
+  syncLayerRows();
+  refreshColorControl();
+  render();
+  setStatus('Painting map/' + kind + '.bmp');
 }
 
 /** The colour a province is repainted towards, or undefined for grey: its owner's, or its first state's. */
@@ -260,13 +312,18 @@ function setTintMode(mode: TintMode | null): void {
   render();
 }
 
-/** A new map: the overlays and the repaints start over. */
+/** A new map: the overlays and the repaints start over, and the province map is what is painted again. */
 export function resetLayers(riversUri: string | undefined, terrainUri: string | undefined): void {
   state.countryColors = null; state.stateOf = null;
   for (const mode of TINT_MODES) { state.tinted[mode] = null; }
   state.overlayUri.rivers = riversUri ?? null; state.overlayUri.terrain = terrainUri ?? null;
-  for (const kind of OVERLAYS) { state.overlayTiles[kind] = null; state.overlayLoading[kind] = false; }
-  state.terrain = null; terrainLoad = null; terrainFailure = null;
+  for (const kind of OVERLAYS) {
+    state.indexed[kind] = null;
+    state.overlayLoading[kind] = false;
+    indexedLoad[kind] = null;
+    indexedFailure[kind] = null;
+  }
+  state.editLayer = 'provinces';
   syncLayerRows();
 }
 

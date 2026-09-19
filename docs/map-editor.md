@@ -97,7 +97,8 @@ square thumbnail (the whole map squeezed into it, the way an icon is), its name 
 **opacity slider** under the name (the number is on the slider's tooltip), and under them the
 reference pictures dropped in.
 
-- **Provinces** (`provinces.bmp`) is what is painted and what the clicks read. It is drawn first, at 100%.
+- **Provinces** (`provinces.bmp`) is what the clicks read, and what is painted until another layer is
+  picked. It is drawn first, at 100%.
 - **Rivers** (`rivers.bmp`) goes over it, at 20%: every palette index below 254 (source, merge point and the
   river widths) is a blue pixel and everything else is clear — only the rivers, never the land and
   sea the file itself paints. Its thumbnail, though, is the file as an image editor shows it, through
@@ -106,9 +107,18 @@ reference pictures dropped in.
 - **Terrain** (`terrain.bmp`) goes over both, at 0%: shown through its own palette, the colours an image editor
   gives it.
 
-A layer at 0% is not even fetched; the first time its slider leaves 0 it is read from wherever the
-stack resolves it (a mod without its own `rivers.bmp` shows the vanilla rivers), decoded once and
-kept until **Reload**. A layer's thumbnail is the icon shipped with the extension as
+**Clicking a layer's name picks it to edit**, and its row lights up. The tools then paint that file:
+the province map with a colour, the other two with a palette index. The layer being edited is drawn
+over everything else, opaque and in its own palette whatever its slider says — for `rivers.bmp` that
+means the magenta sea and the white land come back, so the brush lands on what the file holds rather
+than on a hint of it. Picking `provinces` again puts the rivers back to the blue mask. A layer the
+picked mods do not have cannot be picked, and neither can one while **Sea Province** is the mode.
+
+A layer at 0% that is not being edited is not even fetched; the first time its slider leaves 0, or a
+mode needs to read it, it is read from wherever the stack resolves it (a mod without its own
+`rivers.bmp` shows the vanilla rivers), decoded once and kept until **Reload**. Its canvases are
+built only when something draws it, so a file the Terrain Lock reads and nobody looks at costs a
+byte a pixel and no canvas. A layer's thumbnail is the icon shipped with the extension as
 `assets/<layer>.png` when there is one; a layer without an icon gets its bitmap sampled small on the
 server rather than decoded whole (`services/mapThumbnails.ts`), after the map is up so it never
 holds it back.
@@ -197,9 +207,10 @@ Layers box ([Reference pictures](#reference-pictures)). The other three paint wi
   still draws a line, not a dotted one. Clicking the pencil **while it is the tool** turns it into the
   **eraser** (the button keeps its place and shows the eraser glyph; clicking again gives the pencil
   back). The eraser rubs out only the draft: a pixel it passes over goes back to the colour
-  `provinces.bmp` has for it, and a pixel that was never painted is not touched, so the file's own
-  map cannot be erased. It uses the brush width, is one undo step per drag like the pencil, and the
-  Terrain Lock has nothing to say to it.
+  the file of the layer being edited has for it, and a pixel that was never painted is not touched, so its own
+  map cannot be erased. It uses the brush width, is one undo step per drag like the pencil, and no
+  mode has anything to say to it — under Multi Draw it takes back what the stroke wrote in the other
+  files too.
 - **Draw and paint** grows a province in one gesture: draw a line that leaves a province of the
   chosen colour and comes back into it somewhere else, and everything the line shut in is filled.
   The line and the pixels already holding the colour are one wall; whatever the edge of the map can
@@ -209,21 +220,59 @@ Layers box ([Reference pictures](#reference-pictures)). The other three paint wi
 - the **bucket** gives everything that touches the pixel clicked and shares its colour — four
   neighbours at a time, so a region that only meets another through a corner stays where it is.
 
-The colour swatch is a colour picker: any colour can be painted, including one no province has yet.
-Beside it are its red, green and blue as `definition.csv` writes them, and its hex is on the swatch's
-own tooltip. **Generate Color**, under the row, takes a colour at random that **nothing on the map is
-using** — no `definition.csv` row, no lake row, and no pixel of `provinces.bmp`, because a colour no
-row names is still a blob on the map and painting with it would silently merge the two. The bitmap is
-walked once, on the first Generate; after that the only colour that can reach the map is the brush's,
-and that one is remembered as it is set.
+What the brush holds changes with the layer being edited. For **provinces** it is a colour picker:
+any colour can be painted, including one no province has yet. Beside it are its red, green and blue
+as `definition.csv` writes them, and its hex is on the swatch's own tooltip. **Generate Color**,
+under the row, takes a colour at random that **nothing on the map is using** — no `definition.csv`
+row, no lake row, and no pixel of `provinces.bmp`, because a colour no row names is still a blob on
+the map and painting with it would silently merge the two. The bitmap is walked once, on the first
+Generate; after that the only colour that can reach the map is the brush's, and that one is
+remembered as it is set.
 
-**Terrain Lock**, above Generate Color and on by default, keeps the brush on land: the pencil, Draw
-and paint and the bucket leave alone every pixel that `map/terrain.bmp` has as water, and the status
-bar counts what a stroke held back. Water is whatever `map/terrain.txt` says it is — the palette
-indices typed as a category with `is_water = yes` (`ocean`, index 254, in the game and in TGC) — so
-a mod's own terrain scheme is honoured. Choosing a painting tool fetches `terrain.bmp` if the Terrain
-layer has not already; until it is in, or when the mods have none, it cannot be read or it is not the
-map's size, the lock paints nothing and says why, and unticking it paints regardless.
+For **rivers** and **terrain** the same control stands in the same place — the colour square, and
+what it is called beside it — and only the click differs: instead of the colours of the operating
+system it opens the file's own palette, and only the indices that mean something. Those are the
+terrain types `map/terrain.txt` names (`5 - plains`, and so on) plus `254 - ocean`, or the river
+source, merge, widths, wide river, sea and land. Each row carries the colour the file's palette
+gives it, the arrow keys step through them, and the eye drop takes the index under the cursor.
+**Generate Color** greys out there: only the province map takes a colour of its own.
+
+### The modes
+
+Under the colour is one button, and each click is the next mode: **Terrain Lock**, **Sea Province**,
+**Multi Draw**, **Free Paint**, and round again. The button carries the mode it is in, and its
+tooltip both spells out the rule and names what the next click gives. Each mode says what the brush
+may do where the three files disagree about land and sea; Free Paint asks them nothing and simply
+paints the layer that was picked, which is what the old unticked Terrain Lock did.
+
+- **Terrain Lock** paints only where the *other two* files have land, and the status bar counts what
+  a stroke held back. Editing `provinces.bmp` that means terrain that is not water and rivers that
+  is not the sea index; editing `terrain.bmp`, a province that is not a sea one and rivers that is
+  not sea; editing `rivers.bmp`, neither a sea province nor ocean terrain. A river line is land, so
+  painting over one is allowed.
+- **Sea Province** is the same rule the other way round, and only for `provinces.bmp`: it paints
+  where every other file has water, which is how a sea province is drawn without touching
+  `terrain.bmp` or `rivers.bmp`. Picking it puts the editing back on the province map.
+- **Multi Draw** lets the stroke land whole and brings the other files with it, so the three always
+  agree. Paint a land province and `rivers.bmp` turns magenta into white where it was sea, while
+  `terrain.bmp` turns water into plains; paint a sea province and both go the other way, the river
+  lines under it included. Paint land in one of the other two files and the province map takes a
+  colour **held for a new land province**, sea and it takes the one held for a new sea one — the
+  same two colours all session, so stroke after stroke builds one province rather than a new one
+  each time. Clicking either opens the panel of a province that does not exist yet, with **Sea
+  province** already ticked for the second one, and the Save that creates it frees the colour.
+
+Water is whatever `map/terrain.txt` says it is — the palette indices typed as a category with
+`is_water = yes` (`ocean`, index 254, in the game and in TGC) — so a mod's own terrain scheme is
+honoured, and so is its own plains. Choosing a painting tool fetches the files the modes read;
+until they are in, or when one cannot be read or is not the map's size, the brush paints nothing and
+says why, and Free Paint paints regardless. The eraser answers to none of them: it only
+takes back the draft, and under Multi Draw it takes back what the stroke wrote in the other files
+too. An undo is one step across every file a stroke touched.
+
+**Save** writes one file at a time, each with the same rules every other save follows: a bitmap the
+stack resolved to a layer below the target is patched and written into the target as its own copy.
+**Reset** puts all three back the way their files have them.
 
 Both boxes are **three tool icons wide** and no wider, padding included: they sit over the map, which
 is what is being looked at. Everything in them is sized to that one width — the type is a notch

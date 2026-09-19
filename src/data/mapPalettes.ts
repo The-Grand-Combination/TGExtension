@@ -154,6 +154,24 @@ export const RIVER_MERGE = 1;
 export const RIVER_SEA = 254;
 export const RIVER_LAND = 255;
 
+/** The widest river TGC paints; the palette fills 16-253 with one filler colour, and the game draws them all. */
+export const RIVER_WIDE = 16;
+
+/**
+ * The rivers.bmp indices worth painting with, as the Map Editor offers them.
+ * Every other index below the sea is a river the game draws just the same, but
+ * nothing names it, so the list stops at what a mapper reaches for.
+ */
+export const RIVER_INDEX_NAMES: readonly { readonly index: number; readonly name: string }[] = [
+  { index: RIVER_SOURCE, name: 'source' },
+  { index: RIVER_MERGE, name: 'merge' },
+  ...Array.from({ length: 10 }, (_, step) => ({ index: step + 2, name: `width ${String(step + 2)}` })),
+  ...Array.from({ length: 4 }, (_, step) => ({ index: step + 12, name: `width ${String(step + 12)}` })),
+  { index: RIVER_WIDE, name: 'wide river' },
+  { index: RIVER_SEA, name: 'sea' },
+  { index: RIVER_LAND, name: 'land' },
+];
+
 /** terrain.bmp pixel meanings (NCE palette_definition::finish, load_terrain_data). */
 export const TERRAIN_INDEX_LIMIT = 64;
 export const TERRAIN_OCEAN = 254;

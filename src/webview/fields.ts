@@ -151,13 +151,85 @@ interface ComboEntry {
   readonly id: string;
   readonly label: string;
   readonly name?: string;
+  readonly swatch?: string;
   readonly empty?: boolean;
+}
+
+/** The colour square a palette row carries; the page has no inline styles, so it is set on the node. */
+function swatchOf(color: string): HTMLElement {
+  const box = h('span', { class: 'swatch' });
+  box.style.background = color;
+  return box;
 }
 
 /** A row of the pick list: `identifier` plain, and the localised name after it set apart. */
 function comboItemContent(entry: ComboEntry): (string | HTMLElement)[] {
-  if (entry.name === undefined || entry.name === '') { return [entry.label]; }
-  return [entry.id, h('span', { class: 'combo-name' }, ' - ' + entry.name)];
+  const swatch = entry.swatch === undefined ? [] : [swatchOf(entry.swatch)];
+  if (entry.name === undefined || entry.name === '') { return [...swatch, entry.label]; }
+  return [...swatch, entry.id, h('span', { class: 'combo-name' }, ' - ' + entry.name)];
+}
+
+/**
+ * A palette index, picked the way a colour is: the same square and the same
+ * value beside it as the province map's own picker, so the row never moves —
+ * what changes is that clicking opens the list of what this file's palette
+ * means rather than the colours of the operating system.
+ */
+export function paletteInput(value: string | undefined, entries: readonly NamedIdentifier[]): Field {
+  const box = h('button', { class: 'swatch-box', type: 'button' });
+  const text = h('span', { class: 'value' });
+  const list = h('div', { class: 'combo-list up', hidden: true });
+  const wrapper = h('div', { class: 'tint palette field' }, box, text, list);
+  let selected = value ?? '';
+  function entryOf(id: string): NamedIdentifier | undefined {
+    return entries.find(function (entry) { return entry.id === id; });
+  }
+  function show(): void {
+    const entry = entryOf(selected);
+    box.style.background = entry?.swatch ?? 'transparent';
+    text.textContent = entry ? entry.label : selected;
+    box.title = 'Painting with ' + (entry ? entry.label : selected);
+  }
+  function close(): void { list.hidden = true; }
+  function pick(id: string): void {
+    selected = id;
+    show();
+    close();
+    wrapper.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  function open(): void {
+    list.replaceChildren(...entries.map(function (entry) {
+      return h('div', {
+        class: 'combo-item' + (entry.id === selected ? ' active' : ''),
+        onmousedown: function (event: Event) { event.preventDefault(); pick(entry.id); },
+      }, swatchOf(entry.swatch ?? 'transparent'), entry.label);
+    }));
+    list.hidden = false;
+    list.querySelector('.active')?.scrollIntoView({ block: 'nearest' });
+  }
+  function step(by: number): void {
+    const at = entries.findIndex(function (entry) { return entry.id === selected; });
+    const next = entries[Math.min(entries.length - 1, Math.max(0, at + by))];
+    if (next) { pick(next.id); }
+    if (!list.hidden) { open(); }
+  }
+  box.addEventListener('click', function () { if (list.hidden) { open(); } else { close(); } });
+  box.addEventListener('blur', close);
+  box.addEventListener('keydown', function (event: KeyboardEvent) {
+    if (event.key === 'Escape') { close(); return; }
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') { return; }
+    event.preventDefault();
+    step(event.key === 'ArrowDown' ? 1 : -1);
+  });
+  text.addEventListener('click', function () { box.focus(); if (list.hidden) { open(); } });
+  show();
+  return register({
+    node: wrapper,
+    input: null,
+    get value(): string { return selected; },
+    set value(next: string) { selected = next; show(); },
+    focus: function (): void { box.focus(); },
+  });
 }
 
 const COMBO_LIMIT = 80;

@@ -1,8 +1,7 @@
 /**
- * Painting provinces on `provinces.bmp`: the pixels a brush or a fill covers,
- * and how they go back into the file's bytes. The Map Editor page and the
- * server both read this, so a pixel the page painted lands on the byte the
- * server writes.
+ * Painting the map bitmaps: the pixels a brush or a fill covers, and how they
+ * go back into a file's bytes. The Map Editor page and the server both read
+ * this, so a pixel the page painted lands on the byte the server writes.
  *
  * Painted pixels travel as **runs** — `index, length, colour` triples — never
  * one entry per pixel: a bucket over a large region covers millions of pixels
@@ -15,6 +14,14 @@ import type { BmpImage } from './bmpDecoder.js';
 import { decodeRowOffset } from './mapBitmaps.js';
 
 export { decodeRowOffset };
+
+/**
+ * The pixels of one map bitmap. `provinces.bmp` holds a packed colour per
+ * pixel, the two 8-bit bitmaps a palette index; every run function reads only
+ * the value, so both travel through the same code and an index map costs a
+ * byte a pixel rather than four.
+ */
+export type PixelArray = Uint32Array | Uint8Array;
 
 export interface Point {
   readonly x: number;
@@ -52,7 +59,7 @@ function stamp(pixels: Set<number>, centerX: number, centerY: number, size: numb
  * province.
  */
 export function floodRuns(
-  packed: Uint32Array,
+  packed: PixelArray,
   width: number,
   height: number,
   start: number,
@@ -82,13 +89,13 @@ export function floodRuns(
   return runs;
 }
 
-function reachLeft(packed: Uint32Array, seen: Uint8Array, target: number, from: number, rowStart: number): number {
+function reachLeft(packed: PixelArray, seen: Uint8Array, target: number, from: number, rowStart: number): number {
   let left = from;
   while (left > rowStart && seen[left - 1] === 0 && packed[left - 1] === target) { left--; }
   return left;
 }
 
-function reachRight(packed: Uint32Array, seen: Uint8Array, target: number, from: number, rowEnd: number): number {
+function reachRight(packed: PixelArray, seen: Uint8Array, target: number, from: number, rowEnd: number): number {
   let right = from;
   while (right < rowEnd && seen[right + 1] === 0 && packed[right + 1] === target) { right++; }
   return right;
@@ -98,7 +105,7 @@ function reachRight(packed: Uint32Array, seen: Uint8Array, target: number, from:
 function pushTargetRuns(
   stack: number[],
   seen: Uint8Array,
-  packed: Uint32Array,
+  packed: PixelArray,
   target: number,
   from: number,
   to: number,
@@ -123,7 +130,7 @@ const TAKEN = 3;
  * elsewhere on the map is left alone.
  */
 export function enclosedRuns(
-  packed: Uint32Array,
+  packed: PixelArray,
   width: number,
   height: number,
   line: readonly number[],
@@ -225,7 +232,7 @@ export function runsOfIndices(indices: readonly number[], color: number, width: 
  * Where two pictures of the map differ, carrying the first one's colours: what
  * the page has painted over the file, or the file's own colours back again.
  */
-export function changedRuns(from: Uint32Array, against: Uint32Array, width: number): number[] {
+export function changedRuns(from: PixelArray, against: PixelArray, width: number): number[] {
   const runs: number[] = [];
   const count = Math.min(from.length, against.length);
   for (let index = 0; index < count; index++) {
@@ -246,38 +253,75 @@ export type PaintOutcome =
   | { readonly ok: true; readonly pixels: number }
   | { readonly ok: false; readonly reason: string };
 
-/** Write the runs into the bitmap's own bytes; the caller saves them as they are. */
-export function applyRuns(image: BmpImage, runs: readonly number[]): PaintOutcome {
-  if (image.bitsPerPixel === 8) {
-    return { ok: false, reason: 'provinces.bmp is 8-bit; the map editor paints 24-bit and 32-bit maps' };
-  }
+/**
+ * Every pixel of every run, as the byte offset of its row and its place in it.
+ * The runs are checked whole and inside the map before a byte is written, so a
+ * bitmap is never left half painted by a bad message.
+ */
+function writeRunPixels(
+  image: BmpImage,
+  runs: readonly number[],
+  write: (rowStart: number, x: number, value: number) => void,
+): PaintOutcome {
   if (runs.length % 3 !== 0) {
     return { ok: false, reason: 'painted pixels arrived incomplete' };
   }
-  const { width, height, bytes } = image;
-  const bytesPerPixel = image.bitsPerPixel / 8;
+  const { width, height } = image;
+  for (let at = 0; at < runs.length; at += 3) {
+    const start = runs[at] ?? 0;
+    const length = runs[at + 1] ?? 0;
+    if (start < 0 || length < 1 || start + length > width * height) {
+      return { ok: false, reason: 'painted pixels fall outside the map' };
+    }
+  }
   let count = 0;
   let row = -1;
   let rowStart = 0;
   for (let at = 0; at < runs.length; at += 3) {
     const start = runs[at] ?? 0;
-    const length = runs[at + 1] ?? 0;
-    const color = runs[at + 2] ?? 0;
-    if (start < 0 || length < 1 || start + length > width * height) {
-      return { ok: false, reason: 'painted pixels fall outside the map' };
-    }
-    for (let index = start; index < start + length; index++) {
+    const end = start + (runs[at + 1] ?? 0);
+    const value = runs[at + 2] ?? 0;
+    for (let index = start; index < end; index++) {
       const x = index % width;
       const y = (index - x) / width;
       if (y !== row) { row = y; rowStart = decodeRowOffset(image, y); }
-      const offset = rowStart + x * bytesPerPixel;
-      bytes[offset] = color & 0xff;
-      bytes[offset + 1] = (color >> 8) & 0xff;
-      bytes[offset + 2] = (color >> 16) & 0xff;
+      write(rowStart, x, value);
       count++;
     }
   }
   return { ok: true, pixels: count };
+}
+
+/** Write the runs into a colour bitmap's own bytes; the caller saves them as they are. */
+export function applyRuns(image: BmpImage, runs: readonly number[]): PaintOutcome {
+  if (image.bitsPerPixel !== 24 && image.bitsPerPixel !== 32) {
+    return { ok: false, reason: `is ${String(image.bitsPerPixel)}-bit; the map editor paints 24-bit and 32-bit colour maps` };
+  }
+  const { bytes } = image;
+  const bytesPerPixel = image.bitsPerPixel / 8;
+  return writeRunPixels(image, runs, function (rowStart, x, color) {
+    const offset = rowStart + x * bytesPerPixel;
+    bytes[offset] = color & 0xff;
+    bytes[offset + 1] = (color >> 8) & 0xff;
+    bytes[offset + 2] = (color >> 16) & 0xff;
+  });
+}
+
+/** Write the runs into an 8-bit bitmap's own bytes: `rivers.bmp` and `terrain.bmp` are palette indices, a byte a pixel. */
+export function applyIndexRuns(image: BmpImage, runs: readonly number[]): PaintOutcome {
+  if (image.bitsPerPixel !== 8) {
+    return { ok: false, reason: `is ${String(image.bitsPerPixel)}-bit; the game reads an 8-bit one` };
+  }
+  for (let at = 2; at < runs.length; at += 3) {
+    const value = runs[at] ?? 0;
+    if (!Number.isInteger(value) || value < 0 || value > 255) {
+      return { ok: false, reason: 'a painted palette index falls outside 0-255' };
+    }
+  }
+  const { bytes } = image;
+  return writeRunPixels(image, runs, function (rowStart, x, index) {
+    bytes[rowStart + x] = index;
+  });
 }
 
 /** Packed colours are 24 bits: `red << 16 | green << 8 | blue`. */

@@ -1,7 +1,7 @@
 import { canvas, ctx, mapArea } from './dom.js';
 import { drawMarkers } from './positions.js';
 import { drawReferences } from './references.js';
-import { definitionById, idByColor, OVERLAYS, state, type DecodedImage, type Highlight, type Point, type Tile } from './state.js';
+import { definitionById, idByColor, OVERLAYS, state, type DecodedImage, type Highlight, type PixelLayer, type Point, type Tile } from './state.js';
 
 /** The map on the canvas: pan, zoom, the layers in order, and the selected province's glow. */
 
@@ -37,13 +37,7 @@ export function render(): void {
   ctx.globalAlpha = state.layerOpacity.provinces / 100;
   const tinted = state.tintMode === null ? null : state.tinted[state.tintMode];
   drawTiles(tinted ? tinted.tiles : image.tiles, left, top, right, bottom);
-  for (const kind of OVERLAYS) {
-    const tiles = state.overlayTiles[kind];
-    if (!tiles || state.layerOpacity[kind] <= 0) { continue; }
-    ctx.globalAlpha = state.layerOpacity[kind] / 100;
-    ctx.imageSmoothingEnabled = false;
-    drawTiles(tiles, left, top, right, bottom);
-  }
+  drawOverlays(left, top, right, bottom);
   ctx.globalAlpha = 1;
   drawReferences();
   if (state.selection) {
@@ -51,6 +45,26 @@ export function render(): void {
     ctx.drawImage(state.selection.canvas, state.selection.x, state.selection.y);
   }
   drawMarkers(left, top, right, bottom);
+}
+
+/**
+ * The two overlays over the province map, each at its own opacity — except the
+ * one being edited, which goes on top of them all, opaque and in the colours
+ * its own file has: the brush lands on what the file holds, not on a hint of it.
+ */
+function drawOverlays(left: number, top: number, right: number, bottom: number): void {
+  ctx.imageSmoothingEnabled = false;
+  for (const kind of OVERLAYS) {
+    const tiles = state.indexed[kind]?.tiles;
+    if (!tiles || kind === state.editLayer || state.layerOpacity[kind] <= 0) { continue; }
+    ctx.globalAlpha = state.layerOpacity[kind] / 100;
+    drawTiles(tiles, left, top, right, bottom);
+  }
+  const edited = state.editLayer === 'provinces' ? null : state.indexed[state.editLayer]?.tiles;
+  if (edited) {
+    ctx.globalAlpha = 1;
+    drawTiles(edited, left, top, right, bottom);
+  }
 }
 
 /** Only the tiles the view actually covers. */
@@ -77,7 +91,7 @@ export function toImageExact(clientX: number, clientY: number): Point {
   return { x: (clientX - rect.left - state.view.x) / state.view.scale, y: (clientY - rect.top - state.view.y) / state.view.scale };
 }
 
-export function insideImage(image: DecodedImage, point: Point): boolean {
+export function insideImage(image: PixelLayer, point: Point): boolean {
   return point.x >= 0 && point.y >= 0 && point.x < image.width && point.y < image.height;
 }
 

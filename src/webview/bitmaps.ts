@@ -52,12 +52,6 @@ export function decodeProvincesBmp(buffer: ArrayBuffer): DecodedPixels {
   return { width: width, height: height, rgba: rgba, packed: packed };
 }
 
-export interface OverlayPixels {
-  readonly width: number;
-  readonly height: number;
-  readonly rgba: Uint8ClampedArray<ArrayBuffer>;
-}
-
 function readOverlay(buffer: ArrayBuffer, name: string): BmpImage {
   const image = readBitmap(buffer, name);
   if (image.bitsPerPixel !== 8) {
@@ -66,34 +60,20 @@ function readOverlay(buffer: ArrayBuffer, name: string): BmpImage {
   return image;
 }
 
-/** rivers.bmp as a transparent overlay: every palette index below 254 (source, merge, widths) becomes a blue pixel. */
-export function decodeRiversBmp(buffer: ArrayBuffer): OverlayPixels {
-  const image = readOverlay(buffer, 'rivers.bmp');
-  const { width, height, bytes } = image;
-  const rgba = new Uint8ClampedArray(new ArrayBuffer(width * height * 4));
-  for (let y = 0; y < height; y++) {
-    let source = decodeRowOffset(image, y);
-    let out = y * width * 4;
-    for (let x = 0; x < width; x++, source++, out += 4) {
-      if (isRiverIndex(bytes[source] ?? RIVER_SEA_INDEX)) {
-        rgba[out] = RIVER_COLOR[0]; rgba[out + 1] = RIVER_COLOR[1]; rgba[out + 2] = RIVER_COLOR[2]; rgba[out + 3] = 255;
-      }
-    }
-  }
-  return { width: width, height: height, rgba: rgba };
-}
-
-/** terrain.bmp as its palette indices, in the order the rows are drawn, with the palette that colours them. */
-export interface TerrainPixels {
+/** An 8-bit bitmap as its palette indices, in the order the rows are drawn, with the palette that colours them. */
+export interface IndexedPixels {
   readonly width: number;
   readonly height: number;
   readonly indices: Uint8Array;
   readonly palette: Uint8ClampedArray;
 }
 
-/** One decode serves the Terrain layer and the Terrain Lock: a byte per pixel is kept, the colours are made when the layer is shown. */
-export function decodeTerrainBmp(buffer: ArrayBuffer): TerrainPixels {
-  const image = readOverlay(buffer, 'terrain.bmp');
+/**
+ * One decode serves the layer, the brush and the Terrain Lock: a byte per
+ * pixel is kept, and the colours are made from it when the layer is shown.
+ */
+export function decodeIndexedBmp(buffer: ArrayBuffer, name: string): IndexedPixels {
+  const image = readOverlay(buffer, name);
   const { width, height, bytes } = image;
   const palette = new Uint8ClampedArray(256 * 3);
   for (let index = 0; index < image.paletteEntries && index < 256; index++) {
@@ -110,13 +90,23 @@ export function decodeTerrainBmp(buffer: ArrayBuffer): TerrainPixels {
   return { width: width, height: height, indices: indices, palette: palette };
 }
 
-/** The terrain in the colours its own palette gives each index: what an image editor shows for it. */
-export function terrainRgba(terrain: TerrainPixels): Uint8ClampedArray<ArrayBuffer> {
-  const { indices, palette } = terrain;
+/** The bitmap in the colours its own palette gives each index: what an image editor shows for it. */
+export function paletteRgba(indices: Uint8Array, palette: Uint8ClampedArray): Uint8ClampedArray<ArrayBuffer> {
   const rgba = new Uint8ClampedArray(new ArrayBuffer(indices.length * 4));
   for (let at = 0, out = 0; at < indices.length; at++, out += 4) {
     const index = (indices[at] ?? 0) * 3;
     rgba[out] = palette[index] ?? 0; rgba[out + 1] = palette[index + 1] ?? 0; rgba[out + 2] = palette[index + 2] ?? 0; rgba[out + 3] = 255;
+  }
+  return rgba;
+}
+
+/** rivers.bmp as a transparent overlay: every palette index below 254 (source, merge, widths) becomes a blue pixel. */
+export function riverMaskRgba(indices: Uint8Array): Uint8ClampedArray<ArrayBuffer> {
+  const rgba = new Uint8ClampedArray(new ArrayBuffer(indices.length * 4));
+  for (let at = 0, out = 0; at < indices.length; at++, out += 4) {
+    if (isRiverIndex(indices[at] ?? RIVER_SEA_INDEX)) {
+      rgba[out] = RIVER_COLOR[0]; rgba[out + 1] = RIVER_COLOR[1]; rgba[out + 2] = RIVER_COLOR[2]; rgba[out + 3] = 255;
+    }
   }
   return rgba;
 }

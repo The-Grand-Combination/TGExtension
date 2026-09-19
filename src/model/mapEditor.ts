@@ -38,6 +38,17 @@ export const VANILLA_MAX_PROVINCES = 3249;
 /** Folder names are case-insensitive on Windows, so the pattern is matched that way. */
 export const PROVINCE_FOLDER_FLAGS = 'i';
 
+/**
+ * The three map bitmaps, which the page both shows and paints: `provinces.bmp`
+ * holds a colour a pixel, `rivers.bmp` and `terrain.bmp` a palette index.
+ */
+export type PaintLayer = 'provinces' | 'rivers' | 'terrain';
+export const PAINT_LAYERS: readonly PaintLayer[] = ['provinces', 'rivers', 'terrain'];
+
+export function isPaintLayer(value: unknown): value is PaintLayer {
+  return value === 'provinces' || value === 'rivers' || value === 'terrain';
+}
+
 export interface MapEditorTargetParams {
   readonly workspaceFolders: readonly string[];
   /** `name`s of the picked mods, in any order; the top one in load order receives the edits. */
@@ -64,6 +75,10 @@ export interface MapEditorMap {
   readonly terrainBmpPath: string | undefined;
   /** The terrain.bmp palette indices `map/terrain.txt` types as water; the Terrain Lock paints over none of them. */
   readonly waterTerrainIndices: readonly number[];
+  /** terrain.bmp palette index (as a JSON key) -> the `map/terrain.txt` type it draws, for the Terrain layer's colour list. */
+  readonly terrainNames: Readonly<Record<string, string>>;
+  /** What Multi Draw gives land the terrain had as water; undefined when terrain.txt names no land type. */
+  readonly plainsTerrainIndex: number | undefined;
   readonly definitions: readonly ProvinceDefinition[];
   readonly seaProvinces: readonly number[];
   /** Start dates found under `history/pops`, earliest first. */
@@ -241,6 +256,8 @@ export interface NamedIdentifier {
   readonly label: string;
   /** The localised part of the label, when the label is `id - name`: the pick list shows it apart. */
   readonly name?: string;
+  /** A CSS colour the row shows as a square, for a list of palette indices. */
+  readonly swatch?: string;
 }
 
 /** Identifier lists the form offers: pick lists with localised labels, plain suggestions for the rest. */
@@ -422,7 +439,9 @@ export interface MapStateColors {
 export type MapStateColorsResult = MapStateColors | { readonly kind: 'unavailable'; readonly reason: string };
 
 export interface PaintParams extends MapEditorTargetParams {
-  /** Painted pixels as `index, length, colour` triples; see `provincePaint`. */
+  /** Which bitmap the runs belong to; their values are colours for `provinces`, palette indices otherwise. */
+  readonly layer: PaintLayer;
+  /** Painted pixels as `index, length, value` triples; see `provincePaint`. */
   readonly runs: readonly number[];
 }
 
@@ -434,7 +453,7 @@ export interface MapThumbnails {
 }
 
 export type PaintResult =
-  | { readonly ok: true; readonly path: string; readonly pixels: number }
+  | { readonly ok: true; readonly layer: PaintLayer; readonly path: string; readonly pixels: number }
   | { readonly ok: false; readonly reason: string };
 
 /**

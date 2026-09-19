@@ -1,11 +1,12 @@
 import { fitView, highlightOf, insideImage, provinceAt, render, toImage, toImageExact, zoomAt } from './canvas.js';
 import { canvas, mapArea, required, requiredInput, saveAllButton, setStatus, tooltip } from './dom.js';
 import { post } from './host.js';
-import { continueStroke, endStroke, hexOf, setTool, startPaint, stepBack, stepForward, strokeInProgress } from './paint.js';
+import { continueStroke, endStroke, setTool, startPaint, stepBack, stepForward, strokeInProgress } from './paint.js';
+import { hexOf, reservedKind, valueName } from './paintColor.js';
 import { renderSide, resetHeader, showHint } from './panel/panel.js';
 import { capturePending, handleLabel, markerAt, moveHandle, pendingCount, sendPending, type PositionHandle } from './positions.js';
 import { endReferenceDrag, gripCursor, hasActiveReference, moveReference, pressReference, referenceDragging, selectReference } from './references.js';
-import { definitionById, seaIds, state, type Highlight, type Point, type Tool } from './state.js';
+import { definitionById, layerImage, seaIds, state, type Highlight, type Point, type Tool } from './state.js';
 
 /** The mouse and the keyboard over the map, and what a click on it opens. */
 
@@ -135,8 +136,16 @@ function showTooltip(event: MouseEvent): void {
   const definition = definitionById.get(id);
   tooltip.textContent = handle
     ? handleLabel(handle) + ' · ' + String(id) + (handle === 'text_rotation' ? ' (drag to turn the name)' : ' (drag to move)')
-    : String(id) + (definition?.name ? ' · ' + definition.name : '') + (seaIds.has(id) ? ' (sea)' : '');
+    : String(id) + (definition?.name ? ' · ' + definition.name : '') + (seaIds.has(id) ? ' (sea)' : '') + editedNote(place);
   placeTooltip(event);
+}
+
+/** What the layer being edited holds under the cursor, when it is not the province map. */
+function editedNote(place: Point): string {
+  const kind = state.editLayer;
+  const image = kind === 'provinces' ? null : layerImage(kind);
+  const value = image === null ? undefined : image.packed[place.y * image.width + place.x];
+  return value === undefined ? '' : ' · ' + kind + ' ' + valueName(kind, value);
 }
 
 /** A colour of definition.csv is a province; anything else is paint waiting for a province. */
@@ -144,9 +153,7 @@ function showColorTooltip(event: MouseEvent, place: Point): void {
   const currentImage = state.image;
   const color = currentImage === null ? undefined : currentImage.packed[place.y * currentImage.width + place.x];
   if (color === undefined) { tooltip.hidden = true; return; }
-  tooltip.textContent = state.map?.lakeColors.includes(color) === true
-    ? hexOf(color) + ' (lake)'
-    : hexOf(color) + ' · click to make it a province';
+  tooltip.textContent = colorNote(color) + editedNote(place);
   placeTooltip(event);
 }
 
@@ -155,6 +162,17 @@ function placeTooltip(event: MouseEvent): void {
   const rect = mapArea.getBoundingClientRect();
   tooltip.style.left = String(event.clientX - rect.left + 12) + 'px';
   tooltip.style.top = String(event.clientY - rect.top + 12) + 'px';
+}
+
+/** What a colour no row of definition.csv names is: a lake, a colour Multi Draw is holding, or paint. */
+function colorNote(color: number): string {
+  const reserved = reservedKind(color);
+  if (reserved !== undefined) {
+    return hexOf(color) + ' · held for a new ' + reserved + ' province; click to make it one';
+  }
+  return state.map?.lakeColors.includes(color) === true
+    ? hexOf(color) + ' (lake)'
+    : hexOf(color) + ' · click to make it a province';
 }
 
 /**

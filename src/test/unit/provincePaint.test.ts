@@ -1,7 +1,7 @@
 import * as assert from 'node:assert';
 import { decodeBmp, type BmpImage } from '../../services/bmpDecoder.js';
-import { applyRuns, changedRuns, enclosedRuns, floodRuns, runsOfIndices, strokePixels, unusedColor } from '../../services/provincePaint.js';
-import { encodeBmp24, packRgb } from './bmpFixtures.js';
+import { applyIndexRuns, applyRuns, changedRuns, enclosedRuns, floodRuns, runsOfIndices, strokePixels, unusedColor } from '../../services/provincePaint.js';
+import { encodeBmp24, encodeBmp8, grayPalette, packRgb } from './bmpFixtures.js';
 
 const RED = packRgb(255, 0, 0);
 const BLUE = packRgb(0, 0, 255);
@@ -108,6 +108,50 @@ suite('provincePaint', () => {
     const bitmap = image(encodeBmp24(3, 2, [RED, RED, RED, BLUE, BLUE, BLUE]));
     assert.deepStrictEqual(applyRuns(bitmap, [5, 2, GREEN]), { ok: false, reason: 'painted pixels fall outside the map' });
     assert.strictEqual(bitmap.rgbAt(2, 0), RED);
+  });
+
+  test('refuses a colour map that is 8-bit', () => {
+    const bitmap = image(encodeBmp8(2, 1, [1, 2], grayPalette()));
+    const outcome = applyRuns(bitmap, [0, 1, GREEN]);
+    assert.strictEqual(outcome.ok, false);
+  });
+});
+
+suite('provincePaint - writing palette indices', () => {
+  /** rivers.bmp and terrain.bmp hold one index a pixel; the page paints those the same way it paints colours. */
+  function indexed(topDown = false): BmpImage {
+    return image(encodeBmp8(3, 2, [1, 1, 1, 2, 2, 2], grayPalette(), topDown ? { topDown: true } : {}));
+  }
+
+  test('writes the index into a bottom-up bitmap the way the page reads it', () => {
+    const bitmap = indexed();
+    assert.deepStrictEqual(applyIndexRuns(bitmap, [1, 1, 254]), { ok: true, pixels: 1 });
+    assert.strictEqual(bitmap.indexAt(1, 1), 254);
+    assert.strictEqual(bitmap.indexAt(1, 0), 1);
+  });
+
+  test('writes the index into a top-down bitmap as its own rows', () => {
+    const bitmap = indexed(true);
+    assert.deepStrictEqual(applyIndexRuns(bitmap, [1, 1, 254]), { ok: true, pixels: 1 });
+    assert.strictEqual(bitmap.indexAt(1, 0), 254);
+  });
+
+  test('refuses a bitmap the game would not read as indices', () => {
+    const bitmap = image(encodeBmp24(2, 1, [RED, BLUE]));
+    const outcome = applyIndexRuns(bitmap, [0, 1, 5]);
+    assert.strictEqual(outcome.ok, false);
+  });
+
+  test('refuses an index no palette has, and leaves the bytes alone', () => {
+    const bitmap = indexed();
+    assert.deepStrictEqual(applyIndexRuns(bitmap, [0, 1, 256]), { ok: false, reason: 'a painted palette index falls outside 0-255' });
+    assert.strictEqual(bitmap.indexAt(0, 0), 1);
+  });
+
+  test('fills a region of indices the way it fills a region of colours', () => {
+    const packed = new Uint8Array([1, 1, 2, 1]);
+    assert.deepStrictEqual(floodRuns(packed, 2, 2, 0, 9), [0, 2, 9, 3, 1, 9]);
+    assert.deepStrictEqual(floodRuns(new Uint8Array([1, 2, 2, 1]), 2, 2, 0, 9), [0, 1, 9]);
   });
 });
 

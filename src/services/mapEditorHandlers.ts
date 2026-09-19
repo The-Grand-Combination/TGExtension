@@ -13,6 +13,7 @@ import {
   type MapThumbnails,
   type NewProvince,
   type NewProvinceParams,
+  type PaintLayer,
   type PaintParams,
   type PaintResult,
   type PopEntry,
@@ -88,11 +89,13 @@ import {
 } from './provincePositionsEdit.js';
 import { planDefaultMapEdit, seaStartsOf } from './mapDefaultEdit.js';
 import { appendDefinitionRow, nextProvinceId, rowOfColor } from './provinceDefinitionEdit.js';
-import { applyRuns } from './provincePaint.js';
+import { applyIndexRuns, applyRuns } from './provincePaint.js';
 import { parseProvinceDefinitions, parseProvinceRows, type ProvinceRow } from './provinceTable.js';
 import { parseDocument } from './syntaxValidation.js';
 import {
   dominantTerrainByProvince,
+  plainsTerrainIndex,
+  terrainNamesOf,
   terrainPictureDataUri,
   terrainSpriteTextures,
   terrainTypeByIndex,
@@ -125,6 +128,7 @@ const PROVINCES_FOLDER = 'history/provinces';
 const PROVINCES_BMP = 'map/provinces.bmp';
 const RIVERS_BMP = 'map/rivers.bmp';
 const TERRAIN_BMP = 'map/terrain.bmp';
+const LAYER_FILES: Record<PaintLayer, string> = { provinces: PROVINCES_BMP, rivers: RIVERS_BMP, terrain: TERRAIN_BMP };
 const TERRAIN_TXT = 'map/terrain.txt';
 const DEFINITION_CSV = 'map/definition.csv';
 const DEFAULT_MAP = 'map/default.map';
@@ -263,6 +267,8 @@ export class MapEditorHandlers {
     const popPaths = this.listRecursive(target.layers, POPS_FOLDER);
     const popDates = popDatesOf(popPaths);
     const terrainText = await this.scriptFile(target.layers, TERRAIN_TXT);
+    const typeByIndex = terrainText ? terrainTypeByIndex(terrainText.document) : new Map<number, string>();
+    const water = terrainText ? waterTerrainIndices(terrainText.document) : new Set<number>();
     return {
       kind: 'ready',
       targetName: this.host.modNameOf(target.root),
@@ -270,7 +276,9 @@ export class MapEditorHandlers {
       provincesBmpPath,
       riversBmpPath: this.resolve(target.layers, RIVERS_BMP),
       terrainBmpPath: this.resolve(target.layers, TERRAIN_BMP),
-      waterTerrainIndices: terrainText ? [...waterTerrainIndices(terrainText.document)].sort((a, b) => a - b) : [],
+      waterTerrainIndices: [...water].sort((a, b) => a - b),
+      terrainNames: terrainNamesOf(typeByIndex),
+      plainsTerrainIndex: plainsTerrainIndex(typeByIndex, water),
       definitions: table.definitions,
       lakeColors: table.rows.flatMap((row) => (row.id === undefined ? [row.color] : [])),
       seaProvinces: [...await this.seaProvinces(target)].map(Number).filter((id) => Number.isInteger(id)),
@@ -555,38 +563,43 @@ export class MapEditorHandlers {
   }
 
   /**
-   * Write the painted pixels into `map/provinces.bmp`. A bitmap the stack
-   * resolves to a layer below the target is patched and written into the target
-   * as its own copy, the same rule every other save follows.
+   * Write the painted pixels into one of the three map bitmaps. A bitmap the
+   * stack resolves to a layer below the target is patched and written into the
+   * target as its own copy, the same rule every other save follows.
    */
   async paint(params: PaintParams): Promise<PaintResult> {
     const target = await this.resolveTarget(params);
     if (typeof target === 'string') {
       return { ok: false, reason: target };
     }
-    const source = this.resolve(target.layers, PROVINCES_BMP);
+    const relative = LAYER_FILES[params.layer];
+    const source = this.resolve(target.layers, relative);
     const bytes = source === undefined ? undefined : await this.host.readBytes(source);
     if (bytes === undefined) {
-      return { ok: false, reason: 'The picked mods have no map/provinces.bmp.' };
+      return { ok: false, reason: `The picked mods have no ${relative}.` };
     }
     const decoded = decodeBmp(bytes);
     if (decoded.kind === 'error') {
-      return { ok: false, reason: `map/provinces.bmp could not be read: ${decoded.reason}.` };
+      return { ok: false, reason: `${relative} could not be read: ${decoded.reason}.` };
     }
-    const outcome = applyRuns(decoded.image, params.runs);
+    const outcome = params.layer === 'provinces' ? applyRuns(decoded.image, params.runs) : applyIndexRuns(decoded.image, params.runs);
     if (!outcome.ok) {
-      return outcome;
+      return { ok: false, reason: `${relative} ${outcome.reason}.` };
     }
-    const destination = isInsideRoot(target.root, source ?? '') ? (source ?? '') : path.join(target.root, PROVINCES_BMP);
+    const destination = isInsideRoot(target.root, source ?? '') ? (source ?? '') : path.join(target.root, relative);
     if (!(await this.host.writeBytes(destination, bytes))) {
-      return { ok: false, reason: 'map/provinces.bmp could not be written.' };
+      return { ok: false, reason: `${relative} could not be written.` };
     }
-    // The province map is another file now: whatever was read from it is stale.
-    this.bitmapByPath.delete(pathKey(source ?? ''));
+    this.dropBitmapCaches(target.layers.key, source ?? '', destination);
+    return { ok: true, layer: params.layer, path: destination, pixels: outcome.pixels };
+  }
+
+  /** A painted bitmap is another file now: whatever was read from it, or built out of it, is stale. */
+  private dropBitmapCaches(layersKey: string, source: string, destination: string): void {
+    this.bitmapByPath.delete(pathKey(source));
     this.bitmapByPath.delete(pathKey(destination));
-    this.thumbnailsByLayers.delete(target.layers.key);
-    this.terrainByLayers.delete(target.layers.key);
-    return { ok: true, path: destination, pixels: outcome.pixels };
+    this.thumbnailsByLayers.delete(layersKey);
+    this.terrainByLayers.delete(layersKey);
   }
 
   /** The three bitmaps as thumbnails for the Layers box, built once per stack; a missing or unreadable file is left out. */

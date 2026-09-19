@@ -18,6 +18,7 @@ import {
   type MapEditorTargetParams,
   type MapThumbnails,
   type PageSaveParams,
+  type PaintLayer,
   type SaveParams,
 } from '../model/mapEditor.js';
 import { affectsMapEditorView, readCountryColorsTint, readPaintUndoSteps } from '../config.js';
@@ -212,7 +213,7 @@ export class MapEditorPanel implements vscode.Disposable {
         await this.newProvince(panel, client, message.color, message.popDate);
         return;
       case 'paint':
-        await this.paint(panel, client, message.runs);
+        await this.paint(panel, client, message.layer, message.runs);
         return;
       case 'saveAll':
         await this.saveAll(panel, client);
@@ -395,12 +396,12 @@ export class MapEditorPanel implements vscode.Disposable {
     post(panel, { type: 'settings', countryColorsTint: readCountryColorsTint(), paintUndoSteps: readPaintUndoSteps() });
   }
 
-  /** Write the painted pixels into the target mod's map/provinces.bmp. */
-  private async paint(panel: vscode.WebviewPanel, client: LanguageClient, runs: readonly number[]): Promise<void> {
+  /** Write the painted pixels into one of the target mod's map bitmaps. */
+  private async paint(panel: vscode.WebviewPanel, client: LanguageClient, layer: PaintLayer, runs: readonly number[]): Promise<void> {
     if (!this.params) {
       return;
     }
-    const result = await request(client, MAP_EDITOR_PAINT_REQUEST, { ...this.params, runs });
+    const result = await request(client, MAP_EDITOR_PAINT_REQUEST, { ...this.params, layer, runs });
     if (result.ok) {
       this.paintPixels = 0;
     } else {
