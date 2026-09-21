@@ -20,7 +20,7 @@ interface Drag {
   readonly marker: PositionHandle | null;
   /** Only the left button opens a province: the others are here to move the map. */
   readonly select: boolean;
-  /** The tool the right button borrowed the hand from, given back when it comes up. */
+  /** The tool a pan button borrowed the hand from, given back when it comes up. */
   readonly restore: Tool | null;
 }
 
@@ -28,17 +28,17 @@ let drag: Drag | null = null;
 const gotoInput = requiredInput('goto');
 
 function onMouseDown(event: MouseEvent): void {
-  // The middle button pans under every tool: painting a border is no reason to
-  // have to put the brush down to reach the rest of the map.
   if (event.button === 0 && state.tool !== 'hand') {
     if (event.target === canvas) { if (state.tool === 'reference') { pressReference(event); } else { startPaint(event); } }
     return;
   }
   if (event.button !== 0 && event.button !== 1 && event.button !== 2) { return; }
-  // The right button is the hand while it is held: it ends whatever was being
-  // drawn, moves the map, and gives the tool back on the way up.
+  // The middle and the right buttons are both the hand while they are held:
+  // either ends whatever was being drawn, moves the map, and gives the tool
+  // back on the way up. Painting a border is no reason to have to put the
+  // brush down to reach the rest of the map.
   let restore: Tool | null = null;
-  if (event.button === 2 && state.tool !== 'hand') {
+  if (event.button !== 0 && state.tool !== 'hand') {
     if (strokeInProgress()) { endStroke(); }
     restore = state.tool;
     setTool('hand');

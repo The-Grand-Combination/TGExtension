@@ -47,6 +47,7 @@ import {
   type SymbolDef,
   type UsageContext,
 } from '../model/symbols.js';
+import type { AnalyzedDocument } from './documentAnalysis.js';
 import { completionContextAt, type CompletionContext } from './completionContext.js';
 import { openerKeysOf, placeOf, rootKeysOf, type ScriptUsage } from './completionScope.js';
 import { namesOf } from './modIndex.js';
@@ -94,12 +95,12 @@ const LARGE_CATEGORY_LIMIT = 300;
  * position cannot be named — a wrong list is the problem being solved.
  */
 export function completionsAt(
-  text: string,
+  document: AnalyzedDocument,
   offset: number,
   fileType: FileType,
   index: ModIndex,
 ): CompletionResult | undefined {
-  const context = completionContextAt(text, offset);
+  const context = completionContextAt(document, offset);
   if (!context) {
     return undefined;
   }

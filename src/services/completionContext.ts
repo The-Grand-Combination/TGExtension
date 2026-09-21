@@ -1,5 +1,6 @@
 import type { Range } from '../model/range.js';
-import { tokenize, type Token, type TokenKind } from '../parser/lexer.js';
+import type { Token, TokenKind } from '../parser/lexer.js';
+import type { AnalyzedDocument } from './documentAnalysis.js';
 
 export type CursorPosition = 'key' | 'value';
 
@@ -29,11 +30,14 @@ interface Level {
  * being typed is rarely well-formed — a brace is open, a value is missing — and
  * the lexer walks that without complaint where the parser would have to recover.
  */
-export function completionContextAt(text: string, offset: number): CompletionContext | undefined {
-  if (inLineComment(text, offset)) {
+export function completionContextAt(
+  document: AnalyzedDocument,
+  offset: number,
+): CompletionContext | undefined {
+  if (inLineComment(document.text, offset)) {
     return undefined;
   }
-  const { tokens } = tokenize(text);
+  const { tokens } = document;
   if (tokens.some((token) => token.kind === 'string' && covers(token, offset))) {
     return undefined;
   }

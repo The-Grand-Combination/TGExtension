@@ -1,5 +1,5 @@
-import { tokenize } from '../parser/lexer.js';
-import { parse, type ParseResult } from '../parser/parser.js';
+import type { ParseResult } from '../parser/parser.js';
+import { analyze } from './documentAnalysis.js';
 
 /**
  * Parse a whole file, returning the AST together with all syntax diagnostics
@@ -7,6 +7,5 @@ import { parse, type ParseResult } from '../parser/parser.js';
  * document to validate structurally and the syntax errors to report.
  */
 export function parseDocument(text: string): ParseResult {
-  const lex = tokenize(text);
-  return parse(lex.tokens, text.length, lex.diagnostics);
+  return analyze(text).parse();
 }

@@ -1,7 +1,12 @@
 import * as assert from 'node:assert';
 import { duplicateDiagnosticsByFile } from '../../services/duplicateDiagnostics.js';
-import { hasIdentifier } from '../../services/modIndex.js';
-import { buildTestIndex } from './testIndex.js';
+import {
+  buildModIndexAsync,
+  hasIdentifier,
+  type IndexBuildResult,
+  type IndexCarry,
+} from '../../services/modIndex.js';
+import { buildTestIndex, fakeProvider } from './testIndex.js';
 
 suite('modIndex', () => {
   const index = buildTestIndex();
@@ -182,5 +187,92 @@ suite('modIndex', () => {
   test('tolerates missing files with empty categories', () => {
     const sparse = buildTestIndex();
     assert.ok(!hasIdentifier(sparse, 'crime', 'nonexistent'));
+  });
+});
+
+/** The same files the fake provider serves, so a test can edit one between builds. */
+function files(extra: Readonly<Record<string, string>> = {}): Record<string, string> {
+  return {
+    'events/A.txt': 'country_event = { id = 1 option = { set_country_flag = from_a } }\n',
+    'events/B.txt': 'country_event = { id = 2 option = { set_global_flag = from_b } }\n',
+    'decisions/D.txt': 'political_decisions = { d_one = { } }\n',
+    'localisation/00.csv': 'K_ONE;One;x\n',
+    'localisation/01.csv': 'K_TWO;Two;x\n',
+    ...extra,
+  };
+}
+
+async function build(
+  tree: Readonly<Record<string, string>>,
+  reuse?: { carry: IndexCarry; changed: ReadonlySet<string> },
+): Promise<IndexBuildResult> {
+  return buildModIndexAsync(fakeProvider(tree), reuse);
+}
+
+suite('modIndex — reusing the last build', () => {
+  test('a file named as changed is read again, and the rest are not', async () => {
+    const tree = files();
+    const first = await build(tree);
+    const read: string[] = [];
+    const watched = { ...fakeProvider(tree), readFile: (p: string): string | undefined => { read.push(p); return tree[p]; } };
+    await buildModIndexAsync(watched, { carry: first.carry, changed: new Set(['events/A.txt']) });
+    assert.ok(read.includes('events/A.txt'));
+    assert.ok(!read.includes('events/B.txt'));
+    assert.ok(!read.includes('decisions/D.txt'));
+    assert.ok(!read.includes('localisation/00.csv'));
+  });
+
+  test('the new content of a changed file replaces the old', async () => {
+    const before = files();
+    const first = await build(before);
+    assert.ok(first.index.eventOccurrences.has('1'));
+    const after = files({ 'events/A.txt': 'country_event = { id = 99 option = { set_country_flag = now_this } }\n' });
+    const second = await build(after, { carry: first.carry, changed: new Set(['events/A.txt']) });
+    assert.ok(!second.index.eventOccurrences.has('1'), 'the old id is gone');
+    assert.ok(second.index.eventOccurrences.has('99'));
+    assert.ok(second.index.countryFlagsSet.has('now_this'));
+    assert.ok(!second.index.countryFlagsSet.has('from_a'), 'and so is the flag it used to set');
+  });
+
+  test('a deleted file drops out, even though nothing named it as changed', async () => {
+    const first = await build(files());
+    const fewer = files();
+    delete fewer['events/B.txt'];
+    // A deletion is not an edit of a file that still exists; the listing is what settles it.
+    const second = await build(fewer, { carry: first.carry, changed: new Set() });
+    assert.ok(second.index.eventOccurrences.has('1'));
+    assert.ok(!second.index.eventOccurrences.has('2'));
+    assert.ok(!second.index.globalFlagsSet.has('from_b'));
+  });
+
+  test('a file the last build never saw is read, changed or not', async () => {
+    const first = await build(files());
+    const more = files({ 'events/C.txt': 'country_event = { id = 3 }\n' });
+    const second = await build(more, { carry: first.carry, changed: new Set() });
+    assert.ok(second.index.eventOccurrences.has('3'));
+  });
+
+  test('reusing everything gives the same index as building it all again', async () => {
+    const tree = files();
+    const first = await build(tree);
+    const reused = await build(tree, { carry: first.carry, changed: new Set() });
+    const fresh = await build(tree);
+    const picture = (result: IndexBuildResult): string =>
+      JSON.stringify({
+        events: [...result.index.eventOccurrences],
+        decisions: [...result.index.decisionOccurrences],
+        loc: [...result.index.locKeyDefinitions],
+        country: [...result.index.countryFlagsSet].sort(),
+        global: [...result.index.globalFlagsSet].sort(),
+      });
+    assert.strictEqual(picture(reused), picture(fresh));
+  });
+
+  test('the first definition of a loc key still wins after a reuse', async () => {
+    const tree = files({ 'localisation/00.csv': 'SHARED;First;x\n', 'localisation/01.csv': 'SHARED;Second;x\n' });
+    const first = await build(tree);
+    assert.strictEqual(first.index.locKeyDefinitions.get('shared')?.text, 'First');
+    const second = await build(tree, { carry: first.carry, changed: new Set(['localisation/01.csv']) });
+    assert.strictEqual(second.index.locKeyDefinitions.get('shared')?.text, 'First');
   });
 });

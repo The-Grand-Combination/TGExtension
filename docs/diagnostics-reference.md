@@ -218,6 +218,28 @@ out: a released dominion flies the flag of the country that released it.
 | `flag-name-case` | warning | the tag in `common/countries.txt` | The flag is on disk under another spelling (`SUA_Communist.tga` for `SUA_communist.tga`). Windows opens it anyway, but the name no longer matches the tag and the flag type. |
 | `flag-type-without-art` | error | the `flagType` value in `common/governments.txt` | Not one tag has a flag for that flag type — a flag type with no art at all, reported once instead of once per tag. |
 
+## Essential tags (`essentialTagsValidation.ts`) — Full Report only
+
+Tags the engine needs by name. `REB` is the one the base game cannot do without: every rebel army
+in the game belongs to it, so a mod that drops it has no one to rise up. It has to be declared in
+`common/countries.txt` **above** `dynamic_tags = yes` — below that line the engine reads a tag as
+one to hand out to a released nation, not as a country of its own — and the country definition it
+points at has to be somewhere in the stack.
+
+The path in `common/countries.txt` is relative to `common/`, not to `history/`: `"countries/rebels.txt"`
+is `common/countries/rebels.txt`, which carries the colour and the party list. A tag's *history*
+file is found another way, by the three characters its file name starts with (see the great-power
+check). The definition is resolved over the stack, so a mod that does not replace `common/`
+inherits the base game's copy and passes — which is how TTA passes without one of its own.
+
+A history file is **not** required: MGQ ships none for `REB` and runs. The flag is covered by the
+flag check, since `REB` is in the country list like any other tag.
+
+| Code | Severity | Reported on | Meaning |
+|---|---|---|---|
+| `missing-essential-tag` | error | the tag in `common/countries.txt`, or the file's first character when it is absent | An essential tag is not declared, or is declared below `dynamic_tags = yes`. |
+| `missing-country-definition` | error | the tag in `common/countries.txt` | An essential tag points at a `common/countries/` file no layer of the stack has. |
+
 ## Pops (`popsValidation.ts`) — Full Report only
 
 The engine reads a province's starting pops from `history/pops/<date>/`, and a province left with

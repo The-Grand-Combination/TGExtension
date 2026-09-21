@@ -224,9 +224,9 @@ function pathOrNote(section: SectionFile, missing: MissingNote): HTMLElement {
   return h('span', { class: 'file path' + (section.inTarget ? '' : ' warning'), title: text }, '‎' + text);
 }
 
-export function layerNote(section: SectionFile): HTMLElement | null {
+export function layerNote(section: SectionFile, note = 'saving writes a copy into it'): HTMLElement | null {
   if (!section.file || section.inTarget) { return null; }
-  return h('div', { class: 'file warning' }, 'Read from a layer below ' + (state.map?.targetName ?? 'the target') + '; saving writes a copy into it.');
+  return h('div', { class: 'file warning' }, 'Read from a layer below ' + (state.map?.targetName ?? 'the target') + '; ' + note + '.');
 }
 
 interface SaveBar {

@@ -3,7 +3,7 @@ import { EFFECTS } from '../data/effects.js';
 import { TRIGGERS } from '../data/triggers.js';
 import type { Range } from '../model/range.js';
 import type { ArgKind, ArgSpec, BlockArgSpec, ScopeChangerDef, SymbolDef } from '../model/symbols.js';
-import { tokenize } from '../parser/lexer.js';
+import type { AnalyzedDocument } from './documentAnalysis.js';
 
 const PLACEHOLDERS: Readonly<Partial<Record<ArgKind, string>>> = {
   number: 'n',
@@ -122,8 +122,8 @@ export interface KeyTokenAt {
 }
 
 /** The word under the cursor, only if it is in key position (followed by an operator). */
-export function resolveKeyAt(text: string, offset: number): KeyTokenAt | undefined {
-  const { tokens } = tokenize(text);
+export function resolveKeyAt(document: AnalyzedDocument, offset: number): KeyTokenAt | undefined {
+  const { tokens } = document;
   const index = tokens.findIndex(
     (candidate) =>
       candidate.kind === 'word' && candidate.range.start <= offset && offset <= candidate.range.end,

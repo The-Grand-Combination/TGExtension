@@ -2,7 +2,9 @@ import * as vscode from 'vscode';
 import type { LanguageClient } from 'vscode-languageclient/node';
 import { FULL_REPORT_REQUEST, type FullReportParams, type FullReportResult } from '../model/fullReport.js';
 import { pickMods, type PickMemory } from './pickMods.js';
-import { request } from '../providers/request.js';
+import { cancellableRequest } from '../providers/request.js';
+import { isCancellation } from './cancellation.js';
+import { singleFlight } from './singleFlight.js';
 
 /**
  * Ask which mods to analyze, then ask the server for a whole-mod validation
@@ -14,7 +16,8 @@ export function generateFullReportCommand(
   getClient: () => LanguageClient | undefined,
   memory: PickMemory,
 ): () => Promise<void> {
-  return async (): Promise<void> => {
+  const once = singleFlight('the full report');
+  return (): Promise<void> => once(async (): Promise<void> => {
     const client = getClient();
     if (!client) {
       void vscode.window.showErrorMessage('Victorian Tools: the language server is not running.');
@@ -32,12 +35,23 @@ export function generateFullReportCommand(
       workspaceFolders: (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
       mods: outcome.kind === 'picked' ? outcome.picked : [],
     };
-    const result = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: 'Victorian Tools: generating full report…' },
-      () => request(client, FULL_REPORT_REQUEST, params),
-    );
-    await showReport(result);
-  };
+    try {
+      const result = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'Victorian Tools: generating full report…',
+          cancellable: true,
+        },
+        (_progress, token) => cancellableRequest(client, FULL_REPORT_REQUEST, params, token),
+      );
+      await showReport(result);
+    } catch (error: unknown) {
+      // Cancelling is the user's own answer, not a failure to report back.
+      if (!isCancellation(error)) {
+        throw error;
+      }
+    }
+  });
 }
 
 async function showReport(result: FullReportResult): Promise<void> {

@@ -219,10 +219,7 @@ const PAGE_STYLE = String.raw`
      hex did, and the hex is on the tooltip for when the number is what is wanted. */
   #tools .tint { display: flex; align-items: center; gap: 4px; position: relative; min-width: 0; }
   #tools .tint[hidden], #tools .palette-row[hidden] { display: none; }
-  /* The colour picker and the palette have to read as the same control, so the
-     picker keeps the shape it has always had and the palette is given it. */
-  #tools .tint input, #tools .tint > .swatch-box { flex: 0 0 var(--tool); min-width: 0; height: 18px; padding: 0 1px; border-radius: 2px; cursor: pointer; background-clip: padding-box; }
-  #tools .tint > .swatch-box { border: 1px solid var(--vscode-input-border, rgba(255, 255, 255, 0.25)); }
+  #tools .tint input { flex: 0 0 var(--tool); min-width: 0; height: 18px; padding: 0 1px; }
   /* Red, green and blue as definition.csv writes them; the hex is on the swatch's tooltip. */
   #tools .tint > span { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; opacity: 0.85; }
   #tools .tint > .value { cursor: pointer; }

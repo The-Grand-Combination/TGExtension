@@ -14,13 +14,18 @@ import {
   layoutConfigEquals,
   readServerConfig,
 } from '../../server/serverConfig.js';
-import type { ModIndex } from '../../model/modIndex.js';
+import type { IndexBuildResult, IndexReuse } from '../../services/modIndex.js';
 import { duplicateDiagnosticsByFile, duplicateDiagnosticsFor } from '../../services/duplicateDiagnostics.js';
 import { buildTestIndex } from './testIndex.js';
 
+/** A build result with an empty carry; the reuse logic is what these tests watch. */
+function freshBuild(): IndexBuildResult {
+  return { index: buildTestIndex(), carry: { byFile: new Map() } };
+}
+
 suite('BoundedCache', () => {
   test('evicts the least recently used entry past the limit', () => {
-    const cache = new BoundedCache<string, number>(2);
+    const cache = new BoundedCache<string, number>({ entries: 2 });
     cache.set('a', 1);
     cache.set('b', 2);
     cache.set('c', 3);
@@ -30,7 +35,7 @@ suite('BoundedCache', () => {
   });
 
   test('a read marks an entry as recently used', () => {
-    const cache = new BoundedCache<string, number>(2);
+    const cache = new BoundedCache<string, number>({ entries: 2 });
     cache.set('a', 1);
     cache.set('b', 2);
     cache.get('a');
@@ -40,15 +45,36 @@ suite('BoundedCache', () => {
   });
 
   test('caches a "not found" value distinctly from a missing key', () => {
-    const cache = new BoundedCache<string, string | undefined>(4);
+    const cache = new BoundedCache<string, string | undefined>({ entries: 4 });
     cache.set('missing.dds', undefined);
     assert.ok(cache.has('missing.dds'));
     assert.strictEqual(cache.get('missing.dds'), undefined);
     assert.ok(!cache.has('other.dds'));
   });
 
+  test('a weighed cache evicts by what the entries weigh, not how many there are', () => {
+    const cache = new BoundedCache<string, string>({ weight: 10, weigh: (text: string): number => text.length });
+    cache.set('a', 'xxx');
+    cache.set('b', 'xxx');
+    cache.set('c', 'xxx');
+    assert.strictEqual(cache.size, 3, 'nine characters still fit');
+    cache.set('d', 'xxxx');
+    assert.strictEqual(cache.weight, 10);
+    assert.ok(!cache.has('a'), 'the oldest goes to make room');
+    assert.ok(cache.has('d'));
+  });
+
+  test('one entry heavier than the whole budget is still kept', () => {
+    const cache = new BoundedCache<string, string>({ weight: 10, weigh: (text: string): number => text.length });
+    cache.set('big', 'x'.repeat(100));
+    assert.ok(cache.has('big'), 'evicting it would mean never serving it');
+    cache.set('small', 'x');
+    assert.ok(!cache.has('big'), 'and it goes as soon as anything else arrives');
+    assert.ok(cache.has('small'));
+  });
+
   test('delete removes one entry and clear removes all', () => {
-    const cache = new BoundedCache<string, number>(4);
+    const cache = new BoundedCache<string, number>({ entries: 4 });
     cache.set('a', 1);
     cache.set('b', 2);
     cache.delete('a');
@@ -110,26 +136,31 @@ suite('modCache — location and index caching', () => {
     readonly built: string[];
     readonly located: string[];
     /** One gate per build, in start order; a build finishes when its gate is resolved. */
-    readonly gates: Deferred<ModIndex>[];
+    readonly gates: Deferred<IndexBuildResult>[];
+    /** What each build was offered to reuse, in build order. */
+    readonly reuses: (IndexReuse | undefined)[];
   }
 
   function newCache(options: { gated?: boolean } = {}): Harness {
     const builds: string[] = [];
     const built: string[] = [];
     const located: string[] = [];
-    const gates: Deferred<ModIndex>[] = [];
+    const gates: Deferred<IndexBuildResult>[] = [];
+    /** What each build was offered to reuse, in build order. */
+    const reuses: (IndexReuse | undefined)[] = [];
     const cache = new ModCache({
       locate: (fsPath): FileLocation | undefined => {
         located.push(fsPath);
         const root = findModRoot(fsPath);
         return root === undefined ? undefined : { root, layers: singleRootLayers(root) };
       },
-      buildIndex: (layers): Promise<ModIndex> => {
+      buildIndex: (layers, reuse): Promise<IndexBuildResult> => {
         builds.push(layers.key);
+        reuses.push(reuse);
         if (options.gated !== true) {
-          return Promise.resolve(buildTestIndex());
+          return Promise.resolve(freshBuild());
         }
-        const gate = deferred<ModIndex>();
+        const gate = deferred<IndexBuildResult>();
         gates.push(gate);
         return gate.promise;
       },
@@ -137,7 +168,7 @@ suite('modCache — location and index caching', () => {
         built.push(layers.key);
       },
     });
-    return { cache, builds, built, located, gates };
+    return { cache, builds, built, located, gates, reuses };
   }
 
   test('builds one index per layers key, shared by concurrent callers', async () => {
@@ -183,13 +214,13 @@ suite('modCache — location and index caching', () => {
   test('refresh keeps serving the old index until the new one is ready', async () => {
     const { cache, builds, gates } = newCache({ gated: true });
     const pending = cache.ensureIndex(layersA);
-    gates[0]?.resolve(buildTestIndex());
+    gates[0]?.resolve(freshBuild());
     const first = await pending;
     cache.refresh([layersA]);
     assert.strictEqual(cache.indexFor(layersA), first, 'the previous index stays in place');
     assert.ok(cache.isBuilding(layersA));
     const refreshed = cache.ensureIndex(layersA);
-    gates[1]?.resolve(buildTestIndex());
+    gates[1]?.resolve(freshBuild());
     const second = await refreshed;
     assert.ok(second);
     assert.notStrictEqual(second, first);
@@ -212,19 +243,76 @@ suite('modCache — location and index caching', () => {
     const { cache, builds, built, gates } = newCache({ gated: true });
     const pending = cache.ensureIndex(layersA);
     cache.refresh([layersA]);
-    gates[0]?.resolve(buildTestIndex());
+    gates[0]?.resolve(freshBuild());
     await nextTick();
     assert.deepStrictEqual(builds, [layersA.key, layersA.key]);
-    gates[1]?.resolve(buildTestIndex());
+    gates[1]?.resolve(freshBuild());
     assert.ok(await pending);
     assert.deepStrictEqual(built, [layersA.key], 'only the fresh build is announced');
+  });
+
+  test('the first build of a stack has nothing to reuse', async () => {
+    const { cache, reuses } = newCache();
+    await cache.ensureIndex(layersA);
+    assert.deepStrictEqual(reuses, [undefined]);
+  });
+
+  test('a refresh that names what changed offers the rest of the last build back', async () => {
+    const { cache, reuses } = newCache();
+    await cache.ensureIndex(layersA);
+    cache.refresh([layersA], () => new Set(['events/A.txt']));
+    await cache.ensureIndex(layersA);
+    assert.deepStrictEqual([...reuses[1]?.changed ?? []], ['events/A.txt']);
+  });
+
+  test('a refresh that names nothing asks for the whole index again', async () => {
+    const { cache, reuses } = newCache();
+    await cache.ensureIndex(layersA);
+    cache.refresh([layersA]);
+    await cache.ensureIndex(layersA);
+    assert.strictEqual(reuses[1], undefined, 'a code page change cannot reuse decoded text');
+  });
+
+  test('changes that arrive while a build runs are still honoured by the build that replaces it', async () => {
+    const { cache, gates, reuses } = newCache({ gated: true });
+    const first = cache.ensureIndex(layersA);
+    gates[0]?.resolve(freshBuild());
+    await first;
+    cache.refresh([layersA], () => new Set(['events/A.txt']));
+    // The second build has started and is offered A; B is edited before it lands.
+    assert.deepStrictEqual([...reuses[1]?.changed ?? []], ['events/A.txt']);
+    cache.refresh([layersA], () => new Set(['events/B.txt']));
+    gates[1]?.resolve(freshBuild());
+    await nextTick();
+    // That build was stale, so a third one runs — and it must see both edits.
+    assert.deepStrictEqual([...reuses[2]?.changed ?? []].sort(), ['events/A.txt', 'events/B.txt']);
+    gates[2]?.resolve(freshBuild());
+    assert.ok(await cache.ensureIndex(layersA));
+  });
+
+  test('an accepted build clears what was pending, so the next reuse starts clean', async () => {
+    const { cache, reuses } = newCache();
+    await cache.ensureIndex(layersA);
+    cache.refresh([layersA], () => new Set(['events/A.txt']));
+    await cache.ensureIndex(layersA);
+    cache.refresh([layersA], () => new Set(['events/B.txt']));
+    await cache.ensureIndex(layersA);
+    assert.deepStrictEqual([...reuses[2]?.changed ?? []], ['events/B.txt']);
+  });
+
+  test('a dropped stack loses its carry, so building it again reads everything', async () => {
+    const { cache, reuses } = newCache();
+    await cache.ensureIndex(layersA);
+    cache.evictUnused(new Set());
+    await cache.ensureIndex(layersA);
+    assert.strictEqual(reuses[1], undefined);
   });
 
   test('forget drops the index and discards a build still running', async () => {
     const { cache, built, gates } = newCache({ gated: true });
     const pending = cache.ensureIndex(layersA);
     cache.forget([layersA]);
-    gates[0]?.resolve(buildTestIndex());
+    gates[0]?.resolve(freshBuild());
     assert.strictEqual(await pending, undefined);
     assert.ok(!cache.hasIndex(layersA));
     assert.deepStrictEqual(built, []);
@@ -234,7 +322,7 @@ suite('modCache — location and index caching', () => {
     const failures: string[] = [];
     const cache = new ModCache({
       locate: (): undefined => undefined,
-      buildIndex: (): Promise<ModIndex> => Promise.reject(new Error('boom')),
+      buildIndex: (): Promise<IndexBuildResult> => Promise.reject(new Error('boom')),
       onBuildFailed: (layers, error): void => {
         failures.push(`${layers.key}: ${error instanceof Error ? error.message : 'unknown'}`);
       },
@@ -265,6 +353,39 @@ suite('modCache — location and index caching', () => {
       [layersB.key, stacked.key],
     );
     assert.deepStrictEqual(cache.layersContaining([path.join(os.tmpdir(), 'stray.txt')]), []);
+  });
+
+  test('evictUnused drops the indexes of stacks nobody named, and keeps the rest', async () => {
+    const built: string[] = [];
+    const cache = new ModCache({
+      locate: (): undefined => undefined,
+      buildIndex: (layers): Promise<IndexBuildResult> => {
+        built.push(layers.key);
+        return Promise.resolve(freshBuild());
+      },
+    });
+    const kept = singleRootLayers(path.join('/mods', 'Kept'));
+    const dropped = singleRootLayers(path.join('/mods', 'Dropped'));
+    await cache.ensureIndex(kept);
+    await cache.ensureIndex(dropped);
+    cache.evictUnused(new Set([kept.key]));
+    assert.ok(cache.hasIndex(kept));
+    assert.ok(!cache.hasIndex(dropped));
+    // The kept one is served from memory; the dropped one is built again.
+    await cache.ensureIndex(kept);
+    await cache.ensureIndex(dropped);
+    assert.deepStrictEqual(built, [kept.key, dropped.key, dropped.key]);
+  });
+
+  test('evictUnused with nothing to keep empties the cache', async () => {
+    const cache = new ModCache({
+      locate: (): undefined => undefined,
+      buildIndex: (): Promise<IndexBuildResult> => Promise.resolve(freshBuild()),
+    });
+    const layers = singleRootLayers(path.join('/mods', 'Only'));
+    await cache.ensureIndex(layers);
+    cache.evictUnused(new Set());
+    assert.ok(!cache.hasIndex(layers));
   });
 
   test('reports whether layers have been indexed, without building', async () => {

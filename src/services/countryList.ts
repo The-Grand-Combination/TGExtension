@@ -6,8 +6,14 @@ const DYNAMIC_TAGS_SWITCH = 'dynamic_tags';
 
 export interface CountryListEntry {
   readonly tag: Scalar;
-  /** The file as `common/countries.txt` spells it, relative to `history/`. */
-  readonly historyFile: string;
+  /**
+   * The country definition the tag points at, as the file spells it. It is
+   * relative to `common/`, not to `history/`: `"countries/England.txt"` is
+   * `common/countries/England.txt`, which holds the colour and the party list.
+   * A tag's history file is found another way — by the three characters its
+   * name starts with (see `greatPowerValidation.ts`).
+   */
+  readonly definitionFile: string;
   readonly dynamic: boolean;
 }
 
@@ -32,7 +38,7 @@ export function parseCountryList(text: string): CountryListEntry[] {
     }
     if (!seen.has(tagLower)) {
       seen.add(tagLower);
-      entries.push({ tag: entry.key, historyFile: entry.value.value, dynamic });
+      entries.push({ tag: entry.key, definitionFile: entry.value.value, dynamic });
     }
   }
   return entries;

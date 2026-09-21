@@ -10,10 +10,12 @@ import {
   POPS_FOLDER,
   PROVINCE_HISTORY_FOLDER,
 } from '../model/gamePaths.js';
+import { NEVER_CANCELLED, throwIfCancelled, type CancelSignal } from '../model/cancellation.js';
 import type { ModDescriptor } from '../model/modDescriptor.js';
 import type { ModIndex } from '../model/modIndex.js';
 import type { Range } from '../model/range.js';
 import type { ValidationOptions } from '../model/validationOptions.js';
+import { auditEssentialTags } from './essentialTagsValidation.js';
 import { auditFlags } from './flagValidation.js';
 import { buildModReport, type ExtraFileFindings, type ReportFileProvider } from './fullReport.js';
 import { auditGreatPowers, collectGreatPowerCandidates, startDateOf } from './greatPowerValidation.js';
@@ -21,7 +23,9 @@ import type { FileLocation } from './modLayout.js';
 import {
   listLayeredFiles,
   listLayeredFilesRecursive,
+  listLayeredFilesResolved,
   resolveLayeredFile,
+  type LayeredFile,
   type LayerFileSystem,
   type ModLayers,
 } from './modLayers.js';
@@ -44,9 +48,11 @@ export interface FullReportHost extends ModStackHost {
 export async function buildFullReport(
   host: FullReportHost,
   params: FullReportParams,
+  signal: CancelSignal = NEVER_CANCELLED,
 ): Promise<FullReportResult> {
   const reports: ModReport[] = [];
   for (const target of host.targets(params)) {
+    throwIfCancelled(signal);
     const index = await host.ensureIndex(target.layers);
     if (index) {
       reports.push(
@@ -55,7 +61,8 @@ export async function buildFullReport(
           reportProviderFor(host, target.root),
           index,
           host.validationOptions(),
-          await crossFileFindings(host, target, index),
+          await crossFileFindings(host, target, index, signal),
+          signal,
         ),
       );
     }
@@ -82,14 +89,33 @@ async function crossFileFindings(
   host: FullReportHost,
   target: FileLocation,
   index: ModIndex,
+  signal: CancelSignal,
 ): Promise<ExtraFileFindings[]> {
   const countries = await layeredFile(host, target.layers, COUNTRY_LIST_FILE);
-  const provinceFiles = listLayeredFilesRecursive(target.layers, host.fileSystem, PROVINCE_HISTORY_FOLDER);
+  const provinceFiles = listLayeredFilesResolved(target.layers, host.fileSystem, PROVINCE_HISTORY_FOLDER);
   return [
+    ...essentialTagFindings(host, target, countries),
     ...(await flagFindings(host, target, countries)),
-    ...(await greatPowerFindings(host, target, index, countries, provinceFiles)),
+    ...(await greatPowerFindings(host, target, index, countries, provinceFiles, signal)),
     ...(await popsFindings(host, target)),
   ].filter((entry) => entry.diagnostics.length > 0);
+}
+
+/** The tags the engine needs by name, over the stack's `common/countries.txt`. */
+function essentialTagFindings(
+  host: FullReportHost,
+  target: FileLocation,
+  countries: LayeredText | undefined,
+): ExtraFileFindings[] {
+  if (countries === undefined) {
+    return [];
+  }
+  const diagnostics = auditEssentialTags(
+    countries.text,
+    (relativePath: string): boolean =>
+      resolveLayeredFile(target.layers, host.fileSystem, relativePath) !== undefined,
+  );
+  return [{ ...countries, diagnostics }];
 }
 
 /**
@@ -133,7 +159,8 @@ async function greatPowerFindings(
   target: FileLocation,
   index: ModIndex,
   countries: LayeredText | undefined,
-  provinceFiles: readonly string[],
+  provinceFiles: readonly LayeredFile[],
+  signal: CancelSignal,
 ): Promise<ExtraFileFindings[]> {
   const defines = await layeredFile(host, target.layers, DEFINES_FILE);
   if (defines === undefined) {
@@ -141,11 +168,11 @@ async function greatPowerFindings(
   }
   const candidates = await collectGreatPowerCandidates(countries?.text, {
     startDate: startDateOf(defines.text),
-    readFile: (relativePath: string): Promise<string | undefined> => layeredText(host, target.layers, relativePath),
+    readFile: host.readText,
     provinceFiles,
-    countryFiles: listLayeredFilesRecursive(target.layers, host.fileSystem, COUNTRY_HISTORY_FOLDER),
+    countryFiles: listLayeredFilesResolved(target.layers, host.fileSystem, COUNTRY_HISTORY_FOLDER),
     stateOfProvince: index.stateOfProvince,
-  });
+  }, signal);
   return [{ ...defines, diagnostics: auditGreatPowers(defines.text, candidates) }];
 }
 
@@ -188,13 +215,4 @@ async function layeredFile(
   }
   const text = await host.readText(absolutePath);
   return text === undefined ? undefined : { path: relativePath, uri: host.fileUri(absolutePath), text };
-}
-
-async function layeredText(
-  host: FullReportHost,
-  layers: ModLayers,
-  relativePath: string,
-): Promise<string | undefined> {
-  const absolutePath = resolveLayeredFile(layers, host.fileSystem, relativePath);
-  return absolutePath === undefined ? undefined : host.readText(absolutePath);
 }

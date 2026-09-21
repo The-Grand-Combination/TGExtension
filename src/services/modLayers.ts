@@ -89,6 +89,23 @@ export function resolveLayeredFile(
   return undefined;
 }
 
+/**
+ * The mod-relative path an absolute path has inside this stack, or undefined
+ * when no layer holds it. The highest layer wins, the same way a lookup does,
+ * so a file present in two layers is named once.
+ */
+export function relativeInLayers(layers: ModLayers, absolutePath: string): string | undefined {
+  const target = normalizePath(absolutePath, layers.caseInsensitivePaths);
+  for (const root of rootsHighestFirst(layers)) {
+    const prefix = `${normalizePath(root, layers.caseInsensitivePaths)}/`;
+    if (target.startsWith(prefix)) {
+      // Cased as the file system spells it: the lookups it feeds are case-folded anyway.
+      return path.resolve(absolutePath).replace(/\\/g, '/').slice(prefix.length);
+    }
+  }
+  return undefined;
+}
+
 /** File names directly inside a folder, merged across layers; a name appears once. */
 export function listLayeredFiles(
   layers: ModLayers,
@@ -112,24 +129,46 @@ export function listLayeredFiles(
   return [...seen.values()];
 }
 
-/** Relative paths under a folder, merged across layers; a path appears once. */
+/** A file the stack resolves to, and the layer it was found in. */
+export interface LayeredFile {
+  readonly relativePath: string;
+  readonly absolutePath: string;
+}
+
+/**
+ * Relative paths under a folder, merged across layers; a path appears once.
+ *
+ * Prefer `listLayeredFilesResolved` when the files are going to be read: the
+ * walk already knows which layer won each path, and asking `resolveLayeredFile`
+ * for it afterwards pays a `fileExists` per layer per file all over again.
+ */
 export function listLayeredFilesRecursive(
   layers: ModLayers,
   fileSystem: LayerFileSystem,
   relativeFolder: string,
 ): string[] {
-  const seen = new Map<string, string>();
+  return listLayeredFilesResolved(layers, fileSystem, relativeFolder).map((file) => file.relativePath);
+}
+
+/** The same merge, keeping the absolute path of the layer each file came from. */
+export function listLayeredFilesResolved(
+  layers: ModLayers,
+  fileSystem: LayerFileSystem,
+  relativeFolder: string,
+): LayeredFile[] {
+  const seen = new Map<string, LayeredFile>();
   for (const root of rootsHighestFirst(layers)) {
     if (isHiddenPath(layers, path.join(root, relativeFolder))) {
       continue;
     }
     for (const relativePath of fileSystem.listFilesRecursive(root, relativeFolder)) {
-      if (isHiddenPath(layers, path.join(root, relativePath))) {
+      const absolutePath = path.join(root, relativePath);
+      if (isHiddenPath(layers, absolutePath)) {
         continue;
       }
       const key = layers.caseInsensitivePaths ? relativePath.toLowerCase() : relativePath;
       if (!seen.has(key)) {
-        seen.set(key, relativePath);
+        seen.set(key, { relativePath, absolutePath });
       }
     }
   }

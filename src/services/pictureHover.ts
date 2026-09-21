@@ -1,6 +1,6 @@
 import type { FileType } from '../model/fileType.js';
 import type { Range } from '../model/range.js';
-import { tokenize } from '../parser/lexer.js';
+import type { AnalyzedDocument } from './documentAnalysis.js';
 import { decodePicture, type DecodedImage } from './pictureDecoder.js';
 import { encodePng } from './pngEncoder.js';
 
@@ -17,8 +17,8 @@ export interface PictureReference {
 }
 
 /** Detect a `picture = <name>` value under the cursor. */
-export function resolvePictureAt(text: string, offset: number): PictureReference | undefined {
-  const { tokens } = tokenize(text);
+export function resolvePictureAt(document: AnalyzedDocument, offset: number): PictureReference | undefined {
+  const { tokens } = document;
   const tokenIndex = tokens.findIndex(
     (candidate) =>
       (candidate.kind === 'word' || candidate.kind === 'string') &&
@@ -57,12 +57,12 @@ const PICTURE_EXTENSIONS: readonly string[] = ['.dds', '.tga'];
  * `<name>.dds` / `<name>.tga` that exists in the folder for this file type.
  */
 export function pictureHoverAt(
-  text: string,
+  document: AnalyzedDocument,
   offset: number,
   fileType: FileType,
   load: PictureMarkdownLoader,
 ): PictureHover | undefined {
-  const reference = resolvePictureAt(text, offset);
+  const reference = resolvePictureAt(document, offset);
   if (!reference) {
     return undefined;
   }

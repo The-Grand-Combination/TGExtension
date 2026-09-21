@@ -3,7 +3,9 @@ import type { LanguageClient } from 'vscode-languageclient/node';
 import { MAP_REPORT_REQUEST, type MapReportParams, type MapReportResult } from '../model/mapAudit.js';
 import type { MapReportTargets } from '../services/mapReportTargets.js';
 import { pickMods, type PickMemory } from './pickMods.js';
-import { request } from '../providers/request.js';
+import { cancellableRequest } from '../providers/request.js';
+import { isCancellation } from './cancellation.js';
+import { singleFlight } from './singleFlight.js';
 
 /**
  * Ask which mods to check, then ask the server to audit their map bitmaps
@@ -16,7 +18,8 @@ export function generateMapReportCommand(
   memory: PickMemory,
   targets: MapReportTargets,
 ): () => Promise<void> {
-  return async (): Promise<void> => {
+  const once = singleFlight('the map report');
+  return (): Promise<void> => once(async (): Promise<void> => {
     const client = getClient();
     if (!client) {
       void vscode.window.showErrorMessage('Victorian Tools: the language server is not running.');
@@ -34,12 +37,23 @@ export function generateMapReportCommand(
       workspaceFolders: (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
       mods: outcome.kind === 'picked' ? outcome.picked : [],
     };
-    const result = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: 'Victorian Tools: checking the map bitmaps…' },
-      () => request(client, MAP_REPORT_REQUEST, params),
-    );
-    await showReport(result, params, targets);
-  };
+    try {
+      const result = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: 'Victorian Tools: checking the map bitmaps…',
+          cancellable: true,
+        },
+        (_progress, token) => cancellableRequest(client, MAP_REPORT_REQUEST, params, token),
+      );
+      await showReport(result, params, targets);
+    } catch (error: unknown) {
+      // Cancelling is the user's own answer, not a failure to report back.
+      if (!isCancellation(error)) {
+        throw error;
+      }
+    }
+  });
 }
 
 async function showReport(

@@ -176,7 +176,9 @@ function comboItemContent(entry: ComboEntry): (string | HTMLElement)[] {
  * means rather than the colours of the operating system.
  */
 export function paletteInput(value: string | undefined, entries: readonly NamedIdentifier[]): Field {
-  const box = h('button', { class: 'swatch-box', type: 'button' });
+  // The very control the province map uses, so the two are the same thing on
+  // screen; what the click would do is all that is taken away from it.
+  const box = h('input', { type: 'color' });
   const text = h('span', { class: 'value' });
   const list = h('div', { class: 'combo-list up', hidden: true });
   const wrapper = h('div', { class: 'tint palette field' }, box, text, list);
@@ -186,7 +188,7 @@ export function paletteInput(value: string | undefined, entries: readonly NamedI
   }
   function show(): void {
     const entry = entryOf(selected);
-    box.style.background = entry?.swatch ?? 'transparent';
+    box.value = entry?.swatch ?? '#000000';
     text.textContent = entry ? entry.label : selected;
     box.title = 'Painting with ' + (entry ? entry.label : selected);
   }
@@ -213,7 +215,13 @@ export function paletteInput(value: string | undefined, entries: readonly NamedI
     if (next) { pick(next.id); }
     if (!list.hidden) { open(); }
   }
-  box.addEventListener('click', function () { if (list.hidden) { open(); } else { close(); } });
+  // Cancelling the click is what keeps the colours of the operating system from
+  // opening over a file that has none: its palette is the whole of its choice.
+  box.addEventListener('mousedown', function (event: Event) { event.preventDefault(); box.focus(); });
+  box.addEventListener('click', function (event: Event) {
+    event.preventDefault();
+    if (list.hidden) { open(); } else { close(); }
+  });
   box.addEventListener('blur', close);
   box.addEventListener('keydown', function (event: KeyboardEvent) {
     if (event.key === 'Escape') { close(); return; }

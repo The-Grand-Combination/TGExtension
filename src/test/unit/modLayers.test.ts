@@ -7,6 +7,7 @@ import {
   layersOf,
   listLayeredFiles,
   listLayeredFilesRecursive,
+  listLayeredFilesResolved,
   resolveLayeredFile,
   singleRootLayers,
   type LayerFileSystem,
@@ -116,6 +117,26 @@ suite('modLayers', () => {
       'events/Only.txt',
       'events/Shared.txt',
     ]);
+  });
+
+  test('listLayeredFilesResolved names the layer each file was found in', () => {
+    const layers = layersOf(GAME, [tgc, submod]);
+    const found = listLayeredFilesResolved(layers, fileSystem, 'events').sort((a, b) =>
+      a.relativePath.localeCompare(b.relativePath),
+    );
+    assert.deepStrictEqual(found, [
+      // Only.txt is in both mods; the higher one wins. Shared.txt is in the game
+      // root and in TGC, and the submod does not carry it, so TGC's is the one.
+      { relativePath: 'events/Only.txt', absolutePath: path.join(GAME, 'mod', 'Sub', 'events', 'Only.txt') },
+      { relativePath: 'events/Shared.txt', absolutePath: path.join(GAME, 'mod', 'TGC', 'events', 'Shared.txt') },
+    ]);
+  });
+
+  test('the resolved path is the one resolveLayeredFile would have looked up', () => {
+    const layers = layersOf(GAME, [tgc, submod]);
+    for (const file of listLayeredFilesResolved(layers, fileSystem, 'history')) {
+      assert.strictEqual(file.absolutePath, resolveLayeredFile(layers, fileSystem, file.relativePath));
+    }
   });
 
   test('a replace_path may point into another mod, hiding that mod folder too', () => {

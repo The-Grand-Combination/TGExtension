@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileExists, listFiles, listFilesRecursive, readModFile } from '../../io/modFiles.js';
 import type { Codepage } from '../../io/textCodec.js';
+import type { ModIndex } from '../../model/modIndex.js';
 import { buildModIndexAsync } from '../../services/modIndex.js';
 import { layeredIndexProvider, singleRootLayers, type LayerFileSystem } from '../../services/modLayers.js';
 import { readProvinceLoc } from '../../services/provinceLocEdit.js';
@@ -28,11 +29,11 @@ function cyrillicMod(): string {
   return root;
 }
 
-function indexOf(root: string, codepage: Codepage): ReturnType<typeof buildModIndexAsync> {
+async function indexOf(root: string, codepage: Codepage): Promise<ModIndex> {
   const provider = layeredIndexProvider(singleRootLayers(root), fileSystem, (filePath: string): string | undefined =>
     readModFile(filePath, codepage),
   );
-  return buildModIndexAsync(provider);
+  return (await buildModIndexAsync(provider)).index;
 }
 
 suite('a Cyrillic mod, read off the real filesystem', () => {

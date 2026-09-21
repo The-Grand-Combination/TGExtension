@@ -1,5 +1,6 @@
 import * as assert from 'node:assert';
 import { resolveKeyAt, symbolHoverMarkdown, syntaxFor } from '../../services/symbolHover.js';
+import { analyze } from '../../services/documentAnalysis.js';
 import { EFFECTS } from '../../data/effects.js';
 import { TRIGGERS } from '../../data/triggers.js';
 import { SCOPE_CHANGERS } from '../../data/scopes.js';
@@ -54,14 +55,14 @@ suite('symbolHover — content', () => {
 suite('symbolHover — key position', () => {
   test('resolves words only in key position', () => {
     const text = 'trigger = { war = no owns = 620 }';
-    const atWar = resolveKeyAt(text, text.indexOf('war') + 1);
+    const atWar = resolveKeyAt(analyze(text), text.indexOf('war') + 1);
     assert.strictEqual(atWar?.name, 'war');
-    assert.strictEqual(resolveKeyAt(text, text.indexOf('no') + 1), undefined);
-    assert.strictEqual(resolveKeyAt(text, text.indexOf('620') + 1), undefined);
+    assert.strictEqual(resolveKeyAt(analyze(text), text.indexOf('no') + 1), undefined);
+    assert.strictEqual(resolveKeyAt(analyze(text), text.indexOf('620') + 1), undefined);
   });
 
   test('supports comparison operators as key position', () => {
     const text = 'prestige >= 10';
-    assert.strictEqual(resolveKeyAt(text, 2)?.name, 'prestige');
+    assert.strictEqual(resolveKeyAt(analyze(text), 2)?.name, 'prestige');
   });
 });

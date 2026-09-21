@@ -1,4 +1,4 @@
-import { tokenize } from '../parser/lexer.js';
+import type { AnalyzedDocument } from './documentAnalysis.js';
 import type { Range } from '../model/range.js';
 import type { LocKeyDefinition, ModIndex } from '../model/modIndex.js';
 
@@ -13,12 +13,11 @@ export interface ResolvedLocKey {
  * whose value is a known loc key map to their CSV definition site.
  */
 export function resolveLocKeyAt(
-  text: string,
+  document: AnalyzedDocument,
   offset: number,
   index: ModIndex,
 ): ResolvedLocKey | undefined {
-  const { tokens } = tokenize(text);
-  const token = tokens.find(
+  const token = document.tokens.find(
     (candidate) =>
       (candidate.kind === 'word' || candidate.kind === 'string') &&
       candidate.range.start <= offset &&

@@ -15,6 +15,7 @@ import { paletteEquals, paletteOf } from './bmpPalette.js';
 import { terrainPaletteIndices } from './mapValidation.js';
 import { parseProvinceRows } from './provinceTable.js';
 import { analyzeRivers } from './riverAnalysis.js';
+import { NEVER_CANCELLED, throwIfCancelled, type CancelSignal } from '../model/cancellation.js';
 import { yieldToEventLoop } from './scheduling.js';
 import { parseDocument } from './syntaxValidation.js';
 
@@ -43,7 +44,11 @@ const MAX_PROVINCE_PIXELS = 200_000;
  * modder sees them. Findings are ordered by file, then errors first, then by
  * position.
  */
-export async function auditMapImages(source: MapImageSource, index: ModIndex): Promise<MapFinding[]> {
+export async function auditMapImages(
+  source: MapImageSource,
+  index: ModIndex,
+  signal: CancelSignal = NEVER_CANCELLED,
+): Promise<MapFinding[]> {
   const out = new Findings();
   const table = provinceTable((await source.readText('map/definition.csv')) ?? '', index);
   const provinces = await loadImage(source, PROVINCES_BMP, out);
@@ -60,13 +65,13 @@ export async function auditMapImages(source: MapImageSource, index: ModIndex): P
     }
     return out.sorted();
   }
-  const map = await provinceMapOf(provinces, table, out);
+  const map = await provinceMapOf(provinces, table, out, signal);
   if (terrain && sameSize(terrain, provinces) && terrain.bitsPerPixel === 8) {
     const mapped = terrainPaletteIndices(parseDocument((await source.readText('map/terrain.txt')) ?? '').document);
-    await checkTerrain(indicesOf(terrain), map, table, mapped, out);
+    await checkTerrain(indicesOf(terrain), map, table, mapped, out, signal);
   }
   if (rivers && sameSize(rivers, provinces) && rivers.bitsPerPixel === 8) {
-    await checkRivers(indicesOf(rivers), map, table, out);
+    await checkRivers(indicesOf(rivers), map, table, out, signal);
   }
   return out.sorted();
 }
@@ -171,14 +176,19 @@ function sizeOf(image: BmpImage): string {
 // --- provinces.bmp ------------------------------------------------------------------
 
 /** Province id per pixel (top-down); reports unknown colors and provinces without pixels. */
-async function provinceMapOf(image: BmpImage, table: ProvinceTable, out: Findings): Promise<ProvinceMap> {
+async function provinceMapOf(
+  image: BmpImage,
+  table: ProvinceTable,
+  out: Findings,
+  signal: CancelSignal,
+): Promise<ProvinceMap> {
   const { width, height } = image;
   const ids = new Uint16Array(width * height);
   const pixelCounts = new Uint32Array(LAKE + 1);
   // Where each province was first seen, so a finding about one can be opened at it.
   const firstPixels = new Int32Array(LAKE + 1).fill(-1);
   const unknown = new Tallies();
-  await forEachRowChunk(height, (y) => {
+  await forEachRowChunk(height, signal, (y) => {
     for (let x = 0; x < width; x++) {
       const color = image.rgbAt(x, y);
       const id = table.idByColor[color] ?? NO_PROVINCE;
@@ -222,13 +232,14 @@ async function checkTerrain(
   table: ProvinceTable,
   mapped: ReadonlySet<number>,
   out: Findings,
+  signal: CancelSignal,
 ): Promise<void> {
   const { width } = map;
   const landOverOcean = new Tallies();
   const terrainOverSea = new Tallies();
   const unmapped = new Tallies();
   const noProvince = new Tallies();
-  await forEachRowChunk(map.height, (y) => {
+  await forEachRowChunk(map.height, signal, (y) => {
     for (let x = 0; x < width; x++) {
       const offset = y * width + x;
       const id = map.ids[offset] ?? NO_PROVINCE;
@@ -282,12 +293,18 @@ function reportTerrain(table: ProvinceTable, tallies: TerrainTallies, out: Findi
 
 // --- rivers.bmp ---------------------------------------------------------------------
 
-async function checkRivers(rivers: Uint8Array, map: ProvinceMap, table: ProvinceTable, out: Findings): Promise<void> {
+async function checkRivers(
+  rivers: Uint8Array,
+  map: ProvinceMap,
+  table: ProvinceTable,
+  out: Findings,
+  signal: CancelSignal,
+): Promise<void> {
   const { width } = map;
   const overSea = new Tallies();
   const seaOverLand = new Tallies();
   const landOverSea = new Tallies();
-  await forEachRowChunk(map.height, (y) => {
+  await forEachRowChunk(map.height, signal, (y) => {
     for (let x = 0; x < width; x++) {
       const offset = y * width + x;
       const value = rivers[offset] ?? RIVER_LAND;
@@ -397,8 +414,13 @@ function severityRank(severity: DiagnosticSeverity): number {
   return severity === 'error' ? 0 : 1;
 }
 
-async function forEachRowChunk(height: number, visitRow: (y: number) => void): Promise<void> {
+async function forEachRowChunk(
+  height: number,
+  signal: CancelSignal,
+  visitRow: (y: number) => void,
+): Promise<void> {
   for (let start = 0; start < height; start += ROWS_PER_CHUNK) {
+    throwIfCancelled(signal);
     const end = Math.min(height, start + ROWS_PER_CHUNK);
     for (let y = start; y < end; y++) {
       visitRow(y);

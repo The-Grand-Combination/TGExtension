@@ -1,4 +1,5 @@
 import * as path from 'node:path';
+import { NEVER_CANCELLED, throwIfCancelled, type CancelSignal } from '../model/cancellation.js';
 import type { MapReport, MapReportParams, MapReportResult } from '../model/mapAudit.js';
 import type { ModIndex } from '../model/modIndex.js';
 import { auditMapImages, type MapImageSource } from './mapImageAudit.js';
@@ -15,22 +16,28 @@ export interface MapReportHost extends ModStackHost {
 export async function buildMapReports(
   host: MapReportHost,
   params: MapReportParams,
+  signal: CancelSignal = NEVER_CANCELLED,
 ): Promise<MapReportResult> {
   const reports: MapReport[] = [];
   for (const target of host.targets(params)) {
-    reports.push(await buildMapReport(host, target));
+    throwIfCancelled(signal);
+    reports.push(await buildMapReport(host, target, signal));
   }
   const generatedAt = reportTimestamp();
   return { generatedAt, reports, text: renderMapReportText(reports, generatedAt) };
 }
 
-async function buildMapReport(host: MapReportHost, target: FileLocation): Promise<MapReport> {
+async function buildMapReport(
+  host: MapReportHost,
+  target: FileLocation,
+  signal: CancelSignal,
+): Promise<MapReport> {
   const source = mapSourceFor(host, target);
   const index = source ? await host.ensureIndex(target.layers) : undefined;
   if (!source || !index) {
     return { root: target.root, audited: false, errorCount: 0, warningCount: 0, findings: [] };
   }
-  const findings = await auditMapImages(source, index);
+  const findings = await auditMapImages(source, index, signal);
   return {
     root: target.root,
     audited: true,

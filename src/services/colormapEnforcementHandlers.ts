@@ -1,5 +1,6 @@
 import * as path from 'node:path';
 import type { Palette } from '../data/mapPalettes.js';
+import { NEVER_CANCELLED, throwIfCancelled, type CancelSignal } from '../model/cancellation.js';
 import type {
   ColormapFileResult,
   EnforceColormapsParams,
@@ -15,10 +16,14 @@ export interface ColormapEnforcementHost extends ModStackHost {
 export async function enforceColormaps(
   host: ColormapEnforcementHost,
   params: EnforceColormapsParams,
+  signal: CancelSignal = NEVER_CANCELLED,
 ): Promise<EnforceColormapsResult> {
   const files: ColormapFileResult[] = [];
   for (const target of host.targets(params)) {
     for (const file of COLORMAP_FILES) {
+      // Checked before each file: a write already made is not undone, but the
+      // ones still to come are not started.
+      throwIfCancelled(signal);
       const absolutePath = path.join(target.root, file.relativePath);
       if (!host.fileExists(absolutePath)) {
         continue;

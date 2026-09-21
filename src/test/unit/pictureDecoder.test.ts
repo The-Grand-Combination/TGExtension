@@ -1,6 +1,7 @@
 import * as assert from 'node:assert';
 import { decodePicture } from '../../services/pictureDecoder.js';
 import { resolvePictureAt } from '../../services/pictureHover.js';
+import { analyze } from '../../services/documentAnalysis.js';
 import { encodePng } from '../../services/pngEncoder.js';
 
 function ddsHeader(width: number, height: number, fourCc: string): Uint8Array {
@@ -115,13 +116,13 @@ suite('pictureHover — context detection', () => {
   test('detects picture values, quoted or not', () => {
     const text = 'country_event = { picture = "Slaves" }';
     const offset = text.indexOf('Slaves') + 2;
-    assert.strictEqual(resolvePictureAt(text, offset)?.name, 'Slaves');
+    assert.strictEqual(resolvePictureAt(analyze(text), offset)?.name, 'Slaves');
     const bare = 'picture = cavours_diplomacy';
-    assert.strictEqual(resolvePictureAt(bare, bare.length - 2)?.name, 'cavours_diplomacy');
+    assert.strictEqual(resolvePictureAt(analyze(bare), bare.length - 2)?.name, 'cavours_diplomacy');
   });
 
   test('ignores non-picture values', () => {
     const text = 'title = "Slaves"';
-    assert.strictEqual(resolvePictureAt(text, text.indexOf('Slaves') + 2), undefined);
+    assert.strictEqual(resolvePictureAt(analyze(text), text.indexOf('Slaves') + 2), undefined);
   });
 });

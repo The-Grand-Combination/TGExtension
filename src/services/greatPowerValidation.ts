@@ -1,8 +1,10 @@
 import type { Document } from '../model/ast.js';
 import { diagnostic, type Diagnostic } from '../model/diagnostic.js';
+import { NEVER_CANCELLED, throwIfCancelled, type CancelSignal } from '../model/cancellation.js';
 import { compareDates } from '../model/gameDate.js';
 import type { Range } from '../model/range.js';
 import { parseCountryList } from './countryList.js';
+import type { LayeredFile } from './modLayers.js';
 import { yieldToEventLoop } from './scheduling.js';
 import { parseDocument } from './syntaxValidation.js';
 
@@ -104,12 +106,16 @@ function greatNationsCount(definesText: string | undefined): CountValue | undefi
 /** The layered reads a start-date picture of the world needs; injected so the service stays testable. */
 export interface StartStateReader {
   readonly startDate: string;
-  /** Read a mod-root-relative path over the stack, as the game would. */
-  readonly readFile: (relativePath: string) => Promise<string | undefined>;
-  /** Merged paths under `history/provinces`, the highest layer of each first. */
-  readonly provinceFiles: readonly string[];
-  /** Merged paths under `history/countries`, the highest layer of each first. */
-  readonly countryFiles: readonly string[];
+  /**
+   * Read one of the files listed below. It takes the absolute path the listing
+   * already resolved: re-resolving a relative path costs a `fileExists` per
+   * layer, and this pass reads thousands of files.
+   */
+  readonly readFile: (absolutePath: string) => Promise<string | undefined>;
+  /** Merged files under `history/provinces`, the highest layer of each first. */
+  readonly provinceFiles: readonly LayeredFile[];
+  /** Merged files under `history/countries`, the highest layer of each first. */
+  readonly countryFiles: readonly LayeredFile[];
   /** Province id → the state region it belongs to, from the mod index. */
   readonly stateOfProvince: ReadonlyMap<string, string>;
 }
@@ -126,24 +132,49 @@ const BATCH_SIZE = 64;
 export async function collectGreatPowerCandidates(
   countriesText: string | undefined,
   reader: StartStateReader,
+  signal: CancelSignal = NEVER_CANCELLED,
 ): Promise<GreatPowerCandidate[]> {
   if (countriesText === undefined) {
     return [];
   }
-  const statesByTag = await ownedStates(reader);
+  const statesByTag = await ownedStates(reader, signal);
   const historyByTag = countryHistoryByTag(reader.countryFiles);
-  const candidates: GreatPowerCandidate[] = [];
-  for (const entry of parseCountryList(countriesText)) {
-    const tag = entry.tag.value.toUpperCase();
-    const historyFile = historyByTag.get(tag);
-    const text = historyFile === undefined ? undefined : await reader.readFile(historyFile);
-    candidates.push({
-      tag: entry.tag.value,
-      civilized: text !== undefined && historyValueAtStart(text, 'civilized', reader.startDate)?.toLowerCase() === 'yes',
-      stateCount: statesByTag.get(tag)?.size ?? 0,
+  const entries = parseCountryList(countriesText);
+  const civilized = await civilizedTags(reader, entries.map((entry) => entry.tag.value), historyByTag, signal);
+  return entries.map((entry) => ({
+    tag: entry.tag.value,
+    civilized: civilized.has(entry.tag.value.toUpperCase()),
+    stateCount: statesByTag.get(entry.tag.value.toUpperCase())?.size ?? 0,
+  }));
+}
+
+/** The tags whose history file sets `civilized = yes` at the start date, read in parallel batches. */
+async function civilizedTags(
+  reader: StartStateReader,
+  tags: readonly string[],
+  historyByTag: ReadonlyMap<string, LayeredFile>,
+  signal: CancelSignal,
+): Promise<ReadonlySet<string>> {
+  const found = new Set<string>();
+  const withHistory = tags
+    .map((tag) => tag.toUpperCase())
+    .flatMap((tag) => {
+      const file = historyByTag.get(tag);
+      return file === undefined ? [] : [{ tag, file }];
     });
+  for (let start = 0; start < withHistory.length; start += BATCH_SIZE) {
+    throwIfCancelled(signal);
+    const batch = withHistory.slice(start, start + BATCH_SIZE);
+    const texts = await Promise.all(batch.map((entry) => reader.readFile(entry.file.absolutePath)));
+    batch.forEach((entry, position) => {
+      const text = texts[position];
+      if (text !== undefined && historyValueAtStart(text, 'civilized', reader.startDate)?.toLowerCase() === 'yes') {
+        found.add(entry.tag);
+      }
+    });
+    await yieldToEventLoop();
   }
-  return candidates;
+  return found;
 }
 
 /**
@@ -152,28 +183,32 @@ export async function collectGreatPowerCandidates(
  * the path in `common/countries.txt`: that one points at the country
  * definition under `common/countries/`, which is a different file.
  */
-function countryHistoryByTag(countryFiles: readonly string[]): ReadonlyMap<string, string> {
-  const byTag = new Map<string, string>();
-  for (const relativePath of countryFiles) {
-    const name = relativePath.slice(relativePath.lastIndexOf('/') + 1);
+function countryHistoryByTag(countryFiles: readonly LayeredFile[]): ReadonlyMap<string, LayeredFile> {
+  const byTag = new Map<string, LayeredFile>();
+  for (const file of countryFiles) {
+    const name = file.relativePath.slice(file.relativePath.lastIndexOf('/') + 1);
     const tag = /^([A-Za-z0-9]{3})(?![A-Za-z0-9])/.exec(name)?.[1]?.toUpperCase();
     // The highest layer comes first; a lower one is the file it replaces.
     if (tag !== undefined && !byTag.has(tag)) {
-      byTag.set(tag, relativePath);
+      byTag.set(tag, file);
     }
   }
   return byTag;
 }
 
 /** Tag → the state regions it owns a province in, over every province history file. */
-async function ownedStates(reader: StartStateReader): Promise<ReadonlyMap<string, Set<string>>> {
+async function ownedStates(
+  reader: StartStateReader,
+  signal: CancelSignal,
+): Promise<ReadonlyMap<string, Set<string>>> {
   const byTag = new Map<string, Set<string>>();
   const seenProvinces = new Set<string>();
   for (let start = 0; start < reader.provinceFiles.length; start += BATCH_SIZE) {
+    throwIfCancelled(signal);
     const batch = reader.provinceFiles.slice(start, start + BATCH_SIZE);
-    const texts = await Promise.all(batch.map((relativePath) => reader.readFile(relativePath)));
-    batch.forEach((relativePath, position) => {
-      const provinceId = provinceIdOf(relativePath);
+    const texts = await Promise.all(batch.map((file) => reader.readFile(file.absolutePath)));
+    batch.forEach((file, position) => {
+      const provinceId = provinceIdOf(file.relativePath);
       const text = texts[position];
       // The highest layer of a province comes first; a lower one is the file it replaces.
       if (provinceId === undefined || text === undefined || seenProvinces.has(provinceId)) {

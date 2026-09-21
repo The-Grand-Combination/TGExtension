@@ -14,8 +14,8 @@ export interface ProvinceLocDefinition {
 export const LOCALISATION_HEADER =
   'CODE;ENGLISH;FRENCH;GERMAN;POLISH;SPANISH;ITALIAN;SWEDISH;CZECH;HUNGARIAN;DUTCH;PORTUGUESE;RUSSIAN;FINNISH;x';
 
-/** The file a mod's province names go to when it has none yet; sorts first, so it wins over the game's text.csv. */
-export const DEFAULT_PROVINCE_LOC_FILE = '00_map-provinces.csv';
+/** Where a mod's province names go: one file with one job, created with the mod's first new province. */
+export const PROVINCE_LOC_FILE = 'provinces.csv';
 
 export function provinceLocKey(provinceId: number): string {
   return `PROV${String(provinceId)}`;
@@ -92,7 +92,14 @@ export interface LocFileCandidate {
   readonly provinceKeyCount: number;
 }
 
-/** The mod's file holding the most province names, else the default file name. */
+/**
+ * Where a name the mod does not define yet is written. Only the mod's own
+ * files are ever offered: a mod that leaves a province with the game's name has
+ * that name read from the game's own file, and writing the new one there would
+ * edit the base game under every other mod. So the mod's file already holding
+ * the most province names wins, and failing that its `provinces.csv`, which the
+ * write creates along with the folder.
+ */
 export function pickLocFileForNewKey(candidates: readonly LocFileCandidate[]): string {
   let best: LocFileCandidate | undefined;
   for (const candidate of candidates) {
@@ -100,7 +107,13 @@ export function pickLocFileForNewKey(candidates: readonly LocFileCandidate[]): s
       best = candidate;
     }
   }
-  return best?.name ?? DEFAULT_PROVINCE_LOC_FILE;
+  if (best) {
+    return best.name;
+  }
+  // Under whatever spelling the mod already has it: a second file differing
+  // only in case is two the game reads and one the editor writes.
+  const held = candidates.find(function (candidate) { return candidate.name.toLowerCase() === PROVINCE_LOC_FILE; });
+  return held?.name ?? PROVINCE_LOC_FILE;
 }
 
 const FORBIDDEN_FILE_NAME_CHARACTERS = /[<>:"/\\|?*]/g;

@@ -1,13 +1,13 @@
 import * as assert from 'node:assert';
 import {
   appendProvinceLoc,
-  countProvinceKeys,
   foldToAscii,
   historyFileNameFor,
   unfoldableCharacter,
   locKeyLine,
   newProvinceLocFile,
   patchProvinceLoc,
+  countProvinceKeys,
   pickLocFileForNewKey,
   readProvinceLoc,
 } from '../../services/provinceLocEdit.js';
@@ -59,7 +59,7 @@ suite('provinceLocEdit', () => {
     assert.strictEqual(countProvinceKeys(CSV), 2);
   });
 
-  test('picks the file with the most province keys, else the default', () => {
+  test('a new name goes to the file already holding the most province names', () => {
     assert.strictEqual(
       pickLocFileForNewKey([
         { name: 'text.csv', provinceKeyCount: 3 },
@@ -67,7 +67,16 @@ suite('provinceLocEdit', () => {
       ]),
       '00_map.csv',
     );
-    assert.strictEqual(pickLocFileForNewKey([{ name: 'events.csv', provinceKeyCount: 0 }]), '00_map-provinces.csv');
+  });
+
+  test('a mod holding no province names at all gets its own province file', () => {
+    assert.strictEqual(pickLocFileForNewKey([{ name: 'events.csv', provinceKeyCount: 0 }]), 'provinces.csv');
+    assert.strictEqual(pickLocFileForNewKey([]), 'provinces.csv');
+  });
+
+  test('a province file the mod already spells its own way is the one written to', () => {
+    const candidates = [{ name: 'events.csv', provinceKeyCount: 0 }, { name: 'Provinces.CSV', provinceKeyCount: 0 }];
+    assert.strictEqual(pickLocFileForNewKey(candidates), 'Provinces.CSV');
   });
 
   test('reads the key through the index', () => {

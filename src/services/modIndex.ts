@@ -9,9 +9,10 @@ import type {
   LocKeyDefinition,
   ModIndex,
 } from '../model/modIndex.js';
+import type { Range } from '../model/range.js';
 import type { IdentifierCategory } from '../model/symbols.js';
 import { csvRows } from '../parser/csv.js';
-import { yieldToEventLoop } from './scheduling.js';
+import { runToEnd, YieldBudget, yieldToEventLoop, type WorkUnits } from './scheduling.js';
 import { seaStartsOf } from './mapDefaultEdit.js';
 import { parseDocument } from './syntaxValidation.js';
 
@@ -324,25 +325,74 @@ function indexIssueCategory(
   }
 }
 
-function indexEventLike(
-  provider: ModFileProvider,
-  folder: 'events' | 'decisions',
-  record: (document: Document, filePath: string) => void,
-): void {
-  for (const fileName of provider.listFiles(folder, '.txt')) {
-    const relativePath = `${folder}/${fileName}`;
-    const document = parseRelative(provider, relativePath);
-    if (document) {
-      record(document, relativePath);
-    }
-  }
+/** A named thing a file declares, and where. */
+interface NameAt {
+  readonly name: string;
+  readonly range: Range;
 }
 
-function recordEventIds(
-  document: Document,
-  filePath: string,
-  occurrences: Map<string, EventOccurrence[]>,
-): void {
+/**
+ * Everything one file of a walked folder adds to the index. Keeping this per
+ * file is what lets a rebuild skip the files that did not change: the four
+ * folders below are pure accumulation, so re-merging a kept contribution gives
+ * exactly what re-reading the file would have.
+ */
+export interface FileContribution {
+  readonly eventIds: readonly NameAt[];
+  readonly decisionNames: readonly NameAt[];
+  readonly countryFlags: readonly string[];
+  readonly globalFlags: readonly string[];
+  /** In file order; the merge keeps the first definition of a key. */
+  readonly locKeys: readonly LocKeyDefinition[];
+}
+
+/** The per-file work of a finished build, to hand back to the next one. */
+export interface IndexCarry {
+  readonly byFile: ReadonlyMap<string, FileContribution>;
+}
+
+/** What a rebuild may reuse: last build's work, minus the files that changed since. */
+export interface IndexReuse {
+  readonly carry: IndexCarry;
+  /** Mod-relative paths whose content differs; anything else is taken from the carry. */
+  readonly changed: ReadonlySet<string>;
+}
+
+export interface IndexBuildResult {
+  readonly index: ModIndex;
+  readonly carry: IndexCarry;
+}
+
+const NOTHING: FileContribution = {
+  eventIds: [],
+  decisionNames: [],
+  countryFlags: [],
+  globalFlags: [],
+  locKeys: [],
+};
+
+function flagsOf(entries: readonly Entry[]): Pick<FileContribution, 'countryFlags' | 'globalFlags'> {
+  const found: FlagSets = { country: new Set(), global: new Set() };
+  collectSetFlags(entries, found);
+  return { countryFlags: [...found.country], globalFlags: [...found.global] };
+}
+
+function eventContribution(text: string): FileContribution {
+  const document = parseDocument(text).document;
+  return { ...NOTHING, ...flagsOf(document.entries), eventIds: eventIdsOf(document) };
+}
+
+function decisionContribution(text: string): FileContribution {
+  const document = parseDocument(text).document;
+  return { ...NOTHING, ...flagsOf(document.entries), decisionNames: decisionNamesOf(document) };
+}
+
+function flagContribution(text: string): FileContribution {
+  return { ...NOTHING, ...flagsOf(parseDocument(text).document.entries) };
+}
+
+function eventIdsOf(document: Document): NameAt[] {
+  const found: NameAt[] = [];
   for (const eventAssignment of blockKeysOf(document)) {
     const keyLower = eventAssignment.key.value.toLowerCase();
     if (keyLower !== 'country_event' && keyLower !== 'province_event') {
@@ -353,17 +403,13 @@ function recordEventIds(
     if (idAssignment?.value.kind !== 'scalar') {
       continue;
     }
-    const list = occurrences.get(idAssignment.value.value) ?? [];
-    list.push({ filePath, range: idAssignment.value.range });
-    occurrences.set(idAssignment.value.value, list);
+    found.push({ name: idAssignment.value.value, range: idAssignment.value.range });
   }
+  return found;
 }
 
-function recordDecisionNames(
-  document: Document,
-  filePath: string,
-  occurrences: Map<string, EventOccurrence[]>,
-): void {
+function decisionNamesOf(document: Document): NameAt[] {
+  const found: NameAt[] = [];
   for (const wrapper of blockKeysOf(document)) {
     if (wrapper.key.value.toLowerCase() !== 'political_decisions') {
       continue;
@@ -373,12 +419,10 @@ function recordDecisionNames(
       continue;
     }
     for (const decision of blockKeysOf(wrapperBlock)) {
-      const nameLower = decision.key.value.toLowerCase();
-      const list = occurrences.get(nameLower) ?? [];
-      list.push({ filePath, range: decision.key.range });
-      occurrences.set(nameLower, list);
+      found.push({ name: decision.key.value.toLowerCase(), range: decision.key.range });
     }
   }
+  return found;
 }
 
 /** Recursively collect `set_country_flag` / `set_global_flag` values. */
@@ -405,38 +449,16 @@ function collectFlagAssignment(assignment: Assignment, into: FlagSets): void {
   }
 }
 
-function collectFlagsFromFolder(provider: ModFileProvider, folder: string, into: FlagSets): void {
-  for (const fileName of provider.listFiles(folder, '.txt')) {
-    const document = parseRelative(provider, `${folder}/${fileName}`);
-    if (document) {
-      collectSetFlags(document.entries, into);
+/** The loc keys a CSV declares, in file order. */
+function locContribution(text: string, filePath: string): FileContribution {
+  const locKeys: LocKeyDefinition[] = [];
+  for (const row of csvRows(text, { maxFields: 2 })) {
+    const key = row.fields[0]?.text ?? '';
+    if (key !== '') {
+      locKeys.push({ name: key, filePath, line: row.line, length: key.length, text: row.fields[1]?.text ?? '' });
     }
   }
-}
-
-function localisationDefinitions(provider: ModFileProvider): Map<string, LocKeyDefinition> {
-  const definitions = new Map<string, LocKeyDefinition>();
-  for (const fileName of provider.listFiles('localisation', '.csv')) {
-    const filePath = `localisation/${fileName}`;
-    const text = provider.readFile(filePath);
-    if (text === undefined) {
-      continue;
-    }
-    for (const row of csvRows(text, { maxFields: 2 })) {
-      const key = row.fields[0]?.text ?? '';
-      const keyLower = key.toLowerCase();
-      if (key !== '' && !definitions.has(keyLower)) {
-        definitions.set(keyLower, {
-          name: key,
-          filePath,
-          line: row.line,
-          length: key.length,
-          text: row.fields[1]?.text ?? '',
-        });
-      }
-    }
-  }
-  return definitions;
+  return { ...NOTHING, locKeys };
 }
 
 const PICTURE_EXTENSION = /\.(tga|dds)$/i;
@@ -474,25 +496,46 @@ function collectDuplicates(
 
 /** Build the identifier index for a mod root. Missing files yield empty categories. */
 export function buildModIndex(provider: ModFileProvider): ModIndex {
-  const build = new IndexBuild(provider);
+  const build = new IndexBuild(provider, undefined);
   for (const step of build.steps) {
-    step();
+    runToEnd(step());
+  }
+  return build.finish().index;
+}
+
+/**
+ * The same build, interleaved: the event loop gets a turn between steps and
+ * again whenever a step has worked through its share of source, so a language
+ * server keeps answering requests while a large mod is indexed.
+ *
+ * With `reuse`, the files a folder walk would have read are taken from the last
+ * build instead, except the ones named as changed. Editing one event file then
+ * costs that file rather than the folder.
+ */
+export async function buildModIndexAsync(
+  provider: ModFileProvider,
+  reuse?: IndexReuse,
+): Promise<IndexBuildResult> {
+  const build = new IndexBuild(provider, reuse);
+  const budget = new YieldBudget();
+  for (const step of build.steps) {
+    await budget.run(step());
+    await yieldToEventLoop();
   }
   return build.finish();
 }
 
-/**
- * The same build with the event loop given a turn between steps, so a language
- * server keeps answering requests while a large mod is indexed. Each step covers
- * one folder or one group of related files.
- */
-export async function buildModIndexAsync(provider: ModFileProvider): Promise<ModIndex> {
-  const build = new IndexBuild(provider);
-  for (const step of build.steps) {
-    step();
-    await yieldToEventLoop();
-  }
-  return build.finish();
+/** Append one declaration site to the occurrence list of its name. */
+function occurrenceAt(occurrences: Map<string, EventOccurrence[]>, found: NameAt, filePath: string): void {
+  const list = occurrences.get(found.name) ?? [];
+  list.push({ filePath, range: found.range });
+  occurrences.set(found.name, list);
+}
+
+/** A step with nothing to interrupt inside it: it reports no interruptible work. */
+function* whole(work: () => void): WorkUnits {
+  work();
+  yield 0;
 }
 
 interface PutOptions {
@@ -507,27 +550,89 @@ class IndexBuild {
   private readonly flags: FlagSets = { country: new Set(), global: new Set() };
   private readonly eventOccurrences = new Map<string, EventOccurrence[]>();
   private readonly decisionOccurrences = new Map<string, EventOccurrence[]>();
-  private locKeyDefinitions = new Map<string, LocKeyDefinition>();
+  private readonly locKeyDefinitions = new Map<string, LocKeyDefinition>();
   private issues: IssueIndex = emptyIssueIndex();
   private defaultMap: DefaultMapData = { maxProvinces: undefined, seaProvinces: new Set() };
   private stateOfProvince = new Map<string, string>();
   private climateOfProvince = new Map<string, string>();
   private techFolders: string[] = [];
+  /** The per-file work of this build, kept for the next one. */
+  private readonly byFile = new Map<string, FileContribution>();
 
-  readonly steps: readonly (() => void)[] = [
-    (): void => { this.indexCommonData(); },
-    (): void => { this.indexIssuesAndPopTypes(); },
-    (): void => { this.indexMap(); },
-    (): void => { this.indexTechnology(); },
-    (): void => { this.indexLocalisationAndPictures(); },
-    (): void => { this.indexEvents(); },
-    (): void => { this.indexDecisions(); },
-    (): void => { this.indexOtherFlagSources(); },
+  /**
+   * The build, in order. The first four read a fixed handful of files and run
+   * whole; the rest walk a folder and report each file, so a mod with hundreds
+   * of them does not hold the event loop for the length of the folder.
+   */
+  readonly steps: readonly (() => WorkUnits)[] = [
+    (): WorkUnits => whole(() => { this.indexCommonData(); }),
+    (): WorkUnits => whole(() => { this.indexIssuesAndPopTypes(); }),
+    (): WorkUnits => whole(() => { this.indexMap(); }),
+    (): WorkUnits => whole(() => { this.indexTechnology(); }),
+    (): WorkUnits => this.indexLocalisationAndPictures(),
+    (): WorkUnits => this.indexEvents(),
+    (): WorkUnits => this.indexDecisions(),
+    (): WorkUnits => this.indexOtherFlagSources(),
   ];
 
-  constructor(private readonly provider: ModFileProvider) {}
+  constructor(
+    private readonly provider: ModFileProvider,
+    private readonly reuse: IndexReuse | undefined,
+  ) {}
 
-  finish(): ModIndex {
+  /**
+   * Walk a folder, merging each file's contribution. A file the last build
+   * already read, and that has not changed since, is merged from the carry
+   * without being read or parsed again.
+   */
+  private *walk(
+    folder: string,
+    extension: string,
+    compute: (text: string, filePath: string) => FileContribution,
+  ): WorkUnits {
+    for (const fileName of this.provider.listFiles(folder, extension)) {
+      const filePath = `${folder}/${fileName}`;
+      const kept = this.reuse?.changed.has(filePath) === false ? this.reuse.carry.byFile.get(filePath) : undefined;
+      if (kept) {
+        this.merge(filePath, kept);
+        continue;
+      }
+      const text = this.provider.readFile(filePath);
+      if (text === undefined) {
+        continue;
+      }
+      this.merge(filePath, compute(text, filePath));
+      yield text.length;
+    }
+  }
+
+  private merge(filePath: string, contribution: FileContribution): void {
+    this.byFile.set(filePath, contribution);
+    for (const event of contribution.eventIds) {
+      occurrenceAt(this.eventOccurrences, event, filePath);
+    }
+    for (const decision of contribution.decisionNames) {
+      occurrenceAt(this.decisionOccurrences, decision, filePath);
+    }
+    for (const flag of contribution.countryFlags) {
+      this.flags.country.add(flag);
+    }
+    for (const flag of contribution.globalFlags) {
+      this.flags.global.add(flag);
+    }
+    for (const definition of contribution.locKeys) {
+      const keyLower = definition.name.toLowerCase();
+      if (!this.locKeyDefinitions.has(keyLower)) {
+        this.locKeyDefinitions.set(keyLower, definition);
+      }
+    }
+  }
+
+  finish(): IndexBuildResult {
+    return { index: this.builtIndex(), carry: { byFile: this.byFile } };
+  }
+
+  private builtIndex(): ModIndex {
     return {
       identifiers: this.identifiers,
       reformOptionsByClass: this.issues.optionsByClass,
@@ -655,35 +760,29 @@ class IndexBuild {
     this.put('unit', folderOccurrences(this.provider, 'units'), { checkDuplicates: true });
   }
 
-  private indexLocalisationAndPictures(): void {
-    this.locKeyDefinitions = localisationDefinitions(this.provider);
+  private *indexLocalisationAndPictures(): WorkUnits {
+    yield* this.walk('localisation', '.csv', locContribution);
     this.putNames('locKey', [...this.locKeyDefinitions.keys()]);
     this.putNames('eventPicture', pictureNames(this.provider, 'gfx/pictures/events'));
     this.putNames('decisionPicture', pictureNames(this.provider, 'gfx/pictures/decisions'));
   }
 
-  private indexEvents(): void {
-    indexEventLike(this.provider, 'events', (document, filePath) => {
-      recordEventIds(document, filePath, this.eventOccurrences);
-      collectSetFlags(document.entries, this.flags);
-    });
+  private *indexEvents(): WorkUnits {
+    yield* this.walk('events', '.txt', eventContribution);
     this.putNames('event', [...this.eventOccurrences.keys()]);
   }
 
-  private indexDecisions(): void {
-    indexEventLike(this.provider, 'decisions', (document, filePath) => {
-      recordDecisionNames(document, filePath, this.decisionOccurrences);
-      collectSetFlags(document.entries, this.flags);
-    });
+  private *indexDecisions(): WorkUnits {
+    yield* this.walk('decisions', '.txt', decisionContribution);
   }
 
-  private indexOtherFlagSources(): void {
+  private *indexOtherFlagSources(): WorkUnits {
     for (const flagSource of ['common/cb_types.txt', 'common/rebel_types.txt', 'common/issues.txt']) {
       const flagDocument = parseRelative(this.provider, flagSource);
       if (flagDocument) {
         collectSetFlags(flagDocument.entries, this.flags);
       }
     }
-    collectFlagsFromFolder(this.provider, 'history/countries', this.flags);
+    yield* this.walk('history/countries', '.txt', flagContribution);
   }
 }

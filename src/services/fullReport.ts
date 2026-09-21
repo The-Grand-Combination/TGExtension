@@ -4,7 +4,8 @@ import type { FileReport, ModReport, ReportDiagnostic } from '../model/fullRepor
 import type { ModIndex } from '../model/modIndex.js';
 import { DEFAULT_VALIDATION_OPTIONS, type ValidationOptions } from '../model/validationOptions.js';
 import { validateFileText } from './fileValidation.js';
-import { yieldToEventLoop } from './scheduling.js';
+import { NEVER_CANCELLED, type CancelSignal } from '../model/cancellation.js';
+import { YieldBudget, type WorkUnits } from './scheduling.js';
 
 /** File access for a whole-mod scan; injected so the service stays testable. */
 export interface ReportFileProvider {
@@ -41,14 +42,16 @@ export interface ExtraFileFindings {
   readonly diagnostics: readonly Diagnostic[];
 }
 
-/** Files read together; also how often the scan yields to other requests. */
+/** Files read together, so their reads overlap. */
 const BATCH_SIZE = 64;
 
 /**
  * Validate every classified file of a mod and collect the findings. Files are
- * read in parallel batches and the event loop gets a turn between batches, so
- * a language server keeps answering while a large mod is scanned. The map
- * bitmaps are not part of this report; see `mapImageAudit.ts`.
+ * read in parallel batches and the event loop gets a turn once a batch has been
+ * validated through its share of source, so a language server keeps answering
+ * while a large mod is scanned — a batch that happens to hold a mod's biggest
+ * files is interrupted as often as its size deserves, not once. The map bitmaps
+ * are not part of this report; see `mapImageAudit.ts`.
  */
 export async function buildModReport(
   root: string,
@@ -56,26 +59,17 @@ export async function buildModReport(
   index: ModIndex,
   options: ValidationOptions = DEFAULT_VALIDATION_OPTIONS,
   extras: readonly ExtraFileFindings[] = [],
+  signal: CancelSignal = NEVER_CANCELLED,
 ): Promise<ModReport> {
   const paths = reportFiles(provider);
-  const files: FileReport[] = [];
-  let fileCount = 0;
+  const scan = new Scan();
+  const budget = new YieldBudget(undefined, signal);
   for (let start = 0; start < paths.length; start += BATCH_SIZE) {
     const batch = paths.slice(start, start + BATCH_SIZE);
     const texts = await Promise.all(batch.map((relativePath) => provider.readFile(relativePath)));
-    batch.forEach((relativePath, position) => {
-      const text = texts[position];
-      if (text === undefined) {
-        return;
-      }
-      fileCount++;
-      const report = reportFor(relativePath, text, provider, index, options);
-      if (report) {
-        files.push(report);
-      }
-    });
-    await yieldToEventLoop();
+    await budget.run(scan.validateBatch(batch, texts, provider, index, options));
   }
+  const { files, fileCount } = scan;
   const merged = withExtras(files, extras);
   const diagnostics = merged.flatMap((file) => file.diagnostics);
   return {
@@ -85,6 +79,34 @@ export async function buildModReport(
     warningCount: diagnostics.filter((item) => item.severity === 'warning').length,
     files: errorsFirst(merged),
   };
+}
+
+/** The files scanned so far, and the work the scan reports as it goes. */
+class Scan {
+  readonly files: FileReport[] = [];
+  /** Files that were read; one with no findings still counts as scanned. */
+  fileCount = 0;
+
+  *validateBatch(
+    batch: readonly string[],
+    texts: readonly (string | undefined)[],
+    provider: ReportFileProvider,
+    index: ModIndex,
+    options: ValidationOptions,
+  ): WorkUnits {
+    for (const [position, relativePath] of batch.entries()) {
+      const text = texts[position];
+      if (text === undefined) {
+        continue;
+      }
+      this.fileCount++;
+      const report = reportFor(relativePath, text, provider, index, options);
+      if (report) {
+        this.files.push(report);
+      }
+      yield text.length;
+    }
+  }
 }
 
 /**

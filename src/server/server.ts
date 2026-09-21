@@ -3,10 +3,13 @@ import {
   createConnection,
   CompletionItemKind,
   InsertTextFormat,
+  LSPErrorCodes,
   MarkupKind,
   ProposedFeatures,
+  ResponseError,
   TextDocuments,
   TextDocumentSyncKind,
+  type CancellationToken,
   type CompletionItem,
   type CompletionList,
   type Connection,
@@ -40,6 +43,7 @@ import {
   type EnforceColormapsParams,
   type EnforceColormapsResult,
 } from '../model/colormaps.js';
+import { isCancelled, type CancelSignal } from '../model/cancellation.js';
 import type { Diagnostic } from '../model/diagnostic.js';
 import type { RequestDescriptor } from '../model/request.js';
 import { classifyFile } from '../model/fileType.js';
@@ -85,38 +89,40 @@ import {
 import type { ModIndex } from '../model/modIndex.js';
 import { duplicateDiagnosticsByFile, duplicateDiagnosticsFor } from '../services/duplicateDiagnostics.js';
 import { validateFileText } from '../services/fileValidation.js';
-import { compilePattern, NULL_TAG_FLAGS, type ValidationOptions } from '../model/validationOptions.js';
+import { NULL_TAG_FLAGS, type ValidationOptions } from '../model/validationOptions.js';
 import { enforceColormaps, type ColormapEnforcementHost } from '../services/colormapEnforcementHandlers.js';
 import { buildFullReport, type FullReportHost } from '../services/fullReportHandlers.js';
 import { buildMapReports, type MapReportHost } from '../services/mapReportHandlers.js';
 import type { ModStackHost, TargetParams } from '../services/modStackHost.js';
 import { locKeyHoverMarkdown, resolveLocKeyAt } from '../services/locDefinition.js';
-import { buildModIndexAsync } from '../services/modIndex.js';
+import { buildModIndexAsync, type IndexBuildResult, type IndexReuse } from '../services/modIndex.js';
 import {
   layeredIndexProvider,
-  layersOf,
   listLayeredFiles,
+  relativeInLayers,
   resolveLayeredFile,
   type LayerFileSystem,
   type LayerOptions,
   type ModLayers,
 } from '../services/modLayers.js';
 import {
-  detectGameRoot,
-  detectModDirectory,
-  loadModDescriptors,
   locateFile,
   locateLoneMod,
-  mergeDescriptors,
   missingDependencies,
-  resolveSelection,
   type FileLocation,
   type ModLayout,
 } from '../services/modLayout.js';
+import {
+  loadLayout,
+  reportTargets,
+  selectionLayers as layersOfSelection,
+} from '../services/serverLayout.js';
+import { CompiledPattern, CompiledValidationOptions } from '../services/validationSettings.js';
 import { pictureHoverAt, pictureHoverMarkdown, type PictureHover } from '../services/pictureHover.js';
 import { resolveKeyAt, symbolHoverMarkdown } from '../services/symbolHover.js';
 import { completionsAt, type CompletionEntry, type CompletionKind } from '../services/completion.js';
 import { BoundedCache } from '../services/boundedCache.js';
+import { DocumentAnalysisCache, type AnalyzedDocument } from '../services/documentAnalysis.js';
 import { MapEditorHandlers } from '../services/mapEditorHandlers.js';
 import { ModCache, type ModContext } from '../services/modCache.js';
 import {
@@ -132,7 +138,9 @@ const connection: Connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
 let config: ServerConfig = DEFAULT_CONFIG;
-let compiled = compile(config);
+const compiledOptions = new CompiledValidationOptions(NULL_TAG_FLAGS);
+/** `history/provinces` subfolders the Map Editor sees; empty means all of them. */
+const compiledProvinceFolder = new CompiledPattern(PROVINCE_FOLDER_FLAGS);
 
 /**
  * Text I/O bound to the mod's code page. These read `config` on every call
@@ -151,55 +159,13 @@ function writeText(absolutePath: string, text: string): Promise<boolean> {
   return writeModFileText(absolutePath, text, config.encoding);
 }
 
-interface CompiledOptions {
-  readonly sources: readonly string[];
-  readonly options: ValidationOptions;
-}
-
-function compile(source: ServerConfig): CompiledOptions {
-  return {
-    sources: optionSourcesOf(source),
-    options: {
-      locKeyPattern: compilePattern(source.locKeyPattern),
-      flagNamePattern: compilePattern(source.flagNamePattern),
-      nullTagPattern: compilePattern(source.nullTagPattern, NULL_TAG_FLAGS),
-      suppressNullTagWarnings: source.nullTagSuppressWarnings,
-      ignoreMarker: source.ignoreMarker,
-    },
-  };
-}
-
-/** What the compiled options were built from; a change to any of them recompiles. */
-function optionSourcesOf(source: ServerConfig): readonly string[] {
-  return [
-    source.locKeyPattern,
-    source.flagNamePattern,
-    source.nullTagPattern,
-    String(source.nullTagSuppressWarnings),
-    source.ignoreMarker,
-  ];
-}
-
 /** The validation options of the current configuration; the regexes are compiled once per change. */
 function validationOptions(): ValidationOptions {
-  const sources = optionSourcesOf(config);
-  if (sources.some((source, position) => source !== compiled.sources[position])) {
-    compiled = compile(config);
-  }
-  return compiled.options;
+  return compiledOptions.of(config);
 }
 
-/** `history/provinces` subfolders the Map Editor sees; compiled once per change, undefined for all. */
-let provinceFolder: { source: string; pattern: RegExp | undefined } = { source: '', pattern: undefined };
-
 function provinceFolderPattern(): RegExp | undefined {
-  if (config.provinceFolderPattern !== provinceFolder.source) {
-    provinceFolder = {
-      source: config.provinceFolderPattern,
-      pattern: compilePattern(config.provinceFolderPattern, PROVINCE_FOLDER_FLAGS),
-    };
-  }
-  return provinceFolder.pattern;
+  return compiledProvinceFolder.of(config.provinceFolderPattern);
 }
 
 let workspaceFolders: string[] = [];
@@ -216,9 +182,22 @@ const modCache = new ModCache({
   onBuildFailed: indexFailed,
 });
 
-/** Rendered picture hovers, keyed by absolute path; decoding a `.dds` is slow. */
-const PICTURE_CACHE_LIMIT = 200;
-const pictureCache = new BoundedCache<string, string | undefined>(PICTURE_CACHE_LIMIT);
+/** The tokens of the document a request is about; see `DocumentAnalysisCache`. */
+const documentAnalyses = new DocumentAnalysisCache();
+
+/**
+ * Rendered picture hovers, keyed by absolute path; decoding a `.dds` is slow.
+ * Bounded by what the markdown weighs rather than by a count: one preview runs
+ * to 96k characters of base64, so two hundred of them would be tens of
+ * megabytes held for the life of the session.
+ */
+const PICTURE_CACHE_CHARACTERS = 8_000_000;
+/** What a remembered miss weighs: no markdown, but still a key worth bounding. */
+const PICTURE_MISS_WEIGHT = 64;
+const pictureCache = new BoundedCache<string, string | undefined>({
+  weight: PICTURE_CACHE_CHARACTERS,
+  weigh: (markdown: string | undefined): number => markdown?.length ?? PICTURE_MISS_WEIGHT,
+});
 
 /** URIs this server published index-time diagnostics to, per layers key. */
 const publishedByLayers = new Map<string, Set<string>>();
@@ -270,6 +249,7 @@ function applyWorkspaceFolderChange(event: WorkspaceFoldersChangeEvent): void {
 connection.onShutdown(() => {
   stopTimers();
   modCache.clear();
+  documentAnalyses.clear();
   pictureCache.clear();
   publishedByLayers.clear();
   rootlessDocumentUris.clear();
@@ -322,8 +302,17 @@ async function refreshConfiguration(): Promise<ConfigChange> {
 
 /** Re-read the install and the selection, then index and revalidate with the new layers. */
 function applyLayout(recoded = false): void {
-  layout = loadLayout();
-  logLayout();
+  const loaded = loadLayout(
+    {
+      gamePath: config.gamePath,
+      activeMods: config.activeMods,
+      workspaceFolders,
+      options: LAYER_OPTIONS,
+    },
+    { listFiles, readFile: readText, isDirectory },
+  );
+  layout = loaded.layout;
+  logLayout(loaded.ignoredGamePath);
   modCache.resetLocations();
   if (recoded) {
     // Locations are dropped above, but the indexes are not: they hold decoded
@@ -336,62 +325,10 @@ function applyLayout(recoded = false): void {
   void connection.sendNotification(LAYOUT_CHANGED_NOTIFICATION);
 }
 
-/**
- * The install's `mod/` plus every mod directory a workspace folder sits in (a
- * checkout laid out like `mod/`). A checkout shadows the installed copy of the
- * same name: that is the one being edited.
- */
-function loadLayout(): ModLayout {
-  const gameRoot = findGameRoot();
-  const fileSystem = { listFiles, readFile: readText };
-  const installedDirectory = gameRoot === undefined ? undefined : path.join(gameRoot, 'mod');
-  const installed = installedDirectory === undefined ? [] : loadModDescriptors(installedDirectory, fileSystem);
-  const checkedOut: ModDescriptor[] = [];
-  for (const directory of externalModDirectories(installedDirectory)) {
-    checkedOut.push(...loadModDescriptors(directory, fileSystem));
+function logLayout(ignoredGamePath: string | undefined): void {
+  if (ignoredGamePath !== undefined) {
+    connection.console.warn(`victorianTools.gamePath has no mod/ folder: ${ignoredGamePath}`);
   }
-  const mods = mergeDescriptors(checkedOut, installed);
-  return { gameRoot, mods, selection: resolveSelection(mods, config.activeMods) };
-}
-
-function externalModDirectories(installedDirectory: string | undefined): string[] {
-  const found = new Set<string>();
-  for (const folder of workspaceFolders) {
-    const directory = detectModDirectory(folder, listFiles);
-    if (directory !== undefined && !samePath(directory, installedDirectory)) {
-      found.add(directory);
-    }
-  }
-  return [...found];
-}
-
-function samePath(left: string, right: string | undefined): boolean {
-  if (right === undefined) {
-    return false;
-  }
-  const [a, b] = [path.resolve(left), path.resolve(right)];
-  return LAYER_OPTIONS.caseInsensitivePaths === true ? a.toLowerCase() === b.toLowerCase() : a === b;
-}
-
-/** The configured install folder when it holds a `mod/` folder, else the one above the workspace. */
-function findGameRoot(): string | undefined {
-  if (config.gamePath !== '') {
-    const configured = path.resolve(config.gamePath);
-    if (isDirectory(path.join(configured, 'mod'))) {
-      return configured;
-    }
-    connection.console.warn(`victorianTools.gamePath has no mod/ folder: ${configured}`);
-  }
-  for (const folder of workspaceFolders) {
-    const detected = detectGameRoot(folder, isDirectory);
-    if (detected !== undefined) {
-      return detected;
-    }
-  }
-  return undefined;
-}
-
-function logLayout(): void {
   if (layout.gameRoot === undefined) {
     connection.console.log(
       `No Victoria 2 install found around the workspace; ${String(layout.mods.length)} mod(s) are read without the game files.`,
@@ -413,7 +350,7 @@ function logLayout(): void {
 }
 
 function selectionLayers(): ModLayers | undefined {
-  return layout.selection.length > 0 ? layersOf(layout.gameRoot, layout.selection, LAYER_OPTIONS) : undefined;
+  return layersOfSelection(layout, LAYER_OPTIONS);
 }
 
 /** A file of a known mod or of the game gets its stack; any other folder with `common/` is a lone mod over the game. */
@@ -437,6 +374,27 @@ function onRequest<TParams, TResult>(
   connection.onRequest(descriptor, handler);
 }
 
+/**
+ * The same, for a handler long enough that the client may give up on it. The
+ * cancellation token becomes a plain signal the services can read, and the
+ * unwinding that follows is reported as cancellation rather than as a failure.
+ */
+function onCancellableRequest<TParams, TResult>(
+  descriptor: RequestDescriptor<TParams, TResult>,
+  handler: (params: TParams, signal: CancelSignal) => Promise<TResult>,
+): void {
+  connection.onRequest(descriptor, async (params: TParams, token: CancellationToken) => {
+    try {
+      return await handler(params, { get cancelled(): boolean { return token.isCancellationRequested; } });
+    } catch (error: unknown) {
+      if (isCancelled(error)) {
+        return new ResponseError(LSPErrorCodes.RequestCancelled, 'Cancelled.');
+      }
+      throw error;
+    }
+  });
+}
+
 onRequest(
   MODS_REQUEST,
   (): ModsResult => ({ gameRoot: layout.gameRoot, mods: layout.mods }),
@@ -444,18 +402,34 @@ onRequest(
 
 // --- Index building ----------------------------------------------------------------
 
-async function buildIndexFor(layers: ModLayers): Promise<ModIndex> {
+async function buildIndexFor(layers: ModLayers, reuse: IndexReuse | undefined): Promise<IndexBuildResult> {
   const started = Date.now();
-  const index = await buildModIndexAsync(layeredIndexProvider(layers, layerFileSystem, readText));
-  connection.console.log(`Indexed ${describeLayers(layers)} in ${String(Date.now() - started)}ms`);
+  const built = await buildModIndexAsync(layeredIndexProvider(layers, layerFileSystem, readText), reuse);
+  const how = reuse === undefined ? 'Indexed' : `Re-indexed ${String(reuse.changed.size)} changed file(s) of`;
+  connection.console.log(`${how} ${describeLayers(layers)} in ${String(Date.now() - started)}ms`);
   if (listLayeredFiles(layers, layerFileSystem, 'events', '.txt').length === 0) {
     connection.console.log(`No events/ files in ${describeLayers(layers)}`);
   }
-  return index;
+  return built;
 }
 
 function describeLayers(layers: ModLayers): string {
   return layers.roots.length === 1 ? (layers.roots[0] ?? '') : layers.roots.slice(1).join(' > ');
+}
+
+/**
+ * The changed files as the index names them: paths relative to whichever layer
+ * holds them. A path outside every layer is left out — it changes nothing here.
+ */
+function relativePathsIn(layers: ModLayers, changed: readonly string[]): ReadonlySet<string> {
+  const found = new Set<string>();
+  for (const fsPath of changed) {
+    const relativePath = relativeInLayers(layers, fsPath);
+    if (relativePath !== undefined) {
+      found.add(relativePath);
+    }
+  }
+  return found;
 }
 
 /** A finished index: publish its mod-wide findings, then bring open documents up to date. */
@@ -545,7 +519,7 @@ function rebuildChangedIndexes(): void {
     return;
   }
   const affected = modCache.layersContaining(changed);
-  modCache.refresh(affected);
+  modCache.refresh(affected, (layers) => relativePathsIn(layers, changed));
   if (affected.length === 0) {
     // Nothing indexed went stale, but a new mod root may have appeared: give
     // the documents that had none another chance to find one.
@@ -561,9 +535,37 @@ documents.onDidChangeContent((change) => {
 
 documents.onDidClose((event) => {
   cancelValidation(event.document.uri);
+  documentAnalyses.forget(event.document.uri);
   rootlessDocumentUris.delete(event.document.uri);
   publishClosedDocument(event.document.uri);
+  evictUnusedIndexes();
 });
+
+/**
+ * The stacks still worth an index: the selection, the mods the workspace is of,
+ * and whatever an open document belongs to. Anything else was reached by
+ * opening one file somewhere else, and its index is tens of megabytes.
+ */
+function evictUnusedIndexes(): void {
+  const keep = new Set<string>();
+  const selection = selectionLayers();
+  if (selection) {
+    keep.add(selection.key);
+  }
+  for (const folder of workspaceFolders) {
+    const location = modCache.locationForDirectory(folder);
+    if (location) {
+      keep.add(location.layers.key);
+    }
+  }
+  for (const document of documents.all()) {
+    const layers = contextForUri(document.uri)?.layers;
+    if (layers) {
+      keep.add(layers.key);
+    }
+  }
+  modCache.evictUnused(keep);
+}
 
 /**
  * A closed file keeps its index-time duplicates: those were found across the
@@ -653,13 +655,22 @@ function contextForUri(uri: string): ModContext | undefined {
   return modCache.contextFor(URI.parse(uri).fsPath);
 }
 
+/**
+ * The tokens of an open document. Hover asks three questions of the same text
+ * and completion a fourth, so they share one analysis, and a second request
+ * against an unedited document reuses it rather than lexing again.
+ */
+function analysisOf(document: TextDocument): AnalyzedDocument {
+  return documentAnalyses.of(document.uri, document.version, document.getText());
+}
+
 connection.onDefinition((params): Location | undefined => {
   const document = documents.get(params.textDocument.uri);
   const modContext = document ? contextForUri(document.uri) : undefined;
   if (!document || !modContext?.index) {
     return undefined;
   }
-  const resolved = resolveLocKeyAt(document.getText(), document.offsetAt(params.position), modContext.index);
+  const resolved = resolveLocKeyAt(analysisOf(document), document.offsetAt(params.position), modContext.index);
   if (!resolved) {
     return undefined;
   }
@@ -677,8 +688,12 @@ connection.onDefinition((params): Location | undefined => {
   };
 });
 
-function pictureHoverFor(document: TextDocument, offset: number, modContext: ModContext): PictureHover | undefined {
-  return pictureHoverAt(document.getText(), offset, classifyFile(modContext.relativePath), (relativePath) => {
+function pictureHoverFor(
+  analysis: AnalyzedDocument,
+  offset: number,
+  modContext: ModContext,
+): PictureHover | undefined {
+  return pictureHoverAt(analysis, offset, classifyFile(modContext.relativePath), (relativePath) => {
     const absolutePath = resolveLayeredFile(modContext.layers, layerFileSystem, relativePath);
     return absolutePath === undefined ? undefined : cachedPictureMarkdown(absolutePath, relativePath);
   });
@@ -700,19 +715,20 @@ connection.onHover((params) => {
     return null;
   }
   const offset = document.offsetAt(params.position);
+  const analysis = analysisOf(document);
 
-  const key = resolveKeyAt(document.getText(), offset);
+  const key = resolveKeyAt(analysis, offset);
   if (key) {
     const markdown = symbolHoverMarkdown(key.name);
     return markdown === undefined ? null : hoverResult(document, markdown, key.tokenRange);
   }
 
-  const picture = pictureHoverFor(document, offset, modContext);
+  const picture = pictureHoverFor(analysis, offset, modContext);
   if (picture) {
     return hoverResult(document, picture.markdown, picture.tokenRange);
   }
 
-  const resolved = resolveLocKeyAt(document.getText(), offset, modContext.index);
+  const resolved = resolveLocKeyAt(analysis, offset, modContext.index);
   if (!resolved) {
     return null;
   }
@@ -748,7 +764,7 @@ connection.onCompletion((params): CompletionList | null => {
     return null;
   }
   const result = completionsAt(
-    document.getText(),
+    analysisOf(document),
     document.offsetAt(params.position),
     classifyFile(modContext.relativePath),
     modContext.index,
@@ -781,38 +797,12 @@ function completionItem(entry: CompletionEntry, range: LspRange): CompletionItem
 
 // --- Reports and Enforce Colormaps -------------------------------------------------
 
-/**
- * The mods to report on: the ones the request names, each over the game and
- * its dependencies (one stack for all of them); else the mods set in Settings,
- * each over the whole selection; else the mod each workspace folder belongs to.
- */
-function reportTargets(params: TargetParams): FileLocation[] {
-  if (params.mods.length > 0) {
-    const stack = resolveSelection(layout.mods, params.mods);
-    const layers = layersOf(layout.gameRoot, stack, LAYER_OPTIONS);
-    return stack.filter((mod) => params.mods.includes(mod.name)).map((mod) => ({ root: mod.folder, layers }));
-  }
-  const selection = selectionLayers();
-  if (selection) {
-    return layout.selection.map((mod) => ({ root: mod.folder, layers: selection }));
-  }
-  const byRoot = new Map<string, FileLocation>();
-  const folders = params.workspaceFolders.length > 0 ? params.workspaceFolders : workspaceFolders;
-  for (const folder of folders) {
-    const location = modCache.locationForDirectory(folder);
-    if (location) {
-      byRoot.set(location.root, location);
-    }
-  }
-  return [...byRoot.keys()].sort().flatMap((root) => {
-    const location = byRoot.get(root);
-    return location ? [location] : [];
-  });
-}
-
 /** `targets` stays a call, not a value: the picked mods change while the server runs. */
 const modStack: ModStackHost = {
-  targets: reportTargets,
+  targets: (params: TargetParams): FileLocation[] =>
+    reportTargets(layout, params, workspaceFolders, LAYER_OPTIONS, (folder) =>
+      modCache.locationForDirectory(folder),
+    ),
   fileExists,
   readText: readTextAsync,
   readBytes: readModFileBytesAsync,
@@ -836,22 +826,22 @@ const mapReportHost: MapReportHost = {
 
 const colormapHost: ColormapEnforcementHost = { ...modStack, writeBytes: writeModFileBytes };
 
-onRequest(FULL_REPORT_REQUEST, async (params: FullReportParams): Promise<FullReportResult> => {
+onCancellableRequest(FULL_REPORT_REQUEST, async (params: FullReportParams, signal): Promise<FullReportResult> => {
   const started = Date.now();
-  const result = await buildFullReport(fullReportHost, params);
+  const result = await buildFullReport(fullReportHost, params, signal);
   connection.console.log(`Full report over ${String(result.reports.length)} mod(s) in ${String(Date.now() - started)}ms`);
   return result;
 });
 
-onRequest(MAP_REPORT_REQUEST, async (params: MapReportParams): Promise<MapReportResult> => {
+onCancellableRequest(MAP_REPORT_REQUEST, async (params: MapReportParams, signal): Promise<MapReportResult> => {
   const started = Date.now();
-  const result = await buildMapReports(mapReportHost, params);
+  const result = await buildMapReports(mapReportHost, params, signal);
   connection.console.log(`Map report over ${String(result.reports.length)} mod(s) in ${String(Date.now() - started)}ms`);
   return result;
 });
 
-onRequest(ENFORCE_COLORMAPS_REQUEST, async (params: EnforceColormapsParams): Promise<EnforceColormapsResult> => {
-  const result = await enforceColormaps(colormapHost, params);
+onCancellableRequest(ENFORCE_COLORMAPS_REQUEST, async (params: EnforceColormapsParams, signal): Promise<EnforceColormapsResult> => {
+  const result = await enforceColormaps(colormapHost, params, signal);
   connection.console.log(`Enforce colormaps (${params.dryRun ? 'dry run' : 'write'}): ${result.files.map((file) => `${file.path} ${file.outcome}`).join('; ')}`);
   return result;
 });

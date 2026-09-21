@@ -7,6 +7,7 @@ import {
   type GreatPowerCandidate,
   type StartStateReader,
 } from '../../services/greatPowerValidation.js';
+import type { LayeredFile } from '../../services/modLayers.js';
 
 const DEFINES = [
   'defines = {',
@@ -129,13 +130,18 @@ const COUNTRIES = [
   'ZUL = "countries/Zululand.txt"',
 ].join('\n');
 
+/** The fixtures key files by relative path, so here the two paths are the same. */
+function listed(relativePaths: readonly string[]): LayeredFile[] {
+  return relativePaths.map((relativePath) => ({ relativePath, absolutePath: relativePath }));
+}
+
 function reader(): StartStateReader {
   const files: Readonly<Record<string, string>> = { ...PROVINCES, ...COUNTRY_HISTORY };
   return {
     startDate: '1836.1.1',
-    readFile: (relativePath) => Promise.resolve(files[relativePath]),
-    provinceFiles: Object.keys(PROVINCES),
-    countryFiles: Object.keys(COUNTRY_HISTORY),
+    readFile: (absolutePath) => Promise.resolve(files[absolutePath]),
+    provinceFiles: listed(Object.keys(PROVINCES)),
+    countryFiles: listed(Object.keys(COUNTRY_HISTORY)),
     stateOfProvince: STATE_OF_PROVINCE,
   };
 }
@@ -183,9 +189,9 @@ suite('greatPowerValidation — the world at the start date', () => {
     };
     const found = await collectGreatPowerCandidates(COUNTRIES, {
       ...reader(),
-      readFile: (relativePath) => Promise.resolve(files[relativePath]),
+      readFile: (absolutePath) => Promise.resolve(files[absolutePath]),
       // Highest layer first, as the layered listing returns it.
-      provinceFiles: [mine, theirs],
+      provinceFiles: listed([mine, theirs]),
     });
     assert.strictEqual(found.find((candidate) => candidate.tag === 'ENG')?.stateCount, 1);
     assert.strictEqual(found.find((candidate) => candidate.tag === 'FRA')?.stateCount, 0);

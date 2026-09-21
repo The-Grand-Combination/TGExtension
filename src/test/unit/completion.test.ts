@@ -2,6 +2,7 @@ import * as assert from 'node:assert';
 import type { FileType } from '../../model/fileType.js';
 import type { ModIndex } from '../../model/modIndex.js';
 import { completionsAt, type CompletionEntry, type CompletionResult } from '../../services/completion.js';
+import { analyze } from '../../services/documentAnalysis.js';
 import { completionContextAt } from '../../services/completionContext.js';
 import { buildTestIndex } from './testIndex.js';
 
@@ -16,7 +17,7 @@ function cursor(marked: string): { readonly text: string; readonly offset: numbe
 
 function complete(marked: string, fileType: FileType, from: ModIndex = index): CompletionResult {
   const { text, offset } = cursor(marked);
-  const result = completionsAt(text, offset, fileType, from);
+  const result = completionsAt(analyze(text), offset, fileType, from);
   assert.ok(result, `expected completions for ${marked}`);
   return result;
 }
@@ -203,7 +204,7 @@ suite('completion — keys', () => {
 suite('completionContext', () => {
   test('an unclosed block still resolves', () => {
     const { text, offset } = cursor('country_event = {\n  immediate = {\n    |');
-    const context = completionContextAt(text, offset);
+    const context = completionContextAt(analyze(text), offset);
     assert.ok(context);
     assert.deepStrictEqual(context.path, ['country_event', 'immediate']);
     assert.strictEqual(context.position, 'key');
@@ -211,7 +212,7 @@ suite('completionContext', () => {
 
   test('a partial word is the prefix, and the range covers it', () => {
     const { text, offset } = cursor('country_event = { immediate = { add_co| } }');
-    const context = completionContextAt(text, offset);
+    const context = completionContextAt(analyze(text), offset);
     assert.ok(context);
     assert.strictEqual(context.prefix, 'add_co');
     assert.strictEqual(text.slice(context.range.start, context.range.end), 'add_co');
@@ -219,7 +220,7 @@ suite('completionContext', () => {
 
   test('the cursor after an operator is a value', () => {
     const { text, offset } = cursor('owner = |');
-    const context = completionContextAt(text, offset);
+    const context = completionContextAt(analyze(text), offset);
     assert.ok(context);
     assert.strictEqual(context.position, 'value');
     assert.deepStrictEqual(context.path, ['owner']);
@@ -228,7 +229,7 @@ suite('completionContext', () => {
 
   test('a value being edited keeps its key', () => {
     const { text, offset } = cursor('owner = EN|G');
-    const context = completionContextAt(text, offset);
+    const context = completionContextAt(analyze(text), offset);
     assert.ok(context);
     assert.strictEqual(context.position, 'value');
     assert.strictEqual(context.prefix, 'EN');
@@ -237,14 +238,14 @@ suite('completionContext', () => {
 
   test('comments and strings are left alone', () => {
     const comment = cursor('owner = ENG # a note |here');
-    assert.strictEqual(completionContextAt(comment.text, comment.offset), undefined);
+    assert.strictEqual(completionContextAt(analyze(comment.text), comment.offset), undefined);
     const inString = cursor('desc = "some te|xt"');
-    assert.strictEqual(completionContextAt(inString.text, inString.offset), undefined);
+    assert.strictEqual(completionContextAt(analyze(inString.text), inString.offset), undefined);
   });
 
   test('a closed block is popped off the path', () => {
     const { text, offset } = cursor('country_event = { trigger = { } |');
-    const context = completionContextAt(text, offset);
+    const context = completionContextAt(analyze(text), offset);
     assert.ok(context);
     assert.deepStrictEqual(context.path, ['country_event']);
   });

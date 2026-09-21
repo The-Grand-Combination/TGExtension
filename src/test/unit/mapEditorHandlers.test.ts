@@ -651,7 +651,7 @@ suite('MapEditorHandlers — climate and state', () => {
   }
 
   /** A mod whose map folder holds climate.txt and region.txt, both naming province 1. */
-  function placed(files: ReadonlyMap<string, string> = new Map()): Placed {
+  function placed(files: ReadonlyMap<string, string> = new Map(), indexFiles: Readonly<Record<string, string>> = {}): Placed {
     const all = new Map<string, string>([
       [path.join(ROOT, 'map/climate.txt'), CLIMATE],
       [path.join(ROOT, 'map/region.txt'), REGION],
@@ -659,12 +659,15 @@ suite('MapEditorHandlers — climate and state', () => {
     ]);
     const written = new Map<string, string>();
     const host: MapEditorHost = {
-      targets: (): readonly FileLocation[] => [TARGET],
+      targets: (): readonly FileLocation[] => [{ root: ROOT, layers: UNDER_GAME }],
       modNameOf: (root: string): string => root,
-      ensureIndex: (): Promise<ReturnType<typeof buildTestIndex> | undefined> => Promise.resolve(buildTestIndex()),
+      ensureIndex: (): Promise<ReturnType<typeof buildTestIndex> | undefined> => Promise.resolve(buildTestIndex(indexFiles)),
       fileSystem: {
         fileExists: (absolutePath: string): boolean => all.has(absolutePath) || written.has(absolutePath),
-        listFiles: (): string[] => [],
+        listFiles: (directory: string, extension: string): string[] =>
+          [...all.keys(), ...written.keys()]
+            .filter((file) => path.dirname(file) === directory && file.toLowerCase().endsWith(extension))
+            .map((file) => path.basename(file)),
         listFilesRecursive: (): string[] => [],
       },
       readText: (absolutePath: string): Promise<string | undefined> =>
@@ -686,6 +689,10 @@ suite('MapEditorHandlers — climate and state', () => {
   const base = { ...targetParams, provinceId: 1, popDate: '1836.1.1' };
   const climateFile = path.join(ROOT, 'map/climate.txt');
   const regionFile = path.join(ROOT, 'map/region.txt');
+  const GAME = '/game';
+  /** The mod over the base game, which is where a name the mod does not define is read from. */
+  const UNDER_GAME: ModLayers = { key: 'game+mod', gameRoot: GAME, roots: [GAME, ROOT], hiddenFolders: [], caseInsensitivePaths: false };
+  const NAME_SAVE = { section: 'history', data: EMPTY_HISTORY, climate: 'harsh_climate', createInFolder: '', states: ['ENG_1'] } as const;
 
   test('the province reads back the climate and the states it is listed in', async () => {
     const result = await new MapEditorHandlers(placed().host).province(base);
@@ -744,6 +751,46 @@ suite('MapEditorHandlers — climate and state', () => {
     });
     assert.ok(result.ok, result.ok ? '' : result.reason);
     assert.ok([...written.keys()].some((file) => file.includes('localisation')), [...written.keys()].join(', '));
+  });
+
+  test('a name the mod does not define yet makes it a province file of its own, header and all', async () => {
+    const { host, written } = placed();
+    const result = await new MapEditorHandlers(host).save({
+      ...base, ...NAME_SAVE, localisation: { text: 'Nova', renameHistoryFile: false },
+    });
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+    const file = path.join(ROOT, 'localisation', 'provinces.csv');
+    assert.ok(written.has(file), [...written.keys()].join(', '));
+    assert.ok(written.get(file)?.startsWith('CODE;ENGLISH;'), written.get(file));
+    assert.ok(written.get(file)?.includes('PROV1;Nova;'), written.get(file));
+  });
+
+  test('a name the mod already keeps province names for joins them in that file', async () => {
+    const own = path.join(ROOT, 'localisation', '00_map.csv');
+    const { host, written } = placed(new Map([
+      [own, 'CODE;ENGLISH;x\r\nPROV2;Two;x\r\nPROV3;Three;x\r\n'],
+      [path.join(ROOT, 'localisation', 'events.csv'), 'CODE;ENGLISH;x\r\nEVTNAME1;An event;x\r\n'],
+    ]));
+    const result = await new MapEditorHandlers(host).save({
+      ...base, ...NAME_SAVE, localisation: { text: 'Nova', renameHistoryFile: false },
+    });
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+    assert.ok(written.get(own)?.includes('PROV1;Nova;'), [...written.keys()].join(', '));
+    assert.strictEqual(written.get(path.join(ROOT, 'localisation', 'provinces.csv')), undefined);
+  });
+
+  test('a name the game defines and the mod does not is written into the mod, never into the game', async () => {
+    const vanilla = path.join(GAME, 'localisation', 'text.csv');
+    const { host, written } = placed(
+      new Map([[vanilla, 'CODE;ENGLISH;x\r\nPROV1;Vanilla name;x\r\n']]),
+      { 'localisation/text.csv': 'CODE;ENGLISH;x\r\nPROV1;Vanilla name;x\r\n' },
+    );
+    const result = await new MapEditorHandlers(host).save({
+      ...base, ...NAME_SAVE, localisation: { text: 'Nova', renameHistoryFile: false },
+    });
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+    assert.strictEqual(written.get(vanilla), undefined, 'the base game must be left alone');
+    assert.ok(written.get(path.join(ROOT, 'localisation', 'provinces.csv'))?.includes('PROV1;Nova;'), [...written.keys()].join(', '));
   });
 
   test('a save that would leave the province with no climate is refused, and writes nothing', async () => {
@@ -1052,12 +1099,26 @@ suite('MapEditorHandlers — the Layers box thumbnails', () => {
     assert.ok(reads.length > before + 1, String(reads.length));
   });
 
-  test('provinces.bmp is decoded once for the thumbnails and the terrain alike', async () => {
+  test('a bitmap is not held between the things built out of it', async () => {
     const { host, reads } = bitmaps(ALL);
     const handlers = new MapEditorHandlers(host);
     await handlers.thumbnails(targetParams);
     await handlers.terrainPictureFor({ ...targetParams, terrain: 'desert' });
-    assert.strictEqual(reads.filter((file) => file === provincesFile).length, 1, reads.join(', '));
+    // The thumbnails and the terrain table each read provinces.bmp for
+    // themselves: keeping a 60 MB file between them would cost far more than
+    // the re-read. What is kept is what they build, tested below.
+    assert.strictEqual(reads.filter((file) => file === provincesFile).length, 2, reads.join(', '));
+  });
+
+  test('but each thing built out of it is, so asking twice reads nothing again', async () => {
+    const { host, reads } = bitmaps(ALL);
+    const handlers = new MapEditorHandlers(host);
+    await handlers.thumbnails(targetParams);
+    await handlers.terrainPictureFor({ ...targetParams, terrain: 'desert' });
+    const before = reads.length;
+    await handlers.thumbnails(targetParams);
+    await handlers.terrainPictureFor({ ...targetParams, terrain: 'desert' });
+    assert.strictEqual(reads.length, before, reads.join(', '));
   });
 
   test('a changed file drops only what was read from it', async () => {
@@ -1069,7 +1130,8 @@ suite('MapEditorHandlers — the Layers box thumbnails', () => {
     assert.strictEqual(reads.length, 3, 'a history file is no reason to read the bitmaps again');
     handlers.invalidate([riversFile]);
     await handlers.thumbnails(targetParams);
-    assert.deepStrictEqual(reads.slice(3), [riversFile], reads.join(', '));
+    // A changed bitmap drops the thumbnails, and they are built from all three.
+    assert.deepStrictEqual(reads.slice(3), [provincesFile, riversFile, terrainFile], reads.join(', '));
   });
 
   test('no mod to edit is no thumbnails, not an error', async () => {

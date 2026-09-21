@@ -46,7 +46,7 @@ export function localisationSection(current: ProvinceDetails): HTMLElement {
   input.node.addEventListener('keydown', function (event) { if (event instanceof KeyboardEvent && event.key === 'Enter') { forms.definitionSave?.click(); } });
   return h('div', { class: 'section' },
     sectionHeader('Localisation', loc, { text: loc.key + ' is not defined; saving adds it to the mod\'s province names file.', warning: true }),
-    layerNote(loc),
+    layerNote(loc, 'saving adds the name to this mod\'s own province names file, and leaves that one alone'),
     h('div', { class: 'inline' }, h('label', null, loc.key), input.node),
     seaRow,
     rename.node);

@@ -281,11 +281,10 @@ smaller, the buttons grow from their own labels to share a row, and a layer name
 even where it runs into the padding: two lines for one switch reads worse than a name reaching the
 edge.
 
-The middle mouse button moves the map under every tool — the pointer becomes the hand while it is
-held, as it is under the hand tool — and the wheel still zooms, so painting a border never means
-putting the brush down to reach the rest of the map. The **right button borrows the hand**: it ends
-whatever was being drawn and moves the map while it is held, then gives the tool back the moment it
-comes up. No context menu opens over the map, and only the left button opens a province in the side
+The **middle and right buttons borrow the hand**, and do it the same way: either ends whatever was
+being drawn, becomes the hand while it is held so the map moves under it, and gives the tool back
+the moment it comes up. The wheel still zooms over the map, so painting a border never means putting
+the brush down to reach the rest of it. No context menu opens over the map, and only the left button opens a province in the side
 panel.
 
 Nothing reaches `map/provinces.bmp` while painting: the pixels change on the page, and the two
@@ -439,10 +438,13 @@ stack, the last one in load order; its name is in the tab title and the side pan
 When the file a province is read from belongs to a layer below the target (the game, or a base mod
 a submod depends on), the panel says so, and saving writes the edited copy into the target mod at
 the same relative path. The lower layer is never modified. Localisation is the exception: a key
-defined below the target is not copied file by file; the new text is **added as a row** to the
-target's own province names file (the `localisation/*.csv` of the target holding the most `PROV`
-keys, else a new `00_map-provinces.csv` with the standard 14-language header), which the game reads
-first.
+defined below the target is not copied file by file, and the file that defines it is not touched —
+a mod that leaves a province with the game's own name reads that name out of the game's own
+`text.csv`, and writing there would edit the base game under every other mod. The new text is
+**added as a row** to a file of the target's own instead: the `localisation/*.csv` of the target
+already holding the most `PROV` keys, else its `localisation/provinces.csv`, which is created with
+the standard 14-language header — and the `localisation` folder with it when the mod has none. So a
+province named in a mod with no localisation at all still comes out named, in the mod.
 
 ## Which province history files it reads
 
