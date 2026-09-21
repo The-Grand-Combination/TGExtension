@@ -13,11 +13,9 @@ import { FIXED_LAYERS, layerImage, RIVER_COLOR, state, TILE, TINT_MODES, type Fi
 export type Step = Partial<Record<FixedLayer, number[]>>;
 
 interface Draft {
-  /** The layer as the file has it, copied the first time a stroke lands on it. */
   file: PixelArray | null;
   /** Which bitmap the copy belongs to: a new map makes the old one meaningless. */
   of: PixelLayer | null;
-  /** How many pixels no longer hold their file value. */
   painted: number;
 }
 
@@ -52,7 +50,6 @@ export function paintedTotal(): number {
   return total;
 }
 
-/** The layers holding paint the file does not have, in the order they are written. */
 export function dirtyLayers(): FixedLayer[] {
   return FIXED_LAYERS.filter(function (kind) { return drafts[kind].painted > 0; });
 }
@@ -128,7 +125,6 @@ export function fileRuns(kind: FixedLayer): number[] {
   return image ? changedRuns(fileValues(kind, image), image.packed, image.width) : [];
 }
 
-/** A layer written back to its file: what the page holds is the file now. */
 export function clearDraft(kind: FixedLayer): void {
   drafts[kind] = { file: null, of: null, painted: 0 };
 }

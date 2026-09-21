@@ -1,7 +1,6 @@
 import type { FileReport, ModReport, ReportDiagnostic } from '../model/fullReport.js';
 import type { MapFinding, MapReport } from '../model/mapAudit.js';
 
-/** When it was made and how long it took: a run that crawls says so, rather than looking hung in hindsight. */
 function generatedLine(generatedAt: string, tookMs: number | undefined): string {
   return tookMs === undefined ? `Generated ${generatedAt}` : `Generated ${generatedAt} in ${String(tookMs)} ms`;
 }

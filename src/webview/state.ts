@@ -183,7 +183,6 @@ export interface State {
   overlayLoading: Record<Overlay, boolean>;
   /** Each overlay once fetched: what the Terrain Lock and Multi Draw read, and what the layer is drawn from. */
   indexed: Record<Overlay, IndexedImage | null>;
-  /** Which bitmap the tools paint; the other two are only looked at. */
   editLayer: FixedLayer;
   /** What the brush is allowed to do where the three files disagree; none of them paints wherever it is put. */
   paintMode: PaintMode | null;
@@ -221,7 +220,6 @@ export const state: State = {
   paintMode: 'lock',
 };
 
-/** The bitmap a layer is painted on, or null while it is not loaded. */
 export function layerImage(kind: FixedLayer): PixelLayer | null {
   return kind === 'provinces' ? state.image : state.indexed[kind];
 }

@@ -41,11 +41,9 @@ export type LayerRuns = Partial<Record<PaintLayer, number[]>>;
 
 export interface StrokePlan {
   readonly writes: LayerRuns;
-  /** Pixels the mode kept the brush off. */
   readonly heldBack: number;
 }
 
-/** Whether the value stands for water in its own layer. */
 export function isSeaValue(layer: PaintLayer, value: number, rules: PaintRules): boolean {
   if (layer === 'provinces') {
     return rules.seaColors.has(value);
@@ -122,7 +120,6 @@ function planGuarded(
   return heldBack;
 }
 
-/** Whether every other layer the page holds says what the lock is asking for at that pixel. */
 function agrees(layer: PaintLayer, index: number, wantSea: boolean, pixels: LayerPixels, rules: PaintRules): boolean {
   for (const other of PAINT_LAYERS) {
     const held = other === layer ? undefined : pixels[other]?.[index];
@@ -165,7 +162,6 @@ function planMulti(
   }
 }
 
-/** One pixel of a Multi Draw stroke: each other layer holding the opposite of what was painted takes the matching value. */
 function bringAlong(
   layer: PaintLayer,
   index: number,

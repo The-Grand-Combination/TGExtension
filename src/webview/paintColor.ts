@@ -18,7 +18,6 @@ const generateColorButton = requiredButton('generateColorButton');
 const colorRow = required('colorRow');
 const paletteRow = required('paletteRow');
 
-/** The first river width, which is what a mapper draws with. */
 const FIRST_RIVER_WIDTH = 2;
 
 const values: Record<FixedLayer, number> = { provinces: 0xff0000, rivers: FIRST_RIVER_WIDTH, terrain: 0 };
@@ -31,10 +30,8 @@ let palettePick: Field | null = null;
  * map is the brush's, and `setBrushValue` adds that one as it goes.
  */
 let usedColors: Set<number> | null = null;
-/** The two colours Multi Draw paints provinces with, taken once and kept until one of them becomes a province. */
 let reserved: { land: number; sea: number } | null = null;
 
-/** What the brush writes into the layer being edited. */
 export function brushValue(): number {
   return values[state.editLayer];
 }
@@ -101,7 +98,6 @@ export function reservedColors(): { land: number; sea: number } {
   return reserved;
 }
 
-/** Whether a colour is one of the two Multi Draw is holding, and which. */
 export function reservedKind(color: number): 'land' | 'sea' | undefined {
   if (!reserved) { return undefined; }
   if (color === reserved.land) { return 'land'; }

@@ -37,7 +37,6 @@ export interface ModReport {
 
 export interface FullReportResult {
   readonly generatedAt: string;
-  /** How long the run took, as the report's first line reports it. */
   readonly tookMs: number;
   readonly reports: readonly ModReport[];
   readonly text: string;

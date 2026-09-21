@@ -72,7 +72,6 @@ let drawLine: number[] | null = null;
 let paintTimer: number | null = null;
 /** The tool the eye drop was picked up from: one value taken, the eye drop hands it back. */
 let pickReturn: Tool | null = null;
-/** The layers a Save still has to write, in order; one file is written at a time. */
 let saveQueue: FixedLayer[] = [];
 
 /** The eraser lives on the pencil's button: it is the pencil, lit, with the other glyph. */
@@ -384,7 +383,6 @@ function refreshOutline(was: readonly number[]): void {
   }
 }
 
-/** The files a Save would write, as the buttons name them. */
 function dirtyFiles(): string {
   return dirtyLayers().map(function (kind) { return 'map/' + kind + '.bmp'; }).join(', ');
 }
