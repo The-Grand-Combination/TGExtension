@@ -5,7 +5,7 @@ import type { ModIndex } from '../model/modIndex.js';
 import { auditMapImages, type MapImageSource } from './mapImageAudit.js';
 import { resolveLayeredFile, type LayerFileSystem, type ModLayers } from './modLayers.js';
 import type { FileLocation } from './modLayout.js';
-import { reportTimestamp, type ModStackHost } from './modStackHost.js';
+import { reportHeading, type ModStackHost } from './modStackHost.js';
 import { renderMapReportText } from './reportText.js';
 
 export interface MapReportHost extends ModStackHost {
@@ -18,13 +18,14 @@ export async function buildMapReports(
   params: MapReportParams,
   signal: CancelSignal = NEVER_CANCELLED,
 ): Promise<MapReportResult> {
+  const startedAt = Date.now();
   const reports: MapReport[] = [];
   for (const target of host.targets(params)) {
     throwIfCancelled(signal);
     reports.push(await buildMapReport(host, target, signal));
   }
-  const generatedAt = reportTimestamp();
-  return { generatedAt, reports, text: renderMapReportText(reports, generatedAt) };
+  const { generatedAt, tookMs } = reportHeading(startedAt);
+  return { generatedAt, tookMs, reports, text: renderMapReportText(reports, generatedAt, tookMs) };
 }
 
 async function buildMapReport(

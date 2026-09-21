@@ -29,7 +29,7 @@ import {
   type LayerFileSystem,
   type ModLayers,
 } from './modLayers.js';
-import { reportTimestamp, type ModStackHost } from './modStackHost.js';
+import { reportHeading, type ModStackHost } from './modStackHost.js';
 import { auditPops, popsDiagnostics } from './popsValidation.js';
 import { renderReportText } from './reportText.js';
 
@@ -50,6 +50,7 @@ export async function buildFullReport(
   params: FullReportParams,
   signal: CancelSignal = NEVER_CANCELLED,
 ): Promise<FullReportResult> {
+  const startedAt = Date.now();
   const reports: ModReport[] = [];
   for (const target of host.targets(params)) {
     throwIfCancelled(signal);
@@ -67,8 +68,8 @@ export async function buildFullReport(
       );
     }
   }
-  const generatedAt = reportTimestamp();
-  return { generatedAt, reports, text: renderReportText(reports, generatedAt) };
+  const { generatedAt, tookMs } = reportHeading(startedAt);
+  return { generatedAt, tookMs, reports, text: renderReportText(reports, generatedAt, tookMs) };
 }
 
 /** A mod's own files: the report covers what the modder maintains, read with the stack's index. */

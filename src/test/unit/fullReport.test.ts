@@ -133,6 +133,12 @@ suite('fullReport', () => {
     assert.ok(renderMapReportText([], 'now').includes('No Victoria 2 mod was found'));
   });
 
+  test('says when it was made, and how long it took when the run was timed', () => {
+    assert.strictEqual(renderReportText([], '2026-09-07 12:00:00', 1234).split('\n')[1], 'Generated 2026-09-07 12:00:00 in 1234 ms');
+    assert.strictEqual(renderMapReportText([], '2026-09-07 12:00:00', 7).split('\n')[1], 'Generated 2026-09-07 12:00:00 in 7 ms');
+    assert.strictEqual(renderReportText([], '2026-09-07 12:00:00').split('\n')[1], 'Generated 2026-09-07 12:00:00');
+  });
+
   test('renders plain text grouped by file', () => {
     const text = renderReportText([report], '2026-09-07 12:00:00');
     const lines = text.split('\n');

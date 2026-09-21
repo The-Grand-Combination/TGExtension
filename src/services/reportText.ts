@@ -1,9 +1,14 @@
 import type { FileReport, ModReport, ReportDiagnostic } from '../model/fullReport.js';
 import type { MapFinding, MapReport } from '../model/mapAudit.js';
 
+/** When it was made and how long it took: a run that crawls says so, rather than looking hung in hindsight. */
+function generatedLine(generatedAt: string, tookMs: number | undefined): string {
+  return tookMs === undefined ? `Generated ${generatedAt}` : `Generated ${generatedAt} in ${String(tookMs)} ms`;
+}
+
 /** Render the full report as plain text, grouped by file, one line per finding. */
-export function renderReportText(reports: readonly ModReport[], generatedAt: string): string {
-  const lines = ['Victorian Tools - Full report', `Generated ${generatedAt}`, ''];
+export function renderReportText(reports: readonly ModReport[], generatedAt: string, tookMs?: number): string {
+  const lines = ['Victorian Tools - Full report', generatedLine(generatedAt, tookMs), ''];
   if (reports.length === 0) {
     lines.push('No Victoria 2 mod was found in the workspace (a folder containing common/).', '');
   }
@@ -30,10 +35,10 @@ function renderModReport(report: ModReport): string[] {
  * provinces.bmp, terrain.bmp and rivers.bmp, with pixel positions as image
  * editors show them.
  */
-export function renderMapReportText(reports: readonly MapReport[], generatedAt: string): string {
+export function renderMapReportText(reports: readonly MapReport[], generatedAt: string, tookMs?: number): string {
   const lines = [
     'Victorian Tools - Map report',
-    `Generated ${generatedAt}`,
+    generatedLine(generatedAt, tookMs),
     'Pixel positions are x, y from the top-left corner of the image.',
     '',
   ];

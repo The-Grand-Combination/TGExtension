@@ -16,6 +16,11 @@ export interface ModStackHost {
 }
 
 /** `2026-09-12 20:37:40`, as both report headers stamp themselves. */
-export function reportTimestamp(): string {
+function reportTimestamp(): string {
   return new Date().toISOString().replace('T', ' ').slice(0, 19);
+}
+
+/** When the report was asked for and how long it took, as its first line says it. */
+export function reportHeading(startedAt: number): { readonly generatedAt: string; readonly tookMs: number } {
+  return { generatedAt: reportTimestamp(), tookMs: Math.max(0, Math.round(Date.now() - startedAt)) };
 }
