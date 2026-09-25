@@ -21,11 +21,12 @@ import { auditEssentialTags } from './essentialTagsValidation.js';
 import { auditFlags } from './flagValidation.js';
 import { buildModReport, type ExtraFileFindings, type ReportFileProvider } from './fullReport.js';
 import { auditGreatPowers, collectGreatPowerCandidates, startDateOf } from './greatPowerValidation.js';
-import type { FileLocation } from './modLayout.js';
+import { relativeToRoot, type FileLocation } from './modLayout.js';
 import {
   listLayeredFiles,
   listLayeredFilesRecursive,
   listLayeredFilesResolved,
+  loadLayeredFile,
   resolveLayeredFile,
   type LayeredFile,
   type LoadedLayeredFile,
@@ -34,7 +35,8 @@ import {
 } from './modLayers.js';
 import { reportHeading, type ModStackHost } from './modStackHost.js';
 import { auditPops, popsDiagnostics } from './popsValidation.js';
-import { auditProvinceHistory } from './provinceHistoryValidation.js';
+import { emptyAudit, provinceHistoryAuditUnits } from './provinceHistoryValidation.js';
+import { readInBatches, YieldBudget } from './scheduling.js';
 import { renderReportText } from './reportText.js';
 
 export interface FullReportHost extends ModStackHost {
@@ -101,36 +103,32 @@ async function crossFileFindings(
   const provinceFiles = await loadAll(
     host,
     listLayeredFilesResolved(target.layers, host.fileSystem, PROVINCE_HISTORY_FOLDER),
+    signal,
   );
   return [
     ...essentialTagFindings(host, target, countries),
     ...(await flagFindings(host, target, countries)),
     ...(await greatPowerFindings(host, target, index, countries, provinceFiles, signal)),
-    ...(await provinceHistoryFindings(host, target, index, provinceFiles)),
+    ...(await provinceHistoryFindings(host, target, index, provinceFiles, signal)),
     ...(await popsFindings(host, target)),
   ].filter((entry) => entry.diagnostics.length > 0);
 }
-
-/** Files read together, so their reads overlap. */
-const READ_BATCH = 64;
 
 /** The text of every one of these files; a file that will not read is left out. */
 async function loadAll(
   host: FullReportHost,
   files: readonly LayeredFile[],
+  signal: CancelSignal,
 ): Promise<LoadedLayeredFile[]> {
-  const loaded: LoadedLayeredFile[] = [];
-  for (let start = 0; start < files.length; start += READ_BATCH) {
-    const batch = files.slice(start, start + READ_BATCH);
-    const texts = await Promise.all(batch.map((file) => host.readText(file.absolutePath)));
-    batch.forEach((file, position) => {
-      const text = texts[position];
-      if (text !== undefined) {
-        loaded.push({ ...file, text });
-      }
-    });
-  }
-  return loaded;
+  const loaded = await readInBatches(
+    files,
+    async (file) => {
+      const text = await host.readText(file.absolutePath);
+      return text === undefined ? undefined : loadLayeredFile(file, text);
+    },
+    signal,
+  );
+  return loaded.filter((file): file is LoadedLayeredFile => file !== undefined);
 }
 
 /**
@@ -144,14 +142,20 @@ async function provinceHistoryFindings(
   target: FileLocation,
   index: ModIndex,
   provinceFiles: readonly LoadedLayeredFile[],
+  signal: CancelSignal,
 ): Promise<ExtraFileFindings[]> {
   const definition = await layeredFile(host, target.layers, PROVINCE_DEFINITION_FILE);
-  const audit = auditProvinceHistory({
-    definitionText: definition?.text,
-    maxProvinces: index.maxProvinces,
-    seaProvinces: index.seaProvinces,
-    files: provinceFiles,
-  });
+  const audit = emptyAudit();
+  const units = provinceHistoryAuditUnits(
+    {
+      definitionText: definition?.text,
+      maxProvinces: index.maxProvinces,
+      seaProvinces: index.seaProvinces,
+      files: provinceFiles,
+    },
+    audit,
+  );
+  await new YieldBudget(undefined, signal).run(units);
   const onFiles = [...audit.byFile].flatMap((entry) => fileFindings(host, provinceFiles, entry));
   return [...(definition ? [{ ...definition, diagnostics: audit.definition }] : []), ...onFiles];
 }
@@ -203,7 +207,7 @@ async function popsFindings(host: FullReportHost, target: FileLocation): Promise
   const audit = auditPops(listLayeredFilesRecursive(target.layers, host.fileSystem, POPS_FOLDER));
   return [
     {
-      path: path.relative(target.root, descriptor.descriptorPath).replace(/\\/g, '/'),
+      path: relativeToRoot(target.root, descriptor.descriptorPath),
       uri: host.fileUri(descriptor.descriptorPath),
       text,
       diagnostics: popsDiagnostics(audit, replacePathRange(text)),

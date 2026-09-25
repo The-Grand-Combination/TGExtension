@@ -51,10 +51,10 @@ export class MapEditorTerrain {
     private readonly stack: MapEditorStack,
   ) {}
 
-  /** A stack whose sprites or bitmaps cannot be read has no terrain pictures, which is an answer, not an error. */
+  /** A stack whose sprites or bitmaps cannot be read has no terrain pictures; the failure itself is not kept. */
   info(layers: ModLayers): Promise<TerrainInfo> {
-    return cached(this.byLayers, layers.key, () =>
-      this.build(layers).catch((): TerrainInfo => ({ textures: new Map(), dominant: new Map() })),
+    return cached(this.byLayers, layers.key, () => this.build(layers)).catch(
+      (): TerrainInfo => ({ textures: new Map(), dominant: new Map() }),
     );
   }
 

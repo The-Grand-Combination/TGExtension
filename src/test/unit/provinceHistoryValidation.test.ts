@@ -1,7 +1,12 @@
 import * as assert from 'node:assert';
 import type { Diagnostic } from '../../model/diagnostic.js';
-import type { LoadedLayeredFile } from '../../services/modLayers.js';
-import { auditProvinceHistory, type ProvinceHistoryAudit } from '../../services/provinceHistoryValidation.js';
+import { loadLayeredFile, type LoadedLayeredFile } from '../../services/modLayers.js';
+import {
+  auditProvinceHistory,
+  emptyAudit,
+  provinceHistoryAuditUnits,
+  type ProvinceHistoryAudit,
+} from '../../services/provinceHistoryValidation.js';
 
 const DEFINITION = [
   'province;red;green;blue;x;x',
@@ -14,7 +19,10 @@ const DEFINITION = [
 const COMPLETE = 'owner = ENG\nlife_rating = 35\ntrade_goods = cattle\n';
 
 function file(relativePath: string, text: string): LoadedLayeredFile {
-  return { relativePath: `history/provinces/${relativePath}`, absolutePath: `/mod/history/provinces/${relativePath}`, text };
+  return loadLayeredFile(
+    { relativePath: `history/provinces/${relativePath}`, absolutePath: `/mod/history/provinces/${relativePath}` },
+    text,
+  );
 }
 
 function audit(files: readonly LoadedLayeredFile[], overrides: Partial<Parameters<typeof auditProvinceHistory>[0]> = {}): ProvinceHistoryAudit {
@@ -143,5 +151,22 @@ suite('provinceHistoryValidation — provinces described by more than one file',
   test('one file alone says nothing about others', () => {
     const result = audit([file('1 - Sitka.txt', 'owner = ENG\n'), file('2 - Yakutat.txt', COMPLETE)]);
     assert.ok(!(result.byFile.get('history/provinces/1 - Sitka.txt')?.[0]?.message ?? '').includes('more file'));
+  });
+});
+
+suite('provinceHistoryAuditUnits — the audit as work units', () => {
+  test('one unit per declared land province, sized by the files claiming it, with the same findings', () => {
+    const files = [file('1 - Sitka.txt', 'owner = ENG\n'), file('2 - Yakutat.txt', COMPLETE)];
+    const into = emptyAudit();
+    const sizes = [...provinceHistoryAuditUnits({ definitionText: DEFINITION, maxProvinces: 1000, seaProvinces: new Set(['900']), files }, into)];
+    assert.deepStrictEqual(sizes, ['owner = ENG\n'.length, COMPLETE.length]);
+    assert.deepStrictEqual(into, audit(files));
+  });
+
+  test('a file is parsed once however many audits walk it', () => {
+    const loaded = file('1 - Sitka.txt', COMPLETE);
+    assert.strictEqual(loaded.document(), loaded.document());
+    audit([loaded]);
+    assert.strictEqual(loaded.document(), loaded.document());
   });
 });

@@ -46,6 +46,9 @@ export function activate(context: vscode.ExtensionContext): void {
       '**/{common,map,poptypes,technologies,inventions,units,events,decisions,localisation,news,history}/**/*.{txt,csv,map}',
     ),
     vscode.workspace.createFileSystemWatcher('**/gfx/pictures/{events,decisions}/**/*.{tga,dds}'),
+    vscode.workspace.createFileSystemWatcher('**/map/*.bmp'),
+    vscode.workspace.createFileSystemWatcher('**/interface/*.gfx'),
+    vscode.workspace.createFileSystemWatcher('**/gfx/interface/terrain/**/*.{tga,dds}'),
     vscode.workspace.createFileSystemWatcher('**/*.mod'),
   ];
   context.subscriptions.push(...fileWatchers);

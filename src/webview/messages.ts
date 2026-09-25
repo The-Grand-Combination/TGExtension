@@ -128,6 +128,7 @@ function handleDetails(fresh: ProvinceDetails): void {
 
 /** Save all: what the page was holding is now on disk, so the map reads it from there. */
 function handleSavedAll(written: readonly number[], failed: number): void {
+  finishSave();
   saveAllButton.disabled = false;
   for (const id of written) {
     const held = pendingPositions.get(id);

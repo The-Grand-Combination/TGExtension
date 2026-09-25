@@ -75,12 +75,21 @@ export async function readModFileBytesAsync(filePath: string): Promise<Uint8Arra
   }
 }
 
-/** Overwrite a file in place; false when the write fails. */
-export async function writeModFileBytes(filePath: string, bytes: Uint8Array): Promise<boolean> {
+/** Replace a file's bytes; false when the write fails. */
+export function writeModFileBytes(filePath: string, bytes: Uint8Array): Promise<boolean> {
+  return writeAtomically(filePath, bytes);
+}
+
+/** Written beside the target and renamed over it, so a crash never leaves a truncated file. */
+async function writeAtomically(filePath: string, bytes: Uint8Array): Promise<boolean> {
+  const temporary = `${filePath}.${String(process.pid)}.tmp`;
   try {
-    await fsPromises.writeFile(filePath, bytes);
+    await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
+    await fsPromises.writeFile(temporary, bytes);
+    await fsPromises.rename(temporary, filePath);
     return true;
   } catch {
+    await fsPromises.rm(temporary, { force: true }).catch(() => undefined);
     return false;
   }
 }
@@ -94,16 +103,7 @@ export async function writeModFileBytes(filePath: string, bytes: Uint8Array): Pr
  */
 export async function writeModFileText(filePath: string, text: string, codepage: Codepage): Promise<boolean> {
   const bytes = encodeText(text, codepage);
-  if (!bytes) {
-    return false;
-  }
-  try {
-    await fsPromises.mkdir(path.dirname(filePath), { recursive: true });
-    await fsPromises.writeFile(filePath, bytes);
-    return true;
-  } catch {
-    return false;
-  }
+  return bytes ? writeAtomically(filePath, bytes) : false;
 }
 
 /** Move a file; false when the source is missing, the target exists, or the move fails. */

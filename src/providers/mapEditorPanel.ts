@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import type { LanguageClient } from 'vscode-languageclient/node';
 import {
   MAP_EDITOR_COUNTRY_COLORS_REQUEST,
+  MAP_EDITOR_INVALIDATE_REQUEST,
   MAP_EDITOR_MAP_REQUEST,
   MAP_EDITOR_NEW_PROVINCE_REQUEST,
   MAP_EDITOR_PAINT_REQUEST,
@@ -201,6 +202,9 @@ export class MapEditorPanel implements vscode.Disposable {
         return;
       case 'reload':
         if (!(await this.keepUnsaved())) {
+          if (this.params) {
+            await request(client, MAP_EDITOR_INVALIDATE_REQUEST, this.params);
+          }
           await this.load(panel);
         }
         return;
@@ -530,21 +534,22 @@ export class MapEditorPanel implements vscode.Disposable {
    */
   private async offerPending(): Promise<void> {
     const client = this.getClient();
-    if (this.pending.length === 0 || !client) {
+    const edits = this.pending;
+    if (edits.length === 0 || !client) {
       return;
     }
     const save = 'Save them';
     const answer = await vscode.window.showWarningMessage(
-      `The Map Editor closed with map positions edited in ${String(this.pending.length)} province(s) and not saved.`,
+      `The Map Editor closed with map positions edited in ${String(edits.length)} province(s) and not saved.`,
       { modal: true },
       save,
       'Discard',
     );
     if (answer !== save) {
-      this.pending = [];
+      this.pending = this.pending.filter((edit) => !edits.includes(edit));
       return;
     }
-    const result = await this.writePending(client);
+    const result = await this.writePending(client, edits);
     const first = result.failed[0];
     void (first
       ? vscode.window.showErrorMessage(`Victorian Tools: province ${String(first.provinceId)} was not saved: ${first.reason}`)
@@ -554,6 +559,7 @@ export class MapEditorPanel implements vscode.Disposable {
   /** Save the held provinces one by one; the ones that fail stay held. */
   private async writePending(
     client: LanguageClient,
+    edits: readonly PendingPositions[] = this.pending,
   ): Promise<{ written: number[]; failed: { provinceId: number; reason: string }[] }> {
     const target = this.params;
     const written: number[] = [];
@@ -561,7 +567,7 @@ export class MapEditorPanel implements vscode.Disposable {
     if (!target) {
       return { written, failed };
     }
-    for (const edit of this.pending) {
+    for (const edit of edits) {
       const params: SaveParams = {
         ...target,
         provinceId: edit.provinceId,
@@ -576,7 +582,7 @@ export class MapEditorPanel implements vscode.Disposable {
         failed.push({ provinceId: edit.provinceId, reason: result.reason });
       }
     }
-    this.pending = this.pending.filter((edit) => failed.some((one) => one.provinceId === edit.provinceId));
+    this.pending = this.pending.filter((edit) => !written.includes(edit.provinceId) || !edits.includes(edit));
     return { written, failed };
   }
 

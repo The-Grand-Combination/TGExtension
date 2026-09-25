@@ -7,7 +7,7 @@ import {
   type ProvinceScope,
 } from './declaredProvinces.js';
 import type { LoadedLayeredFile } from './modLayers.js';
-import { parseDocument } from './syntaxValidation.js';
+import { runToEnd, type WorkUnits } from './scheduling.js';
 
 /**
  * Keys a land province's history has to set. Without `life_rating` the province
@@ -28,7 +28,7 @@ export interface ProvinceHistoryAudit {
   /** Findings about a province with no history at all, reported where it is declared. */
   readonly definition: Diagnostic[];
   /** Findings about a history file, by its mod-relative path. */
-  readonly byFile: ReadonlyMap<string, Diagnostic[]>;
+  readonly byFile: Map<string, Diagnostic[]>;
 }
 
 /**
@@ -46,27 +46,36 @@ export interface ProvinceHistoryAudit {
  * mod's own `definition.csv` no longer has.
  */
 export function auditProvinceHistory(input: ProvinceHistoryAuditInput): ProvinceHistoryAudit {
-  const byFile = new Map<string, Diagnostic[]>();
+  const audit = emptyAudit();
+  runToEnd(provinceHistoryAuditUnits(input, audit));
+  return audit;
+}
+
+export function emptyAudit(): ProvinceHistoryAudit {
+  return { definition: [], byFile: new Map<string, Diagnostic[]>() };
+}
+
+/** `auditProvinceHistory` as work units, one per declared province; the findings land in `into`. */
+export function* provinceHistoryAuditUnits(input: ProvinceHistoryAuditInput, into: ProvinceHistoryAudit): WorkUnits {
   const land = landProvinces(input.definitionText, input);
   if (land.length === 0) {
     // No definition.csv in the stack: nothing says which provinces exist.
-    return { definition: [], byFile };
+    return;
   }
   const byId = filesByProvinceId(input.files);
-  const definition: Diagnostic[] = [];
   for (const province of land) {
     const claiming = byId.get(province.id);
     if (claiming === undefined) {
-      definition.push(withoutHistory(province));
+      into.definition.push(withoutHistory(province));
       continue;
     }
     const keys = keysOf(claiming);
     const missing = REQUIRED_KEYS.filter((key) => !keys.has(key));
     if (missing.length > 0) {
-      addTo(byFile, reportedOn(claiming), incomplete(province, claiming, missing));
+      addTo(into.byFile, reportedOn(claiming), incomplete(province, claiming, missing));
     }
+    yield claiming.reduce((size, file) => size + file.text.length, 0);
   }
-  return { definition, byFile };
 }
 
 /**
@@ -96,7 +105,7 @@ function provinceIdOf(relativePath: string): string | undefined {
 function keysOf(claiming: readonly LoadedLayeredFile[]): ReadonlySet<string> {
   const keys = new Set<string>();
   for (const file of claiming) {
-    for (const entry of parseDocument(file.text).document.entries) {
+    for (const entry of file.document().entries) {
       // A dated block is a later change; the province still has to start with a value.
       if (entry.kind === 'assignment' && entry.key.type !== 'date') {
         keys.add(entry.key.value.toLowerCase());

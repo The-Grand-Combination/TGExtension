@@ -53,3 +53,23 @@ suite('modFiles — text I/O in the mod code page', () => {
     assert.strictEqual(readModFile(scratchFile('absent.txt'), 'windows-1252'), undefined);
   });
 });
+
+suite('modFiles — writes replace the file whole', () => {
+  test('a written file is the new bytes, with no temporary left beside it', async () => {
+    const filePath = scratchFile('map/positions.txt');
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, 'old');
+    assert.strictEqual(await writeModFileText(filePath, 'new', 'windows-1252'), true);
+    assert.strictEqual(fs.readFileSync(filePath, 'latin1'), 'new');
+    assert.deepStrictEqual(fs.readdirSync(path.dirname(filePath)), ['positions.txt']);
+  });
+
+  test('a write that cannot land leaves the old file as it was and no temporary', async () => {
+    const blocker = scratchFile('map');
+    fs.writeFileSync(blocker, 'a file where the folder should be');
+    const filePath = path.join(blocker, 'positions.txt');
+    assert.strictEqual(await writeModFileText(filePath, 'new', 'windows-1252'), false);
+    assert.strictEqual(fs.readFileSync(blocker, 'latin1'), 'a file where the folder should be');
+    assert.deepStrictEqual(fs.readdirSync(path.dirname(blocker)), ['map']);
+  });
+});

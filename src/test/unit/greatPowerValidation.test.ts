@@ -7,7 +7,7 @@ import {
   type GreatPowerCandidate,
   type StartStateReader,
 } from '../../services/greatPowerValidation.js';
-import type { LayeredFile, LoadedLayeredFile } from '../../services/modLayers.js';
+import { loadLayeredFile, type LayeredFile, type LoadedLayeredFile } from '../../services/modLayers.js';
 
 const DEFINES = [
   'defines = {',
@@ -140,7 +140,7 @@ function loaded(
   relativePaths: readonly string[],
   texts: Readonly<Record<string, string>>,
 ): LoadedLayeredFile[] {
-  return listed(relativePaths).map((file) => ({ ...file, text: texts[file.relativePath] ?? '' }));
+  return listed(relativePaths).map((file) => loadLayeredFile(file, texts[file.relativePath] ?? ''));
 }
 
 function reader(): StartStateReader {

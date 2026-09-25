@@ -1,6 +1,8 @@
 import * as path from 'node:path';
+import type { Document } from '../model/ast.js';
 import type { ModDescriptor } from '../model/modDescriptor.js';
 import type { ModFileProvider } from './modIndex.js';
+import { parseDocument } from './syntaxValidation.js';
 
 /**
  * The folders the game reads a file set from, the way its launcher stacks
@@ -153,6 +155,17 @@ export function listLayeredFilesRecursive(
 /** A layered file whose text has been read, so several audits can share one read. */
 export interface LoadedLayeredFile extends LayeredFile {
   readonly text: string;
+  /** The parsed text, built on the first ask and kept. */
+  readonly document: () => Document;
+}
+
+export function loadLayeredFile(file: LayeredFile, text: string): LoadedLayeredFile {
+  let parsed: Document | undefined;
+  return {
+    ...file,
+    text,
+    document: (): Document => (parsed ??= parseDocument(text).document),
+  };
 }
 
 /** The same merge, keeping the absolute path of the layer each file came from. */

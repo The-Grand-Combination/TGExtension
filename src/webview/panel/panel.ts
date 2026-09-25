@@ -354,6 +354,13 @@ function popsEdit(current: ProvinceDetails): PopsEdit | undefined {
  * The save in flight is over. A failure gives the Save buttons back and nothing
  * else: what was locked because the province cannot have it stays locked.
  */
+/** Take the page's one save slot; false when a save is already in flight. */
+export function beginSaving(): boolean {
+  if (saving) { return false; }
+  saving = true;
+  return true;
+}
+
 export function finishSave(): void {
   saving = false;
   for (const bar of [...activeSaveBars, ...(dock ? [dock] : [])]) {

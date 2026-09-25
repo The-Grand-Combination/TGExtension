@@ -199,6 +199,11 @@ export function relativeToRoot(root: string, fsPath: string): string {
   return path.relative(root, fsPath).replace(/\\/g, '/');
 }
 
+/** One spelling for a path however it arrives: the watcher's, the resolver's, the target's. */
+export function pathKey(absolutePath: string): string {
+  return absolutePath.replace(/\\/g, '/').toLowerCase();
+}
+
 function walkUp(startPath: string, matches: (directory: string) => boolean): string | undefined {
   let current = path.resolve(startPath);
   for (;;) {

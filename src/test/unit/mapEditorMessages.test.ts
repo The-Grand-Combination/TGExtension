@@ -58,12 +58,13 @@ suite('mapEditorMessages', () => {
   });
 
   test('paint carries whole triples, and anything else is refused outright', () => {
-    assert.deepStrictEqual(asPageMessage({ type: 'paint', runs: [4, 2, 255] }), { type: 'paint', layer: 'provinces', runs: [4, 2, 255] });
-    assert.deepStrictEqual(asPageMessage({ type: 'paint', runs: [] }), { type: 'paint', layer: 'provinces', runs: [] });
+    assert.deepStrictEqual(asPageMessage({ type: 'paint', layer: 'provinces', runs: [4, 2, 255] }), { type: 'paint', layer: 'provinces', runs: [4, 2, 255] });
+    assert.deepStrictEqual(asPageMessage({ type: 'paint', layer: 'provinces', runs: [] }), { type: 'paint', layer: 'provinces', runs: [] });
+    assert.strictEqual(asPageMessage({ type: 'paint', runs: [4, 2, 255] }), undefined);
     // A dropped number would shift every run after it onto the wrong pixels.
-    assert.strictEqual(asPageMessage({ type: 'paint', runs: [4, 2] }), undefined);
-    assert.strictEqual(asPageMessage({ type: 'paint', runs: [4, 2, '255'] }), undefined);
-    assert.strictEqual(asPageMessage({ type: 'paint', runs: [4, 1.5, 255] }), undefined);
+    assert.strictEqual(asPageMessage({ type: 'paint', layer: 'provinces', runs: [4, 2] }), undefined);
+    assert.strictEqual(asPageMessage({ type: 'paint', layer: 'provinces', runs: [4, 2, '255'] }), undefined);
+    assert.strictEqual(asPageMessage({ type: 'paint', layer: 'provinces', runs: [4, 1.5, 255] }), undefined);
     assert.deepStrictEqual(asPageMessage({ type: 'paint', layer: 'terrain', runs: [4, 2, 5] }), { type: 'paint', layer: 'terrain', runs: [4, 2, 5] });
     assert.strictEqual(asPageMessage({ type: 'paint', layer: 'lakes', runs: [4, 2, 5] }), undefined);
     assert.strictEqual(asPageMessage({ type: 'paint' }), undefined);
@@ -115,6 +116,21 @@ suite('mapEditorMessages', () => {
   test('removing a reference names its file', () => {
     assert.deepStrictEqual(asPageMessage({ type: 'removeReference', file: 'a.png' }), { type: 'removeReference', file: 'a.png' });
     assert.strictEqual(asPageMessage({ type: 'removeReference' }), undefined);
+  });
+
+  test('a point sent in the wrong shape refuses the message rather than clearing the point', () => {
+    const numeric = asPageMessage({ type: 'pending', edits: [{ provinceId: 1, data: { unit: { x: 4, y: 5 } } }] });
+    assert.ok(numeric?.type === 'pending');
+    assert.strictEqual(numeric.edits.length, 0, 'the edit with a numeric coordinate is dropped, not read as cleared');
+    const blank = asPageMessage({ type: 'pending', edits: [{ provinceId: 1, data: { unit: { x: '', y: '5' } } }] });
+    assert.ok(blank?.type === 'pending');
+    assert.strictEqual(blank.edits[0]?.data.unit, undefined, 'a blank coordinate still clears');
+  });
+
+  test('openFile needs a line at or above zero', () => {
+    assert.deepStrictEqual(asPageMessage({ type: 'openFile', absolutePath: '/a', line: 0 }), { type: 'openFile', absolutePath: '/a', line: 0 });
+    assert.strictEqual(asPageMessage({ type: 'openFile', absolutePath: '/a', line: -1 }), undefined);
+    assert.strictEqual(asPageMessage({ type: 'openFile', absolutePath: '/a', line: 1.5 }), undefined);
   });
 
   test('paintPending carries the count the close warning uses', () => {

@@ -7,6 +7,7 @@ import type {
   ProvinceHistory,
   ProvincePositions,
   SaveParams,
+  SaveResult,
   TerrainSection,
 } from '../../model/mapEditor.js';
 import { decodeBmp } from '../../services/bmpDecoder.js';
@@ -847,6 +848,19 @@ suite('MapEditorHandlers — climate and state', () => {
     assert.ok(!result.ok);
     assert.ok(result.reason.includes('no continent'), result.reason);
     assert.strictEqual(written.size, 0);
+  });
+
+  test('two positions saves at once both land: the second plans against what the first wrote', async () => {
+    const positionsFile = path.join(ROOT, 'map/positions.txt');
+    const { host, written } = placed(new Map([[positionsFile, '1 = { unit = { x = 0 y = 0 } }\n']]));
+    const handlers = new MapEditorHandlers(host);
+    const save = (provinceId: number, x: string): Promise<SaveResult> =>
+      handlers.save({ ...targetParams, provinceId, popDate: '1836.1.1', section: 'positions', data: { ...EMPTY_POSITIONS, unit: { x, y: '9' } } });
+    const [first, second] = await Promise.all([save(1, '4'), save(2, '5')]);
+    assert.ok(first.ok && second.ok);
+    const after = written.get(positionsFile) ?? '';
+    assert.ok(after.includes('x = 4'), after);
+    assert.ok(after.includes('x = 5'), after);
   });
 
   test('Save All writes the history, the placement and the positions in one go', async () => {

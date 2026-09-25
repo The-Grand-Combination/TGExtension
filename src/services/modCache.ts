@@ -2,7 +2,7 @@ import * as path from 'node:path';
 import type { ModIndex } from '../model/modIndex.js';
 import type { IndexBuildResult, IndexCarry, IndexReuse } from './modIndex.js';
 import type { ModLayers } from './modLayers.js';
-import { relativeToRoot, type FileLocation } from './modLayout.js';
+import { isInsideRoot, relativeToRoot, type FileLocation } from './modLayout.js';
 
 /** Stands for "the carry is worthless"; the next build reads everything again. */
 const EVERYTHING = Symbol('everything changed');
@@ -23,6 +23,8 @@ export interface ModCacheOptions {
   readonly onIndexBuilt?: (layers: ModLayers, index: ModIndex) => void;
   /** Called when a build throws; the layers keep their previous index, if any. */
   readonly onBuildFailed?: (layers: ModLayers, error: unknown) => void;
+  /** Called when an index is let go. */
+  readonly onIndexDropped?: (layers: ModLayers) => void;
 }
 
 /**
@@ -52,11 +54,15 @@ export class ModCache {
    * arrives mid-build is still honoured by the build that replaces it.
    */
   private readonly pendingChangedByKey = new Map<string, Set<string> | typeof EVERYTHING>();
+  /** Stacks whose last build threw; only `ensureIndex` or `refresh` tries again. */
+  private readonly failedKeys = new Set<string>();
 
   constructor(private readonly options: ModCacheOptions) {}
 
+  /** Every stack with an index or a build under way. */
   knownLayers(): ModLayers[] {
-    return [...this.indexByKey.keys()].flatMap((key) => {
+    const keys = new Set([...this.indexByKey.keys(), ...this.buildsInFlight.keys()]);
+    return [...keys].flatMap((key) => {
       const layers = this.layersByKey.get(key);
       return layers ? [layers] : [];
     });
@@ -93,20 +99,29 @@ export class ModCache {
    */
   ensureIndex(layers: ModLayers): Promise<ModIndex | undefined> {
     const cached = this.indexByKey.get(layers.key);
-    return cached && !this.buildsInFlight.has(layers.key) ? Promise.resolve(cached) : this.startBuild(layers);
+    if (cached && !this.buildsInFlight.has(layers.key)) {
+      return Promise.resolve(cached);
+    }
+    this.failedKeys.delete(layers.key);
+    return this.startBuild(layers);
+  }
+
+  /** The mod a file belongs to, without starting a build. */
+  locationFor(fsPath: string): FileLocation | undefined {
+    return this.locationForDirectory(path.dirname(fsPath));
   }
 
   /**
    * The context of a file: its location, relative path, and whatever index
-   * exists. Layers without an index get one started, so the next validation has it.
+   * exists. Layers without an index get one started, unless their last build failed.
    */
   contextFor(fsPath: string): ModContext | undefined {
-    const location = this.locationForDirectory(path.dirname(fsPath));
+    const location = this.locationFor(fsPath);
     if (!location) {
       return undefined;
     }
     const index = this.indexByKey.get(location.layers.key);
-    if (!index) {
+    if (!index && !this.failedKeys.has(location.layers.key)) {
       void this.startBuild(location.layers);
     }
     return { ...location, index, relativePath: relativeToRoot(location.root, fsPath) };
@@ -115,7 +130,7 @@ export class ModCache {
   /** Indexed layers with a root that contains at least one of these paths. */
   layersContaining(fsPaths: readonly string[]): ModLayers[] {
     return this.knownLayers().filter((layers) =>
-      layers.roots.some((root) => fsPaths.some((fsPath) => isInside(root, fsPath))),
+      layers.roots.some((root) => fsPaths.some((fsPath) => isInsideRoot(root, fsPath))),
     );
   }
 
@@ -129,6 +144,7 @@ export class ModCache {
     for (const layers of layersList) {
       this.notePending(layers.key, changedIn?.(layers));
       this.generationByKey.set(layers.key, this.generationOf(layers.key) + 1);
+      this.failedKeys.delete(layers.key);
       void this.startBuild(layers);
     }
   }
@@ -164,11 +180,16 @@ export class ModCache {
   /** Drop everything known about these layers; a build still running is discarded when it ends. */
   forget(layersList: readonly ModLayers[]): void {
     for (const layers of layersList) {
-      this.indexByKey.delete(layers.key);
+      const hadIndex = this.indexByKey.delete(layers.key);
       this.layersByKey.delete(layers.key);
       this.wantedKeys.delete(layers.key);
       this.carryByKey.delete(layers.key);
       this.pendingChangedByKey.delete(layers.key);
+      this.generationByKey.delete(layers.key);
+      this.failedKeys.delete(layers.key);
+      if (hadIndex) {
+        this.options.onIndexDropped?.(layers);
+      }
     }
     this.locationByDirectory.clear();
   }
@@ -199,6 +220,7 @@ export class ModCache {
       .then((built) => this.finishBuild(layers, generation, built))
       .catch((error: unknown) => {
         this.buildsInFlight.delete(layers.key);
+        this.failedKeys.add(layers.key);
         this.options.onBuildFailed?.(layers, error);
         return undefined;
       });
@@ -233,12 +255,15 @@ export class ModCache {
     this.indexByKey.set(layers.key, built.index);
     this.carryByKey.set(layers.key, built.carry);
     this.pendingChangedByKey.delete(layers.key);
-    this.options.onIndexBuilt?.(layers, built.index);
+    try {
+      this.options.onIndexBuilt?.(layers, built.index);
+    } catch (error: unknown) {
+      this.options.onBuildFailed?.(layers, new Error(`after the build: ${describe(error)}`));
+    }
     return Promise.resolve(built.index);
   }
 }
 
-function isInside(root: string, fsPath: string): boolean {
-  const relative = path.relative(root, fsPath);
-  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
+function describe(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

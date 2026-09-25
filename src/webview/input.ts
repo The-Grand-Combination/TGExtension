@@ -3,7 +3,7 @@ import { canvas, mapArea, mapControls, required, requiredInput, saveAllButton, s
 import { post } from './host.js';
 import { continueStroke, endStroke, setTool, startPaint, stepBack, stepForward, strokeInProgress } from './paint.js';
 import { hexOf, reservedKind, valueName } from './paintColor.js';
-import { renderSide, resetHeader, showHint } from './panel/panel.js';
+import { beginSaving, renderSide, resetHeader, showHint } from './panel/panel.js';
 import { capturePending, handleLabel, markerAt, moveHandle, pendingCount, sendPending, type PositionHandle } from './positions.js';
 import { endReferenceDrag, gripCursor, hasActiveReference, moveReference, pressReference, referenceDragging, selectReference } from './references.js';
 import { definitionById, layerImage, seaIds, state, type Highlight, type Point, type Tool } from './state.js';
@@ -342,7 +342,7 @@ export function initInput(): void {
   });
   saveAllButton.addEventListener('click', function () {
     const count = pendingCount();
-    if (count === 0) { return; }
+    if (count === 0 || !beginSaving()) { return; }
     sendPending();
     post({ type: 'saveAll' });
     saveAllButton.disabled = true;

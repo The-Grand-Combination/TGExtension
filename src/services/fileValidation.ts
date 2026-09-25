@@ -6,7 +6,7 @@ import { duplicateDiagnosticsFor } from './duplicateDiagnostics.js';
 import { validateMapCsv } from './mapCsvValidation.js';
 import { validateSemantics } from './semanticValidation.js';
 import { validateStructure } from './structureValidation.js';
-import { parseDocument } from './syntaxValidation.js';
+import { analyze, type AnalyzedDocument } from './documentAnalysis.js';
 
 /**
  * Every diagnostic for one file's text: syntax, structure, and semantics for
@@ -21,8 +21,19 @@ export function validateFileText(
   relativePath: string | undefined,
   options: ValidationOptions = DEFAULT_VALIDATION_OPTIONS,
 ): Diagnostic[] {
-  const found = [...fileNameFindings(relativePath), ...findingsOf(text, fileType, index, relativePath, options)];
-  return dropIgnoredLines(text, found, options.ignoreMarker);
+  return validateAnalyzed(analyze(text), fileType, index, relativePath, options);
+}
+
+/** `validateFileText` over a document already lexed. */
+export function validateAnalyzed(
+  analysis: AnalyzedDocument,
+  fileType: FileType,
+  index: ModIndex | undefined,
+  relativePath: string | undefined,
+  options: ValidationOptions = DEFAULT_VALIDATION_OPTIONS,
+): Diagnostic[] {
+  const found = [...fileNameFindings(relativePath), ...findingsOf(analysis, fileType, index, relativePath, options)];
+  return dropIgnoredLines(analysis.text, found, options.ignoreMarker);
 }
 
 /**
@@ -50,7 +61,7 @@ function fileNameFindings(relativePath: string | undefined): Diagnostic[] {
 const NOT_ASCII = /[^\x20-\x7e]/;
 
 function findingsOf(
-  text: string,
+  analysis: AnalyzedDocument,
   fileType: FileType,
   index: ModIndex | undefined,
   relativePath: string | undefined,
@@ -58,9 +69,9 @@ function findingsOf(
 ): Diagnostic[] {
   const duplicates = index && relativePath !== undefined ? duplicateDiagnosticsFor(index, relativePath) : [];
   if (CSV_FILE_TYPES.has(fileType)) {
-    return index ? [...validateMapCsv(text, fileType, index), ...duplicates] : [];
+    return index ? [...validateMapCsv(analysis.text, fileType, index), ...duplicates] : [];
   }
-  const parseResult = parseDocument(text);
+  const parseResult = analysis.parse();
   const semantic =
     index && fileType !== 'unknown'
       ? validateSemantics(parseResult.document, fileType, index, relativePath, options)

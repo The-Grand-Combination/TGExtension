@@ -149,7 +149,4 @@ export function cached<T>(store: PromiseStore<T>, key: string, build: () => Prom
   return building;
 }
 
-/** One spelling for a path however it arrives: the watcher's, the resolver's, the target's. */
-export function pathKey(absolutePath: string): string {
-  return absolutePath.replace(/\\/g, '/').toLowerCase();
-}
+export { pathKey } from './modLayout.js';

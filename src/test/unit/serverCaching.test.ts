@@ -6,7 +6,7 @@ import { BoundedCache } from '../../services/boundedCache.js';
 import { findModRoot } from '../../io/modFiles.js';
 import { ModCache } from '../../services/modCache.js';
 import { layersOf, singleRootLayers } from '../../services/modLayers.js';
-import { isInsideRoot, relativeToRoot, type FileLocation } from '../../services/modLayout.js';
+import { isInsideRoot, pathKey, relativeToRoot, type FileLocation } from '../../services/modLayout.js';
 import {
   configChange,
   configEquals,
@@ -97,6 +97,17 @@ suite('modLayout — path helpers', () => {
 
   test('relativeToRoot always yields forward slashes', () => {
     assert.strictEqual(relativeToRoot(root, path.join(root, 'history', 'wars', 'W.txt')), 'history/wars/W.txt');
+  });
+
+  test('pathKey makes the watcher spelling and the resolver spelling one key', () => {
+    const stored = 'F:\\Victoria 2\\mod\\TGC\\gfx\\pictures\\events\\a.dds';
+    const watched = 'f:\\Victoria 2\\mod\\TGC\\gfx\\pictures\\events\\a.dds';
+    assert.notStrictEqual(stored, watched);
+    assert.strictEqual(pathKey(stored), pathKey(watched));
+    const cache = new BoundedCache<string, string | undefined>({ entries: 4 });
+    cache.set(pathKey(stored), 'preview');
+    cache.delete(pathKey(watched));
+    assert.ok(!cache.has(pathKey(stored)));
   });
 });
 
@@ -237,6 +248,20 @@ suite('modCache — location and index caching', () => {
     cache.refresh(cache.knownLayers());
     await cache.ensureIndex(layersA);
     assert.deepStrictEqual(builds, [layersA.key, layersA.key], 'only refresh reads the files again');
+  });
+
+  test('a stack on its first build is already known, so a save during it reaches the build', async () => {
+    const { cache, builds, gates, reuses } = newCache({ gated: true });
+    const pending = cache.ensureIndex(layersA);
+    const affected = cache.layersContaining([path.join(modA, 'events', 'A.txt')]);
+    assert.deepStrictEqual(affected.map((layers) => layers.key), [layersA.key]);
+    cache.refresh(affected, () => new Set(['events/A.txt']));
+    gates[0]?.resolve(freshBuild());
+    await nextTick();
+    assert.deepStrictEqual(builds, [layersA.key, layersA.key], 'the first build is redone');
+    gates[1]?.resolve(freshBuild());
+    assert.ok(await pending);
+    assert.strictEqual(reuses[1], undefined);
   });
 
   test('a refresh during a build runs the build again, so no change is missed', async () => {

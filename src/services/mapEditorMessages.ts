@@ -92,7 +92,7 @@ function asFieldMessage(record: UnknownRecord): PageMessage | undefined {
         ? { type: 'select', provinceId: record['provinceId'], popDate: record['popDate'] }
         : undefined;
     case 'openFile':
-      return typeof record['absolutePath'] === 'string' && typeof record['line'] === 'number'
+      return typeof record['absolutePath'] === 'string' && isWhole(record['line']) && record['line'] >= 0
         ? { type: 'openFile', absolutePath: record['absolutePath'], line: record['line'] }
         : undefined;
     default:
@@ -154,7 +154,7 @@ function asLocalisation(value: unknown): LocalisationEdit | undefined {
 /** A triple short of whole, or holding anything but whole numbers, is dropped: it would paint the wrong pixels. */
 function asPaint(record: UnknownRecord): PageMessage | undefined {
   const value: unknown = record['runs'];
-  const layer: unknown = record['layer'] ?? 'provinces';
+  const layer: unknown = record['layer'];
   if (!Array.isArray(value) || !isPaintLayer(layer)) {
     return undefined;
   }
@@ -248,7 +248,7 @@ function asPositionsEdit(record: UnknownRecord): PositionsEdit | undefined {
   return data ? { data } : undefined;
 }
 
-/** Every kind is present; one without both coordinates as strings counts as cleared. */
+/** Every kind is present; a blank coordinate clears, any other shape refuses the message. */
 function asPositions(value: unknown): ProvincePositions | undefined {
   const record = asRecord(value);
   if (!record) {
@@ -256,7 +256,11 @@ function asPositions(value: unknown): ProvincePositions | undefined {
   }
   const positions: Partial<Record<PositionKind, PositionPoint | undefined>> = {};
   for (const kind of POSITION_KINDS) {
-    const point = asStringFields(record[kind], ['x', 'y']);
+    const sent: unknown = record[kind];
+    const point = sent === undefined || sent === null ? undefined : asStringFields(sent, ['x', 'y']);
+    if (sent !== undefined && sent !== null && point === undefined) {
+      return undefined;
+    }
     positions[kind] = point && point.x !== '' && point.y !== '' ? point : undefined;
   }
   // Every kind was assigned just above.
@@ -320,7 +324,7 @@ function asPops(value: unknown): PopEntry[] | undefined {
   });
 }
 
-/** An object whose listed fields are all strings, as exactly that shape. */
+/** An object whose listed fields are strings or absent, as exactly that shape. */
 function asStringFields<K extends string>(value: unknown, keys: readonly K[]): Record<K, string> | undefined {
   const record = asRecord(value);
   if (!record) {
@@ -329,7 +333,10 @@ function asStringFields<K extends string>(value: unknown, keys: readonly K[]): R
   const out: Partial<Record<K, string>> = {};
   for (const key of keys) {
     const field = record[key];
-    out[key] = typeof field === 'string' ? field : '';
+    if (field !== undefined && typeof field !== 'string') {
+      return undefined;
+    }
+    out[key] = field ?? '';
   }
   // Every key was assigned a string just above.
   return out as Record<K, string>;

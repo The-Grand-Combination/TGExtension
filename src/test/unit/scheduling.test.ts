@@ -1,5 +1,6 @@
 import * as assert from 'node:assert';
-import { runToEnd, YieldBudget, type WorkUnits } from '../../services/scheduling.js';
+import { Cancelled } from '../../model/cancellation.js';
+import { readInBatches, runToEnd, YieldBudget, type WorkUnits } from '../../services/scheduling.js';
 
 /** Records the order units run in, reporting each one's size. */
 function counter(sizes: readonly number[], log: number[]): () => WorkUnits {
@@ -74,5 +75,29 @@ suite('scheduling — work units', () => {
     }
     await new YieldBudget(100).run(one());
     assert.deepStrictEqual(seen, [1, 2]);
+  });
+});
+
+suite('scheduling — readInBatches', () => {
+  test('reads every item in order and gives the loop a turn between batches', async () => {
+    const items = Array.from({ length: 150 }, (_, i) => i);
+    let turns = 0;
+    let watching = true;
+    const observe = (): void => { turns++; if (watching) { setImmediate(observe); } };
+    setImmediate(observe);
+    const results = await readInBatches(items, (i) => Promise.resolve(i * 2));
+    watching = false;
+    assert.deepStrictEqual(results, items.map((i) => i * 2));
+    assert.ok(turns >= 2, `expected the loop to turn between three batches, saw ${String(turns)}`);
+  });
+
+  test('a cancelled signal stops the pass at a batch boundary', async () => {
+    let read = 0;
+    const signal = { get cancelled(): boolean { return read >= 64; } };
+    await assert.rejects(
+      readInBatches(Array.from({ length: 200 }, (_, i) => i), (i) => { read++; return Promise.resolve(i); }, signal),
+      Cancelled,
+    );
+    assert.strictEqual(read, 64);
   });
 });

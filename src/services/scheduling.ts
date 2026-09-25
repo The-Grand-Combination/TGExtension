@@ -27,6 +27,24 @@ export type WorkUnits = Generator<number>;
  */
 const DEFAULT_BUDGET = 256 * 1024;
 
+/** Files read together, so their reads overlap. */
+export const READ_BATCH = 64;
+
+/** `read` over every item a batch at a time, yielding to the event loop and reading `signal` between batches. */
+export async function readInBatches<Item, Result>(
+  items: readonly Item[],
+  read: (item: Item) => Promise<Result>,
+  signal: CancelSignal = NEVER_CANCELLED,
+): Promise<Result[]> {
+  const results: Result[] = [];
+  for (let start = 0; start < items.length; start += READ_BATCH) {
+    throwIfCancelled(signal);
+    results.push(...(await Promise.all(items.slice(start, start + READ_BATCH).map(read))));
+    await yieldToEventLoop();
+  }
+  return results;
+}
+
 /** Run every unit without pausing. */
 export function runToEnd(units: WorkUnits): void {
   let step = units.next();

@@ -5,7 +5,7 @@ import { compareDates } from '../model/gameDate.js';
 import type { Range } from '../model/range.js';
 import { parseCountryList } from './countryList.js';
 import type { LayeredFile, LoadedLayeredFile } from './modLayers.js';
-import { yieldToEventLoop } from './scheduling.js';
+import { readInBatches, yieldToEventLoop } from './scheduling.js';
 import { parseDocument } from './syntaxValidation.js';
 
 /** The engine's own default, used when `defines.lua` names no start date. */
@@ -166,18 +166,19 @@ async function civilizedTags(
       const file = historyByTag.get(tag);
       return file === undefined ? [] : [{ tag, file }];
     });
-  for (let start = 0; start < withHistory.length; start += BATCH_SIZE) {
-    throwIfCancelled(signal);
-    const batch = withHistory.slice(start, start + BATCH_SIZE);
-    const texts = await Promise.all(batch.map((entry) => reader.readFile(entry.file.absolutePath)));
-    batch.forEach((entry, position) => {
-      const text = texts[position];
-      if (text !== undefined && historyValueAtStart(text, 'civilized', reader.startDate)?.toLowerCase() === 'yes') {
-        found.add(entry.tag);
-      }
-    });
-    await yieldToEventLoop();
-  }
+  const civilized = await readInBatches(
+    withHistory,
+    async (entry) => {
+      const text = await reader.readFile(entry.file.absolutePath);
+      return text !== undefined && historyValueAtStart(text, 'civilized', reader.startDate)?.toLowerCase() === 'yes';
+    },
+    signal,
+  );
+  withHistory.forEach((entry, position) => {
+    if (civilized[position] === true) {
+      found.add(entry.tag);
+    }
+  });
   return found;
 }
 
@@ -218,7 +219,7 @@ async function ownedStates(
       continue;
     }
     seenProvinces.add(provinceId);
-    const owner = historyValueAtStart(file.text, 'owner', reader.startDate)?.toUpperCase();
+    const owner = historyValueAtStartOf(file.document(), 'owner', reader.startDate)?.toUpperCase();
     const state = reader.stateOfProvince.get(provinceId);
     if (owner === undefined || state === undefined) {
       continue;
@@ -241,7 +242,11 @@ function provinceIdOf(relativePath: string): string | undefined {
  * order rather than in the order they happen to be written.
  */
 export function historyValueAtStart(text: string, key: string, startDate: string): string | undefined {
-  const document = parseDocument(text).document;
+  return historyValueAtStartOf(parseDocument(text).document, key, startDate);
+}
+
+/** `historyValueAtStart` over a file already parsed. */
+export function historyValueAtStartOf(document: Document, key: string, startDate: string): string | undefined {
   const dated = datedBlocks(document, startDate).sort((a, b) => compareDates(a.date, b.date));
   let value = scalarAt(document.entries, key);
   for (const block of dated) {

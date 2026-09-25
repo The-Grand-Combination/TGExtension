@@ -17,6 +17,7 @@ export const MAP_EDITOR_PAINT_REQUEST = requestDescriptor<PaintParams, PaintResu
 export const MAP_EDITOR_NEW_PROVINCE_REQUEST = requestDescriptor<NewProvinceParams, ProvinceResult>('victorianTools/mapEditor/newProvince');
 export const MAP_EDITOR_THUMBNAILS_REQUEST = requestDescriptor<MapEditorTargetParams, MapThumbnails>('victorianTools/mapEditor/thumbnails');
 export const MAP_EDITOR_STATE_COLORS_REQUEST = requestDescriptor<MapEditorTargetParams, MapStateColorsResult>('victorianTools/mapEditor/stateColors');
+export const MAP_EDITOR_INVALIDATE_REQUEST = requestDescriptor<MapEditorTargetParams, null>('victorianTools/mapEditor/invalidate');
 
 /** `victorianTools.mapEditor.countryColorsTint`: percent of the owner's colour in the Country Colors layer. */
 export const DEFAULT_COUNTRY_COLORS_TINT = 82;

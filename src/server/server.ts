@@ -54,6 +54,7 @@ import {
 } from '../model/fullReport.js';
 import {
   MAP_EDITOR_COUNTRY_COLORS_REQUEST,
+  MAP_EDITOR_INVALIDATE_REQUEST,
   MAP_EDITOR_STATE_COLORS_REQUEST,
   MAP_EDITOR_MAP_REQUEST,
   MAP_EDITOR_NEW_PROVINCE_REQUEST,
@@ -88,7 +89,8 @@ import {
 } from '../model/mapAudit.js';
 import type { ModIndex } from '../model/modIndex.js';
 import { duplicateDiagnosticsByFile, duplicateDiagnosticsFor } from '../services/duplicateDiagnostics.js';
-import { validateFileText } from '../services/fileValidation.js';
+import { validateAnalyzed } from '../services/fileValidation.js';
+import { guarded, logFailure } from '../services/guarded.js';
 import { NULL_TAG_FLAGS, type ValidationOptions } from '../model/validationOptions.js';
 import { enforceColormaps, type ColormapEnforcementHost } from '../services/colormapEnforcementHandlers.js';
 import { buildFullReport, type FullReportHost } from '../services/fullReportHandlers.js';
@@ -109,6 +111,8 @@ import {
   locateFile,
   locateLoneMod,
   missingDependencies,
+  pathKey,
+  relativeToRoot,
   type FileLocation,
   type ModLayout,
 } from '../services/modLayout.js';
@@ -180,7 +184,10 @@ const modCache = new ModCache({
   buildIndex: buildIndexFor,
   onIndexBuilt: indexBuilt,
   onBuildFailed: indexFailed,
+  onIndexDropped: indexDropped,
 });
+
+const ensureIndex = (layers: ModLayers): Promise<ModIndex | undefined> => modCache.ensureIndex(layers);
 
 /** The tokens of the document a request is about; see `DocumentAnalysisCache`. */
 const documentAnalyses = new DocumentAnalysisCache();
@@ -233,10 +240,16 @@ connection.onInitialized(() => {
   if (supportsWorkspaceFolders) {
     connection.workspace.onDidChangeWorkspaceFolders(applyWorkspaceFolderChange);
   }
-  void refreshConfiguration().then(() => {
-    applyLayout();
-  });
+  void refreshConfiguration()
+    .then(() => {
+      applyLayout();
+    })
+    .catch(logFailure('Applying the layout', logError));
 });
+
+function logError(message: string): void {
+  connection.console.error(message);
+}
 
 function applyWorkspaceFolderChange(event: WorkspaceFoldersChangeEvent): void {
   const removed = new Set(event.removed.map((folder) => URI.parse(folder.uri).fsPath));
@@ -284,13 +297,15 @@ function warmIndexes(): void {
 }
 
 connection.onDidChangeConfiguration(() => {
-  void refreshConfiguration().then((change) => {
-    if (change === 'other') {
-      validateAllOpen();
-    } else if (change !== 'none') {
-      applyLayout(change === 'recoded');
-    }
-  });
+  void refreshConfiguration()
+    .then((change) => {
+      if (change === 'other') {
+        validateAllOpen();
+      } else if (change !== 'none') {
+        applyLayout(change === 'recoded');
+      }
+    })
+    .catch(logFailure('Applying the configuration', logError));
 });
 
 async function refreshConfiguration(): Promise<ConfigChange> {
@@ -322,6 +337,7 @@ function applyLayout(recoded = false): void {
   mapEditor.invalidate();
   warmIndexes();
   validateAllOpen();
+  evictUnusedIndexes();
   void connection.sendNotification(LAYOUT_CHANGED_NOTIFICATION);
 }
 
@@ -448,6 +464,15 @@ function indexFailed(layers: ModLayers, error: unknown): void {
   connection.console.error(`Indexing ${describeLayers(layers)} failed: ${reason}`);
 }
 
+function indexDropped(layers: ModLayers): void {
+  for (const uri of publishedByLayers.get(layers.key) ?? []) {
+    if (!documents.get(uri)) {
+      void connection.sendDiagnostics({ uri, diagnostics: [] });
+    }
+  }
+  publishedByLayers.delete(layers.key);
+}
+
 /**
  * Publish index-time duplicates for files that are not open. An open document
  * merges them into its own publish, so writing them here as well would briefly
@@ -498,7 +523,7 @@ connection.onDidChangeWatchedFiles((params) => {
   if (rebuildTimer) {
     clearTimeout(rebuildTimer);
   }
-  rebuildTimer = setTimeout(rebuildChangedIndexes, config.indexRebuildDelayMs);
+  rebuildTimer = setTimeout(guarded('Rebuilding indexes', logError, rebuildChangedIndexes), config.indexRebuildDelayMs);
 });
 
 /**
@@ -511,12 +536,11 @@ function rebuildChangedIndexes(): void {
   const changed = pendingWatchedChanges;
   pendingWatchedChanges = [];
   for (const fsPath of changed) {
-    pictureCache.delete(fsPath);
+    pictureCache.delete(pathKey(fsPath));
   }
   mapEditor.invalidate(changed);
   if (changed.some((fsPath) => fsPath.toLowerCase().endsWith('.mod'))) {
     applyLayout();
-    return;
   }
   const affected = modCache.layersContaining(changed);
   modCache.refresh(affected, (layers) => relativePathsIn(layers, changed));
@@ -559,7 +583,7 @@ function evictUnusedIndexes(): void {
     }
   }
   for (const document of documents.all()) {
-    const layers = contextForUri(document.uri)?.layers;
+    const layers = modCache.locationFor(URI.parse(document.uri).fsPath)?.layers;
     if (layers) {
       keep.add(layers.key);
     }
@@ -575,8 +599,7 @@ function publishClosedDocument(uri: string): void {
   const fsPath = URI.parse(uri).fsPath;
   const location = modCache.locationForDirectory(path.dirname(fsPath));
   const index = location ? modCache.indexFor(location.layers) : undefined;
-  const diagnostics =
-    location && index ? duplicateDiagnosticsFor(index, path.relative(location.root, fsPath).replace(/\\/g, '/')) : [];
+  const diagnostics = location && index ? duplicateDiagnosticsFor(index, relativeToRoot(location.root, fsPath)) : [];
   publishFromDisk(uri, fsPath, diagnostics);
 }
 
@@ -588,10 +611,13 @@ function scheduleValidation(uri: string): void {
   }
   validationTimers.set(
     uri,
-    setTimeout(() => {
-      validationTimers.delete(uri);
-      validateByUri(uri);
-    }, config.validationDelayMs),
+    setTimeout(
+      guarded('Validating', logError, () => {
+        validationTimers.delete(uri);
+        validateByUri(uri);
+      }),
+      config.validationDelayMs,
+    ),
   );
 }
 
@@ -631,8 +657,8 @@ function validate(document: TextDocument): void {
   const modContext = contextForUri(document.uri);
   trackRootless(document.uri, modContext);
   const fileType = classifyFile(modContext?.relativePath ?? document.uri);
-  const findings = validateFileText(
-    document.getText(),
+  const findings = validateAnalyzed(
+    analysisOf(document),
     fileType,
     modContext?.index,
     modContext?.relativePath,
@@ -699,19 +725,19 @@ function pictureHoverFor(
   });
 }
 
-/** Decoding a `.dds` is slow, so rendered previews (and misses) are kept per absolute path. */
+/** Decoding a `.dds` is slow, so rendered previews (and misses) are kept per file. */
 function cachedPictureMarkdown(absolutePath: string, relativePath: string): string | undefined {
-  if (!pictureCache.has(absolutePath)) {
+  const key = pathKey(absolutePath);
+  if (!pictureCache.has(key)) {
     const bytes = readModFileBytes(absolutePath);
-    pictureCache.set(absolutePath, bytes ? pictureHoverMarkdown(bytes, relativePath, relativePath) : undefined);
+    pictureCache.set(key, bytes ? pictureHoverMarkdown(bytes, relativePath, relativePath) : undefined);
   }
-  return pictureCache.get(absolutePath);
+  return pictureCache.get(key);
 }
 
 connection.onHover((params) => {
   const document = documents.get(params.textDocument.uri);
-  const modContext = document ? contextForUri(document.uri) : undefined;
-  if (!document || !modContext?.index) {
+  if (!document) {
     return null;
   }
   const offset = document.offsetAt(params.position);
@@ -723,6 +749,10 @@ connection.onHover((params) => {
     return markdown === undefined ? null : hoverResult(document, markdown, key.tokenRange);
   }
 
+  const modContext = contextForUri(document.uri);
+  if (!modContext?.index) {
+    return null;
+  }
   const picture = pictureHoverFor(analysis, offset, modContext);
   if (picture) {
     return hoverResult(document, picture.markdown, picture.tokenRange);
@@ -810,7 +840,7 @@ const modStack: ModStackHost = {
 
 const fullReportHost: FullReportHost = {
   ...modStack,
-  ensureIndex: (layers: ModLayers): Promise<ModIndex | undefined> => modCache.ensureIndex(layers),
+  ensureIndex,
   listFilesRecursive,
   fileUri: (absolutePath: string): string => URI.file(absolutePath).toString(),
   fileSystem: layerFileSystem,
@@ -820,7 +850,7 @@ const fullReportHost: FullReportHost = {
 
 const mapReportHost: MapReportHost = {
   ...modStack,
-  ensureIndex: (layers: ModLayers): Promise<ModIndex | undefined> => modCache.ensureIndex(layers),
+  ensureIndex,
   fileSystem: layerFileSystem,
 };
 
@@ -830,6 +860,7 @@ onCancellableRequest(FULL_REPORT_REQUEST, async (params: FullReportParams, signa
   const started = Date.now();
   const result = await buildFullReport(fullReportHost, params, signal);
   connection.console.log(`Full report over ${String(result.reports.length)} mod(s) in ${String(Date.now() - started)}ms`);
+  evictUnusedIndexes();
   return result;
 });
 
@@ -837,6 +868,7 @@ onCancellableRequest(MAP_REPORT_REQUEST, async (params: MapReportParams, signal)
   const started = Date.now();
   const result = await buildMapReports(mapReportHost, params, signal);
   connection.console.log(`Map report over ${String(result.reports.length)} mod(s) in ${String(Date.now() - started)}ms`);
+  evictUnusedIndexes();
   return result;
 });
 
@@ -849,7 +881,7 @@ onCancellableRequest(ENFORCE_COLORMAPS_REQUEST, async (params: EnforceColormapsP
 const mapEditor = new MapEditorHandlers({
   targets: modStack.targets,
   modNameOf: (root: string): string => layout.mods.find((mod) => mod.folder === root)?.name ?? path.basename(root),
-  ensureIndex: (layers: ModLayers): Promise<ModIndex | undefined> => modCache.ensureIndex(layers),
+  ensureIndex,
   fileSystem: layerFileSystem,
   readText: readTextAsync,
   readBytes: readModFileBytesAsync,
@@ -870,6 +902,10 @@ onRequest(MAP_EDITOR_STATE_COLORS_REQUEST, (params: MapEditorTargetParams): Prom
 onRequest(MAP_EDITOR_TERRAIN_PICTURE_REQUEST, (params: TerrainPictureParams): Promise<TerrainPictureResult> => mapEditor.terrainPictureFor(params));
 onRequest(MAP_EDITOR_NEW_PROVINCE_REQUEST, (params: NewProvinceParams): Promise<ProvinceResult> => mapEditor.newProvince(params));
 onRequest(MAP_EDITOR_THUMBNAILS_REQUEST, (params: MapEditorTargetParams): Promise<MapThumbnails> => mapEditor.thumbnails(params));
+onRequest(MAP_EDITOR_INVALIDATE_REQUEST, (): null => {
+  mapEditor.invalidate();
+  return null;
+});
 
 onRequest(MAP_EDITOR_PAINT_REQUEST, async (params: PaintParams): Promise<PaintResult> => {
   const result = await mapEditor.paint(params);

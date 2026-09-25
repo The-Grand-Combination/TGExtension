@@ -88,13 +88,15 @@ import { planDefaultMapEdit, seaStartsOf } from './mapDefaultEdit.js';
 import { appendDefinitionRow, nextProvinceId, rowOfColor } from './provinceDefinitionEdit.js';
 import { applyIndexRuns, applyRuns } from './provincePaint.js';
 import { parseDocument } from './syntaxValidation.js';
+import { readInBatches } from './scheduling.js';
+import { MapEditorWriter } from './mapEditorWriter.js';
 import {
   plainsTerrainIndex,
   terrainNamesOf,
   terrainTypeByIndex,
   waterTerrainIndices,
 } from './terrainPictures.js';
-import { unrepresentableIn, type Codepage } from '../io/textCodec.js';
+import type { Codepage } from '../io/textCodec.js';
 import { applyPatches } from './textPatch.js';
 import { MapEditorProvinceFiles } from './mapEditorProvinceFiles.js';
 import { MapEditorTerrain } from './mapEditorTerrain.js';
@@ -137,7 +139,6 @@ const DEFINITION_CSV = 'map/definition.csv';
 const DEFAULT_MAP = 'map/default.map';
 const COUNTRIES_FILE = 'common/countries.txt';
 /** History files read at once while collecting owners. */
-const OWNER_BATCH = 64;
 const POPS_FOLDER = 'history/pops';
 const POSITIONS_FILE = 'map/positions.txt';
 const CLIMATE_FILE = 'map/climate.txt';
@@ -168,12 +169,14 @@ export class MapEditorHandlers {
   private readonly terrain: MapEditorTerrain;
   private readonly thumbnailBuilder: MapEditorThumbnails;
   private readonly provinceFiles: MapEditorProvinceFiles;
+  private readonly writer: MapEditorWriter;
 
   constructor(private readonly host: MapEditorHost) {
     this.stack = new MapEditorStack(host);
     this.terrain = new MapEditorTerrain(host, this.stack);
     this.thumbnailBuilder = new MapEditorThumbnails(this.stack);
     this.provinceFiles = new MapEditorProvinceFiles(host, this.stack);
+    this.writer = new MapEditorWriter(host);
   }
 
   /**
@@ -293,6 +296,10 @@ export class MapEditorHandlers {
     if (typeof target === 'string') {
       return { ok: false, reason: target };
     }
+    return this.writer.serialized(target.root, () => this.saveInto(target, params));
+  }
+
+  private async saveInto(target: Target, params: SaveParams): Promise<SaveResult> {
     const parts = sectionsOf(params);
     // The history part carries the name, the climate and the states, so it is
     // the one the checks below and the placement read.
@@ -320,7 +327,7 @@ export class MapEditorHandlers {
     for (const part of parts) {
       const result = await this.saveSection(target, part);
       if (!result.ok) {
-        return withWritten(result, written, params);
+        return withWritten(result, [...written, ...(result.written ?? [])], params);
       }
       written = [...written, ...result.written];
       last = result;
@@ -456,8 +463,8 @@ export class MapEditorHandlers {
     if (patches.length === 0) {
       return [];
     }
-    const destination = isInsideRoot(target.root, file.absolutePath) ? file.absolutePath : path.join(target.root, relativePath);
-    const failed = await this.write(destination, applyPatches(file.text, patches), relativePath, params.dryRun === true);
+    const destination = this.writer.destinationFor(target.root, file.absolutePath, relativePath);
+    const failed = await this.writer.writeText(destination, applyPatches(file.text, patches), relativePath, params.dryRun === true);
     if (failed !== undefined) {
       return failed;
     }
@@ -486,7 +493,7 @@ export class MapEditorHandlers {
   private async saveDefinition(target: Target, params: SaveParams & { section: 'history' }): Promise<SaveResult> {
     const localisation = params.localisation;
     // Asked before anything is written: half a save is worse than none.
-    const stray = localisation === undefined ? undefined : this.codepageReason(localisation.text);
+    const stray = localisation === undefined ? undefined : this.writer.codepageReason(localisation.text);
     if (stray !== undefined) {
       return { ok: false, reason: stray };
     }
@@ -495,7 +502,9 @@ export class MapEditorHandlers {
       return history;
     }
     const named = await this.saveLocalisation(target, params, localisation.text, localisation.renameHistoryFile);
-    return named.ok ? { ...named, written: [...history.written, ...named.written] } : named;
+    return named.ok
+      ? { ...named, written: [...history.written, ...named.written] }
+      : { ...named, written: [...history.written, ...(named.written ?? [])] };
   }
 
   private definitions(layers: ModLayers): Promise<DefinitionTable> {
@@ -523,8 +532,8 @@ export class MapEditorHandlers {
     }
     const name = create.name.trim() === '' ? `Province ${String(params.provinceId)}` : create.name.trim();
     const row = { id: params.provinceId, color: create.color, name };
-    const destination = isInsideRoot(target.root, source) ? source : path.join(target.root, DEFINITION_CSV);
-    const failed = await this.write(destination, appendDefinitionRow(text, row), 'map/definition.csv', params.dryRun === true);
+    const destination = this.writer.destinationFor(target.root, source, DEFINITION_CSV);
+    const failed = await this.writer.writeText(destination, appendDefinitionRow(text, row), 'map/definition.csv', params.dryRun === true);
     if (failed !== undefined) {
       return { ok: false, reason: failed };
     }
@@ -546,8 +555,8 @@ export class MapEditorHandlers {
     if (patches.length === 0) {
       return [];
     }
-    const destination = isInsideRoot(target.root, source) ? source : path.join(target.root, DEFAULT_MAP);
-    const failed = await this.write(destination, applyPatches(text, patches), 'map/default.map', params.dryRun === true);
+    const destination = this.writer.destinationFor(target.root, source, DEFAULT_MAP);
+    const failed = await this.writer.writeText(destination, applyPatches(text, patches), 'map/default.map', params.dryRun === true);
     if (failed === undefined && params.dryRun !== true) {
       this.stack.forgetScript(target.layers, DEFAULT_MAP);
     }
@@ -564,6 +573,10 @@ export class MapEditorHandlers {
     if (typeof target === 'string') {
       return { ok: false, reason: target };
     }
+    return this.writer.serialized(target.root, () => this.paintInto(target, params));
+  }
+
+  private async paintInto(target: Target, params: PaintParams): Promise<PaintResult> {
     const relative = LAYER_FILES[params.layer];
     const source = this.resolve(target.layers, relative);
     const bytes = source === undefined ? undefined : await this.host.readBytes(source);
@@ -578,8 +591,8 @@ export class MapEditorHandlers {
     if (!outcome.ok) {
       return { ok: false, reason: `${relative} ${outcome.reason}.` };
     }
-    const destination = isInsideRoot(target.root, source ?? '') ? (source ?? '') : path.join(target.root, relative);
-    if (!(await this.host.writeBytes(destination, bytes))) {
+    const destination = this.writer.destinationFor(target.root, source, relative);
+    if (!(await this.writer.writeBytes(destination, bytes))) {
       return { ok: false, reason: `${relative} could not be written.` };
     }
     this.dropBitmapCaches(target.layers.key);
@@ -827,18 +840,16 @@ export class MapEditorHandlers {
     const relativePaths = this.provinceFiles.historyFiles(layers).filter((relativePath) =>
       relativePath.toLowerCase().endsWith('.txt'),
     );
-    for (let start = 0; start < relativePaths.length; start += OWNER_BATCH) {
-      const batch = relativePaths.slice(start, start + OWNER_BATCH).map(async (relativePath) => {
-        const id = provinceIdOfHistoryFile(relativePath.slice(relativePath.lastIndexOf('/') + 1));
-        const absolutePath = this.resolve(layers, relativePath);
-        const text = id === undefined || absolutePath === undefined ? undefined : await this.host.readText(absolutePath);
-        const owner = text === undefined ? undefined : provinceOwnerOf(parseDocument(text).document);
-        return owner === undefined || id === undefined ? undefined : ([String(id), owner] as const);
-      });
-      for (const entry of await Promise.all(batch)) {
-        if (entry && !(entry[0] in owners)) {
-          owners[entry[0]] = entry[1];
-        }
+    const entries = await readInBatches(relativePaths, async (relativePath) => {
+      const id = provinceIdOfHistoryFile(relativePath.slice(relativePath.lastIndexOf('/') + 1));
+      const absolutePath = this.resolve(layers, relativePath);
+      const text = id === undefined || absolutePath === undefined ? undefined : await this.host.readText(absolutePath);
+      const owner = text === undefined ? undefined : provinceOwnerOf(parseDocument(text).document);
+      return owner === undefined || id === undefined ? undefined : ([String(id), owner] as const);
+    });
+    for (const entry of entries) {
+      if (entry && !(entry[0] in owners)) {
+        owners[entry[0]] = entry[1];
       }
     }
     return owners;
@@ -859,7 +870,7 @@ export class MapEditorHandlers {
     const key = provinceLocKey(params.provinceId);
     // The only free text a save carries. Asking first turns what would be a
     // silent mangling into a reason the page can show.
-    const stray = this.codepageReason(text);
+    const stray = this.writer.codepageReason(text);
     if (stray !== undefined) {
       return { ok: false, reason: stray };
     }
@@ -870,6 +881,9 @@ export class MapEditorHandlers {
     const files = [written.absolutePath];
     if (renameHistoryFile) {
       const renamed = await this.renameHistoryFile(target, params.provinceId, text, params.dryRun === true);
+      if (typeof renamed === 'object') {
+        return { ok: false, reason: renamed.reason, written: files };
+      }
       if (renamed !== undefined) {
         files.push(renamed);
       }
@@ -878,32 +892,6 @@ export class MapEditorHandlers {
     const details = await this.details(target, params.provinceId, params.popDate);
     const localisation: LocSection = { key, text: text.trim(), file: written, inTarget: true };
     return { ok: true, written: files, details: { ...details, localisation } };
-  }
-
-  /** The message for a character the mod's code page cannot store, or undefined when it can store them all. */
-  private codepageReason(text: string): string | undefined {
-    const codepage = this.host.codepage();
-    const stray = unrepresentableIn(text, codepage);
-    return stray === undefined
-      ? undefined
-      : `'${stray}' cannot be stored in ${codepage}; the game reads this mod one byte per character.`;
-  }
-
-  /**
-   * Write, or the reason it could not. The code page is asked before the write
-   * and not after: a character with no byte in it and a broken disk both come
-   * back from `writeText` as false, and "could not be written" tells a mod
-   * author nothing they can act on.
-   */
-  private async write(absolutePath: string, text: string, subject: string, dryRun = false): Promise<string | undefined> {
-    const stray = this.codepageReason(text);
-    if (stray !== undefined) {
-      return stray;
-    }
-    if (dryRun) {
-      return undefined;
-    }
-    return (await this.host.writeText(absolutePath, text)) ? undefined : `${subject} could not be written.`;
   }
 
   /** Patch the key where the target defines it, else add it to the target's province file. */
@@ -918,7 +906,7 @@ export class MapEditorHandlers {
       return { absolutePath, line: existing === undefined ? 1 : (locKeyLine(existing, key) ?? 0) };
     }
     if (existing === undefined) {
-      return (await this.host.writeText(absolutePath, newProvinceLocFile(key, text))) ? { absolutePath, line: 1 } : undefined;
+      return (await this.writer.writeTextPlain(absolutePath, newProvinceLocFile(key, text))) ? { absolutePath, line: 1 } : undefined;
     }
     const line = locKeyLine(existing, key);
     const patch = line === undefined ? appendProvinceLoc(existing, key, text) : patchProvinceLoc(existing, line, text);
@@ -926,7 +914,7 @@ export class MapEditorHandlers {
       return undefined;
     }
     const updated = applyPatches(existing, [patch]);
-    const ok = await this.host.writeText(absolutePath, updated);
+    const ok = await this.writer.writeTextPlain(absolutePath, updated);
     return ok ? { absolutePath, line: locKeyLine(updated, key) ?? 0 } : undefined;
   }
 
@@ -942,7 +930,12 @@ export class MapEditorHandlers {
   }
 
   /** Rename `<id> - <old>.txt` to match the new name; only a file inside the target moves. */
-  private async renameHistoryFile(target: Target, provinceId: number, name: string, dryRun = false): Promise<string | undefined> {
+  private async renameHistoryFile(
+    target: Target,
+    provinceId: number,
+    name: string,
+    dryRun = false,
+  ): Promise<string | { readonly reason: string } | undefined> {
     const history = await this.readHistory(target, provinceId);
     if (history.file === undefined || !history.inTarget) {
       return undefined;
@@ -956,8 +949,8 @@ export class MapEditorHandlers {
     if (dryRun) {
       return destination;
     }
-    if (!(await this.host.rename(current, destination))) {
-      return undefined;
+    if (!(await this.writer.rename(current, destination))) {
+      return { reason: `The history file could not be renamed to "${wanted}"; check that no file of that name is there already.` };
     }
     // The file the kept walk names is gone.
     this.provinceFiles.forgetHistory(target.layers);
@@ -978,46 +971,65 @@ export class MapEditorHandlers {
     const relativePath = findHistoryFile(this.provinceFiles.historyFiles(target.layers), params.provinceId);
     const source = relativePath === undefined ? undefined : this.resolve(target.layers, relativePath);
     const text = source === undefined ? undefined : await this.host.readText(source);
-    let destination: string;
-    let updated: string;
-    if (relativePath !== undefined && source !== undefined && text !== undefined) {
-      const move = historyMove(target.root, relativePath, source, createInFolder);
-      const patches = planHistoryEdit(text, parseDocument(text).document, data);
-      if (patches.length === 0 && !move.changed) {
-        return { ok: true, written: [], details: await this.details(target, params.provinceId, params.popDate) };
-      }
-      destination = move.destination;
-      updated = applyPatches(text, patches);
-      const moved = await this.moveHistoryFile(move, source, params.dryRun === true);
-      if (moved !== undefined) {
-        return { ok: false, reason: moved };
-      }
-    } else {
-      // The game gives a sea province a name and a unit point and nothing else,
-      // and the Definition tab is locked over the form: there is nothing to write.
-      if (await this.isSeaProvince(target, params)) {
-        return { ok: true, written: [], details: await this.details(target, params.provinceId, params.popDate) };
-      }
-      const hidden = this.provinceFiles.hiddenHistoryFile(target.layers, params.provinceId);
-      if (hidden !== undefined) {
-        return { ok: false, reason: hiddenHistoryReason(hidden, params.provinceId) };
-      }
-      const details = await this.details(target, params.provinceId, params.popDate);
-      // A province being created is named by the save itself: the table row it
-      // writes is not there to be read yet on a dry run.
-      const name = historyName(params.create?.name ?? '', details);
-      destination = path.join(target.root, PROVINCES_FOLDER, createInFolder ?? '', historyFileNameFor(params.provinceId, name));
-      updated = renderProvinceHistory(data);
+    const plan =
+      relativePath !== undefined && source !== undefined && text !== undefined
+        ? await this.patchedHistory(target, params, data, createInFolder, { relativePath, source, text })
+        : await this.newHistory(target, params, data, createInFolder);
+    if ('ok' in plan) {
+      return plan;
     }
-    const failed = await this.write(destination, updated, 'The history file', params.dryRun === true);
+    const { destination, updated, moved } = plan;
+    const failed = await this.writer.writeText(destination, updated, 'The history file', params.dryRun === true);
     if (failed !== undefined) {
-      return { ok: false, reason: failed };
+      return { ok: false, reason: failed, ...(moved ? { written: [destination] } : {}) };
     }
-    // The owner may have changed, so the Country Colors layer is read again.
-    this.countryColorsByLayers.delete(target.layers.key);
-    // A save may have created the file, which the kept walk does not have.
-    this.provinceFiles.forgetHistory(target.layers);
+    if (params.dryRun !== true) {
+      this.countryColorsByLayers.delete(target.layers.key);
+      this.provinceFiles.forgetHistory(target.layers);
+    }
     return { ok: true, written: [destination], details: await this.details(target, params.provinceId, params.popDate) };
+  }
+
+  private async patchedHistory(
+    target: Target,
+    params: SaveParams,
+    data: ProvinceHistory,
+    createInFolder: string | undefined,
+    file: { readonly relativePath: string; readonly source: string; readonly text: string },
+  ): Promise<HistoryWrite | SaveResult> {
+    const move = historyMove(target.root, file.relativePath, file.source, createInFolder);
+    const patches = planHistoryEdit(file.text, parseDocument(file.text).document, data);
+    if (patches.length === 0 && !move.changed) {
+      return { ok: true, written: [], details: await this.details(target, params.provinceId, params.popDate) };
+    }
+    const refused = await this.moveHistoryFile(move, file.source, params.dryRun === true);
+    if (refused !== undefined) {
+      return { ok: false, reason: refused };
+    }
+    return { destination: move.destination, updated: applyPatches(file.text, patches), moved: move.rename && params.dryRun !== true };
+  }
+
+  private async newHistory(
+    target: Target,
+    params: SaveParams,
+    data: ProvinceHistory,
+    createInFolder: string | undefined,
+  ): Promise<HistoryWrite | SaveResult> {
+    // The game gives a sea province a name and a unit point and nothing else,
+    // and the Definition tab is locked over the form: there is nothing to write.
+    if (await this.isSeaProvince(target, params)) {
+      return { ok: true, written: [], details: await this.details(target, params.provinceId, params.popDate) };
+    }
+    const hidden = this.provinceFiles.hiddenHistoryFile(target.layers, params.provinceId);
+    if (hidden !== undefined) {
+      return { ok: false, reason: hiddenHistoryReason(hidden, params.provinceId) };
+    }
+    const details = await this.details(target, params.provinceId, params.popDate);
+    // A province being created is named by the save itself: the table row it
+    // writes is not there to be read yet on a dry run.
+    const name = historyName(params.create?.name ?? '', details);
+    const destination = path.join(target.root, PROVINCES_FOLDER, createInFolder ?? '', historyFileNameFor(params.provinceId, name));
+    return { destination, updated: renderProvinceHistory(data), moved: false };
   }
 
   /** Put the target's own history file in the folder the form picked; a reason when it will not go. */
@@ -1025,7 +1037,7 @@ export class MapEditorHandlers {
     if (!move.rename || dryRun) {
       return undefined;
     }
-    return (await this.host.rename(source, move.destination)) ? undefined : movedHistoryReason(move.folder);
+    return (await this.writer.rename(source, move.destination)) ? undefined : movedHistoryReason(move.folder);
   }
 
   private async savePops(
@@ -1043,7 +1055,7 @@ export class MapEditorHandlers {
     }
     const source = this.resolve(target.layers, relativePath);
     const text = source === undefined ? undefined : await this.host.readText(source);
-    const destination = source !== undefined && isInsideRoot(target.root, source) ? source : path.join(target.root, relativePath);
+    const destination = this.writer.destinationFor(target.root, source, relativePath);
     const updated =
       text === undefined
         ? renderPopsFile(provinceId, pops)
@@ -1051,7 +1063,7 @@ export class MapEditorHandlers {
     if (updated === text) {
       return { ok: true, written: [], details: await this.details(target, provinceId, popDate) };
     }
-    const failed = await this.write(destination, updated, 'The pops file', params.dryRun === true);
+    const failed = await this.writer.writeText(destination, updated, 'The pops file', params.dryRun === true);
     if (failed !== undefined) {
       return { ok: false, reason: failed };
     }
@@ -1068,8 +1080,8 @@ export class MapEditorHandlers {
     if (updated === file?.text) {
       return { ok: true, written: [], details: await this.details(target, provinceId, popDate) };
     }
-    const destination = file && isInsideRoot(target.root, file.absolutePath) ? file.absolutePath : path.join(target.root, POSITIONS_FILE);
-    const failed = await this.write(destination, updated, 'map/positions.txt', params.dryRun === true);
+    const destination = this.writer.destinationFor(target.root, file?.absolutePath, POSITIONS_FILE);
+    const failed = await this.writer.writeText(destination, updated, 'map/positions.txt', params.dryRun === true);
     if (failed !== undefined) {
       return { ok: false, reason: failed };
     }
@@ -1173,6 +1185,12 @@ function historyMove(
     changed,
     rename: changed && inTarget,
   };
+}
+
+interface HistoryWrite {
+  readonly destination: string;
+  readonly updated: string;
+  readonly moved: boolean;
 }
 
 interface HistoryMove {

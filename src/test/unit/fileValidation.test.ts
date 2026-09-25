@@ -1,10 +1,21 @@
 import * as assert from 'node:assert';
 import { DEFAULT_VALIDATION_OPTIONS, type ValidationOptions } from '../../model/validationOptions.js';
-import { validateFileText } from '../../services/fileValidation.js';
+import { validateAnalyzed, validateFileText } from '../../services/fileValidation.js';
+import { analyze } from '../../services/documentAnalysis.js';
 import { buildTestIndex } from './testIndex.js';
 
 suite('fileValidation — the per-file pipeline', () => {
   const index = buildTestIndex({ 'common/buildings.txt': 'fort = { type = fort }\nfort = { type = fort }\n' });
+
+  test('validating through an analysis leaves its AST behind for the next request', () => {
+    const analysis = analyze('country_event = { id = 1 title = "t" desc = "d" option = { name = "o" } }\n');
+    let parses = 0;
+    const counted = { ...analysis, parse: (): ReturnType<typeof analysis.parse> => { parses++; return analysis.parse(); } };
+    const viaAnalysis = validateAnalyzed(counted, 'event', index, 'events/A.txt');
+    assert.strictEqual(parses, 1);
+    assert.deepStrictEqual(viaAnalysis, validateFileText(analysis.text, 'event', index, 'events/A.txt'));
+    assert.strictEqual(analysis.parse(), analysis.parse());
+  });
 
   test('runs syntax, structure, and semantics on a script file', () => {
     const text = 'country_event = { title = "t" desc = "d" trigger = { tags = ENG } option = { name = "o" }';

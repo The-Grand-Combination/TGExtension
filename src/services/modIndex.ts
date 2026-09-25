@@ -386,7 +386,7 @@ export interface IndexCarry {
 /** What a rebuild may reuse: last build's work, minus the files that changed since. */
 export interface IndexReuse {
   readonly carry: IndexCarry;
-  /** Mod-relative paths whose content differs; anything else is taken from the carry. */
+  /** Mod-relative paths whose content differs, compared case-insensitively. */
   readonly changed: ReadonlySet<string>;
 }
 
@@ -608,10 +608,14 @@ class IndexBuild {
     (): WorkUnits => this.indexOtherFlagSources(),
   ];
 
+  private readonly changed: ReadonlySet<string> | undefined;
+
   constructor(
     private readonly provider: ModFileProvider,
     private readonly reuse: IndexReuse | undefined,
-  ) {}
+  ) {
+    this.changed = reuse === undefined ? undefined : new Set([...reuse.changed].map((p) => p.toLowerCase()));
+  }
 
   /**
    * Walk a folder, merging each file's contribution. A file the last build
@@ -625,7 +629,7 @@ class IndexBuild {
   ): WorkUnits {
     for (const fileName of this.provider.listFiles(folder, extension)) {
       const filePath = `${folder}/${fileName}`;
-      const kept = this.reuse?.changed.has(filePath) === false ? this.reuse.carry.byFile.get(filePath) : undefined;
+      const kept = this.changed?.has(filePath.toLowerCase()) === false ? this.reuse?.carry.byFile.get(filePath) : undefined;
       if (kept) {
         this.merge(filePath, kept);
         continue;

@@ -237,6 +237,16 @@ suite('modIndex — reusing the last build', () => {
     assert.ok(!read.includes('localisation/00.csv'));
   });
 
+  test('a changed path is matched in any case: the watcher and the listing may spell it differently', async () => {
+    const tree = files();
+    const first = await build(tree);
+    const read: string[] = [];
+    const watched = { ...fakeProvider(tree), readFile: (p: string): string | undefined => { read.push(p); return tree[p]; } };
+    await buildModIndexAsync(watched, { carry: first.carry, changed: new Set(['Events/a.TXT']) });
+    assert.ok(read.includes('events/A.txt'));
+    assert.ok(!read.includes('events/B.txt'));
+  });
+
   test('the new content of a changed file replaces the old', async () => {
     const before = files();
     const first = await build(before);
