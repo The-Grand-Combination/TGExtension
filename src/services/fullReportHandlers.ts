@@ -196,19 +196,19 @@ function essentialTagFindings(
  * pops when there is one, since that line is what made them the mod's to own.
  */
 async function popsFindings(host: FullReportHost, target: FileLocation): Promise<ExtraFileFindings[]> {
-  const descriptor = host.descriptorOf(target.root);
-  if (descriptor === undefined) {
+  const descriptorPath = host.descriptorOf(target.root)?.descriptorPath;
+  if (descriptorPath === undefined) {
     return [];
   }
-  const text = await host.readText(descriptor.descriptorPath);
+  const text = await host.readText(descriptorPath);
   if (text === undefined) {
     return [];
   }
   const audit = auditPops(listLayeredFilesRecursive(target.layers, host.fileSystem, POPS_FOLDER));
   return [
     {
-      path: relativeToRoot(target.root, descriptor.descriptorPath),
-      uri: host.fileUri(descriptor.descriptorPath),
+      path: relativeToRoot(target.root, descriptorPath),
+      uri: host.fileUri(descriptorPath),
       text,
       diagnostics: popsDiagnostics(audit, replacePathRange(text)),
     },

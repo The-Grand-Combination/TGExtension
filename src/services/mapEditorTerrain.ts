@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import { indicesOf } from './bmpDecoder.js';
 import { cached, pathKey, type MapEditorStack } from './mapEditorStack.js';
+import { PROVINCES_BMP, TERRAIN_BMP, TERRAIN_FILE } from '../model/gamePaths.js';
 import { listLayeredFiles, type LayerFileSystem, type ModLayers } from './modLayers.js';
 import { parseDocument } from './syntaxValidation.js';
 import {
@@ -27,9 +28,6 @@ export interface TerrainHost {
   readonly assetsFolder: string;
 }
 
-const PROVINCES_BMP = 'map/provinces.bmp';
-const TERRAIN_BMP = 'map/terrain.bmp';
-const TERRAIN_TXT = 'map/terrain.txt';
 const OCEAN_TEXTURE = 'gfx/interface/terrain/terrain_ocean.tga';
 const BUNDLED_OCEAN_PICTURE = 'terrain_ocean.dds';
 const BUNDLED_NO_TERRAIN_PICTURE = 'no_terrain.dds';
@@ -139,7 +137,7 @@ export class MapEditorTerrain {
   private async dominantTerrains(layers: ModLayers): Promise<Map<number, string>> {
     const provinces = await this.stack.readBitmap(layers, PROVINCES_BMP);
     const terrain = await this.stack.readBitmap(layers, TERRAIN_BMP);
-    const terrainTextPath = this.stack.resolve(layers, TERRAIN_TXT);
+    const terrainTextPath = this.stack.resolve(layers, TERRAIN_FILE);
     const table = await this.stack.definitions(layers);
     if (!provinces || !terrain || terrainTextPath === undefined || table.absolutePath === undefined) {
       return new Map();

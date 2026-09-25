@@ -44,3 +44,23 @@ export function packColor(
   }
   return ((parts[0] ?? 0) << 16) | ((parts[1] ?? 0) << 8) | (parts[2] ?? 0);
 }
+
+/** The id a lake row or an unusable id maps to; a real id is always below it. */
+export const LAKE_ID = 0xffff;
+
+/** Packed colour → province id for every row with an id below `LAKE_ID`; lake rows map to `lakeAs`, or to nothing. */
+export function idByColorOf(rows: readonly ProvinceRow[], lakeAs?: number): { idByColor: Uint16Array; maxId: number } {
+  const idByColor = new Uint16Array(1 << 24);
+  let maxId = 0;
+  for (const row of rows) {
+    if (row.id === undefined) {
+      if (lakeAs !== undefined) {
+        idByColor[row.color] = lakeAs;
+      }
+    } else if (row.id < LAKE_ID) {
+      idByColor[row.color] = row.id;
+      maxId = Math.max(maxId, row.id);
+    }
+  }
+  return { idByColor, maxId };
+}

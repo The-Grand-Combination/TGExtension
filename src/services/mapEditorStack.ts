@@ -7,6 +7,8 @@ import {
   type ModLayers,
 } from './modLayers.js';
 import type { ProvinceDefinition } from '../model/mapEditor.js';
+import { PROVINCE_DEFINITION_FILE } from '../model/gamePaths.js';
+import type { ModIndex } from '../model/modIndex.js';
 import { parseProvinceDefinitions, parseProvinceRows, type ProvinceRow } from './provinceTable.js';
 import { parseDocument } from './syntaxValidation.js';
 
@@ -33,7 +35,12 @@ export interface StackReaderHost {
   readonly readBytes: (absolutePath: string) => Promise<Uint8Array | undefined>;
 }
 
-const DEFINITION_CSV = 'map/definition.csv';
+/** The mod a request edits: its root, the stack it is read with, and that stack's index. */
+export interface Target {
+  readonly root: string;
+  readonly layers: ModLayers;
+  readonly index: ModIndex;
+}
 
 /**
  * Reading mod files the way the game stacks them, for the Map Editor.
@@ -64,7 +71,7 @@ export class MapEditorStack {
 
   definitions(layers: ModLayers): Promise<DefinitionTable> {
     return cached(this.definitionsByLayers, layers.key, async () => {
-      const absolutePath = this.resolve(layers, DEFINITION_CSV);
+      const absolutePath = this.resolve(layers, PROVINCE_DEFINITION_FILE);
       const text = absolutePath === undefined ? undefined : await this.host.readText(absolutePath);
       const held = text ?? '';
       return { absolutePath, text: held, rows: parseProvinceRows(held), definitions: parseProvinceDefinitions(held) };

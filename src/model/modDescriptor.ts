@@ -15,8 +15,8 @@ export interface ModDescriptor {
   readonly replacePaths: readonly string[];
   /** `dependencies = { "Other Mod" }`: mods that must load before this one. */
   readonly dependencies: readonly string[];
-  /** Absolute path of the `.mod` file. */
-  readonly descriptorPath: string;
+  /** Absolute path of the `.mod` file; undefined for a folder read as a mod without one. */
+  readonly descriptorPath: string | undefined;
 }
 
 /** Custom LSP request: the mods the server knows (installed and checked out around the workspace). */

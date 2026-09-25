@@ -150,7 +150,7 @@ export function resolveSelection(mods: readonly ModDescriptor[], selectedNames: 
 /** A mod folder with no descriptor, read as a mod of its own: no `replace_path`, no dependencies. */
 export function folderMod(folder: string): ModDescriptor {
   const name = path.basename(folder);
-  return { name, path: `mod/${name}`, folder, replacePaths: [], dependencies: [], descriptorPath: '' };
+  return { name, path: `mod/${name}`, folder, replacePaths: [], dependencies: [], descriptorPath: undefined };
 }
 
 /**

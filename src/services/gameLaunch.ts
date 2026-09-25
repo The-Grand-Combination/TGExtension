@@ -9,7 +9,9 @@ export const GAME_EXECUTABLES: readonly string[] = ['v2game.exe', 'victoria2.exe
  * descriptor path relative to the game root with forward slashes, in load order.
  */
 export function gameLaunchArguments(gameRoot: string, stack: readonly ModDescriptor[]): string[] {
-  return stack.map((mod) => `-mod=${path.relative(gameRoot, mod.descriptorPath).replace(/\\/g, '/')}`);
+  return stack.flatMap((mod) =>
+    mod.descriptorPath === undefined ? [] : [`-mod=${path.relative(gameRoot, mod.descriptorPath).replace(/\\/g, '/')}`],
+  );
 }
 
 /** The first game binary present in the game root, if any. */

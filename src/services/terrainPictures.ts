@@ -5,7 +5,7 @@ import type { BmpImage } from './bmpDecoder.js';
 import { decodePicture, type DecodedImage } from './pictureDecoder.js';
 import { scaleImage } from './pictureHover.js';
 import { encodePng } from './pngEncoder.js';
-import type { ProvinceRow } from './provinceTable.js';
+import { idByColorOf, type ProvinceRow } from './provinceTable.js';
 import { yieldToEventLoop } from './scheduling.js';
 
 /**
@@ -21,7 +21,6 @@ const SPRITE_PREFIX = 'gfx_terrainimg_';
 export const TERRAIN_PICTURE_WIDTH = 374;
 export const TERRAIN_PICTURE_HEIGHT = 94;
 const NO_PROVINCE = 0;
-const LAKE = 0xffff;
 const ROWS_PER_CHUNK = 128;
 
 /** Terrain name (lowercase) → texture path relative to the mod root, forward slashes. */
@@ -138,14 +137,7 @@ export async function dominantTerrainByProvince(
   rows: readonly ProvinceRow[],
   typeByIndex: ReadonlyMap<number, string>,
 ): Promise<Map<number, string>> {
-  const idByColor = new Uint16Array(1 << 24);
-  let maxId = 0;
-  for (const row of rows) {
-    if (row.id !== undefined && row.id < LAKE) {
-      idByColor[row.color] = row.id;
-      maxId = Math.max(maxId, row.id);
-    }
-  }
+  const { idByColor, maxId } = idByColorOf(rows);
   const counts = new Uint32Array((maxId + 1) * TERRAIN_INDEX_LIMIT);
   const { width, height } = provinces;
   for (let y = 0; y < height; y++) {

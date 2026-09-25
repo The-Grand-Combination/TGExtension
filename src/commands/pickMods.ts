@@ -77,7 +77,7 @@ function eligibleMods(known: ModsResult, launchableOnly: boolean): readonly ModD
   const gameRoot = known.gameRoot;
   const mods =
     launchableOnly && gameRoot !== undefined
-      ? known.mods.filter((mod) => isInsideRoot(gameRoot, mod.descriptorPath))
+      ? known.mods.filter((mod) => mod.descriptorPath !== undefined && isInsideRoot(gameRoot, mod.descriptorPath))
       : known.mods;
   if (mods.length === 0) {
     void vscode.window.showWarningMessage(

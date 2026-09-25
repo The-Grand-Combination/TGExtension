@@ -307,7 +307,10 @@ export function applyTint(percent: number): void {
 /** One repaint at a time: ticking one box unticks the other. */
 function setTintMode(mode: TintMode | null): void {
   state.tintMode = mode;
-  for (const each of TINT_MODES) { tintBoxes[each].checked = each === mode; }
+  for (const each of TINT_MODES) {
+    tintBoxes[each].checked = each === mode;
+    if (each !== mode) { state.tinted[each] = null; }
+  }
   if (mode && !state.tinted[mode]) { buildTintedTiles(mode); }
   render();
 }

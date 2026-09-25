@@ -2,10 +2,7 @@ import type { MapThumbnails } from '../model/mapEditor.js';
 import { cached, type MapEditorStack } from './mapEditorStack.js';
 import { riversThumbnail, sampledThumbnail, THUMBNAIL_SIZE, thumbnailDataUri } from './mapThumbnails.js';
 import type { ModLayers } from './modLayers.js';
-
-const PROVINCES_BMP = 'map/provinces.bmp';
-const RIVERS_BMP = 'map/rivers.bmp';
-const TERRAIN_BMP = 'map/terrain.bmp';
+import { PROVINCES_BMP, RIVERS_BMP, TERRAIN_BMP } from '../model/gamePaths.js';
 
 /**
  * The three bitmaps as thumbnails for the Layers box. Kept per stack: building

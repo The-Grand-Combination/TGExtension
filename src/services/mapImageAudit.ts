@@ -13,7 +13,7 @@ import type { ModIndex } from '../model/modIndex.js';
 import { decodeBmp, formatRgb, indicesOf, type BmpImage } from './bmpDecoder.js';
 import { paletteEquals, paletteOf } from './bmpPalette.js';
 import { terrainPaletteIndices } from './mapValidation.js';
-import { parseProvinceRows } from './provinceTable.js';
+import { idByColorOf, parseProvinceRows } from './provinceTable.js';
 import { analyzeRivers } from './riverAnalysis.js';
 import { NEVER_CANCELLED, throwIfCancelled, type CancelSignal } from '../model/cancellation.js';
 import { yieldToEventLoop } from './scheduling.js';
@@ -93,13 +93,11 @@ interface ProvinceTable {
 }
 
 function provinceTable(definitionText: string, index: ModIndex): ProvinceTable {
-  const idByColor = new Uint16Array(1 << 24);
+  const rows = parseProvinceRows(definitionText);
+  const { idByColor } = idByColorOf(rows, LAKE);
   const names = new Map<number, string>();
-  for (const row of parseProvinceRows(definitionText)) {
-    if (row.id === undefined) {
-      idByColor[row.color] = LAKE;
-    } else if (row.id < LAKE) {
-      idByColor[row.color] = row.id;
+  for (const row of rows) {
+    if (row.id !== undefined && row.id < LAKE) {
       names.set(row.id, row.name);
     }
   }

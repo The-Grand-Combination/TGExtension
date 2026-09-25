@@ -2,9 +2,7 @@ import type { MapEditorStack } from './mapEditorStack.js';
 import type { ModLayers } from './modLayers.js';
 import { filterHistoryFolders, findHistoryFile } from './provinceHistoryEdit.js';
 import { popFilesOf, provinceIdsInPopsFile } from './provincePopsEdit.js';
-
-const PROVINCES_FOLDER = 'history/provinces';
-const POPS_FOLDER = 'history/pops';
+import { POPS_FOLDER, PROVINCE_HISTORY_FOLDER } from '../model/gamePaths.js';
 
 /** The walk of `history/provinces`, and what the current folder setting narrows it to. */
 interface HistoryFiles {
@@ -47,7 +45,7 @@ export class MapEditorProvinceFiles {
     if (kept && kept.source === pattern?.source) {
       return kept.narrowed;
     }
-    const all = kept?.all ?? this.stack.listRecursive(layers, PROVINCES_FOLDER);
+    const all = kept?.all ?? this.stack.listRecursive(layers, PROVINCE_HISTORY_FOLDER);
     const narrowed = filterHistoryFolders(all, pattern);
     this.historyByLayers.set(layers.key, { all, source: pattern?.source, narrowed });
     return narrowed;
@@ -63,7 +61,7 @@ export class MapEditorProvinceFiles {
       return undefined;
     }
     const kept = this.historyByLayers.get(layers.key);
-    return findHistoryFile(kept?.all ?? this.stack.listRecursive(layers, PROVINCES_FOLDER), provinceId);
+    return findHistoryFile(kept?.all ?? this.stack.listRecursive(layers, PROVINCE_HISTORY_FOLDER), provinceId);
   }
 
   /** Which file of a date holds each province, scanned once per stack and date. */

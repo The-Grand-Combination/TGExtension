@@ -34,6 +34,17 @@ export function indentUnitOf(text: string): string {
   return spaces === null || /^\t+\S/m.test(text) ? '\t' : (spaces[1] ?? '  ');
 }
 
+/** 0-based line of an offset. */
+export function lineOf(text: string, offset: number): number {
+  let line = 0;
+  for (let index = 0; index < offset && index < text.length; index++) {
+    if (text.charCodeAt(index) === 10) {
+      line++;
+    }
+  }
+  return line;
+}
+
 export function lineStartAt(text: string, offset: number): number {
   return text.lastIndexOf('\n', offset - 1) + 1;
 }
