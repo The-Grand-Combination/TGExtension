@@ -138,6 +138,7 @@ function asCreate(value: unknown): NewProvince | undefined {
     isSea: record['isSea'] === true,
     name: optionalString(record['name']) ?? '',
     climate: optionalString(record['climate']) ?? '',
+    continent: optionalString(record['continent']) ?? '',
     states: stringList(record['states']),
   };
 }
@@ -230,6 +231,7 @@ function asHistoryEdit(record: UnknownRecord): HistoryEdit | undefined {
   return {
     data,
     climate: optionalString(record['climate']) ?? '',
+    continent: optionalString(record['continent']) ?? '',
     createInFolder: optionalString(record['createInFolder']),
     ...(localisation ? { localisation } : {}),
     ...(Array.isArray(record['states']) ? { states: stringList(record['states']) } : {}),

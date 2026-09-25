@@ -34,7 +34,7 @@ file that references one by name.
 | `issue` | `common/issues.txt` `party_issues` positions **and** reform options together | pop support / `dominant_issue` / `move_issue_percentage` all reference this combined set |
 | `popType` | file names under `poptypes/` (extension stripped) | |
 | `province` | `map/definition.csv` first column (numeric rows only) | duplicates checked |
-| `stateRegion` | `map/region.txt`, `map/region_sea.txt`, `map/super_region.txt` top-level keys | duplicates checked within each file only: NCE resolves `region = X` and `X = { ... }` scope keys against states and meta-regions alike, and a name mirrored in `region.txt` and `super_region.txt` is legal (the engine keeps the last) |
+| `stateRegion` | `map/region.txt` top-level keys | duplicates checked. Only this file: `map/default.map` names `region` and `region_sea`, but vanilla ships `region_sea.txt` as three empty naval blocks, and no `default.map` names `super_region` at all — a mod that keeps one is keeping notes. NCE reads both extra files by hardcoded name; the original engine does not, and this index follows the original |
 | `continent` | `map/continent.txt` top-level keys | |
 | `terrain` | `map/terrain.txt` → `categories` block keys | |
 | `technology` | every top-level key across every `technologies/*.txt` file | duplicates checked |
@@ -58,12 +58,13 @@ Three more fields come from `map/` and back the [map validators](map-folder.md):
   ids are `1 .. max_provinces - 1`, exactly as NCE sizes its province table.
 - `seaProvinces` — the ids listed in `default.map` `sea_starts`. Used to flag sea zones inside
   states and land provinces used as strait sea zones.
-- `stateOfProvince` — province id → the state that first claimed it, replaying NCE's
-  `make_state_definition` over `region.txt`, then `region_sea.txt`, then `super_region.txt`: a block
-  whose provinces are all already assigned is a meta-region and claims nothing; otherwise its
-  unassigned provinces join it. On TGC this assigns exactly the 2985 land provinces. No diagnostic
-  reads this today: the rule that did (`state-mixes-provinces`) was dropped because mods split
-  states deliberately.
+- `stateOfProvince` — province id → the state that first claimed it, over `map/region.txt` alone: a
+  block whose provinces are all already assigned is a meta-region and claims nothing; otherwise its
+  unassigned provinces join it. On TGC this assigns exactly the 2985 land provinces. Read by
+  `province-without-state` and by the great-power audit's two-state rule.
+- `continentOfProvince` — province id → the continent listing it, over `map/continent.txt`. The ids
+  sit under `provinces = { }`, but a bare id in the continent block counts too; the last continent
+  to list a province is the one the engine keeps. Read by `province-without-continent`.
 
 ## Tech folders and their modifier keys
 

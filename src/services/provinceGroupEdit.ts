@@ -3,19 +3,46 @@ import { assignmentsOf } from '../model/astQuery.js';
 import { lineEndingOf, type TextPatch } from './textPatch.js';
 
 /**
- * `map/climate.txt` and `map/region.txt` are the same file shape: named blocks
- * of bare province ids, saying which group each province belongs to. Climate
- * names the block twice — once with its modifiers, once with its provinces — so
- * only the blocks holding nothing but numbers count as membership.
+ * The three map files that say which group a province belongs to:
+ * `map/climate.txt`, `map/region.txt` and `map/continent.txt`. A province
+ * belongs to one climate, one continent and at least one region, and all three
+ * are edited the same way: the id joins the blocks it should be in and leaves
+ * the ones it should not.
  *
- * A province belongs to one climate and to at least one region, and both are
- * edited the same way: the id joins the blocks it should be in and leaves the
- * ones it should not.
+ * They differ in one thing only — where a group keeps its ids — and that is
+ * what `ProvinceListShape` names.
  */
+
+/**
+ * Where a group keeps its province ids.
+ *
+ * `bare`: straight in the named block, as `climate.txt` and `region.txt` write
+ * them. Climate names a block twice, once with its modifiers and once with its
+ * provinces, so only a block holding nothing but numbers is a membership.
+ *
+ * `nested`: in a `provinces = { }` inside the named block, as `continent.txt`
+ * writes them, because that block carries the continent's modifiers as well.
+ */
+export type ProvinceListShape = 'bare' | 'nested';
 
 /** A block of bare province ids; a modifier block (`farm_rgo_size = 0`) is not one. */
 export function isProvinceList(block: Block): boolean {
   return block.entries.every((entry) => entry.kind === 'scalar' && entry.type === 'number');
+}
+
+const PROVINCES_KEY = 'provinces';
+
+/** The block holding a group's ids, or undefined when the group has none yet. */
+function listBlockOf(assignment: Assignment, shape: ProvinceListShape): Block | undefined {
+  const body = assignment.value.kind === 'block' ? assignment.value : undefined;
+  if (body === undefined) {
+    return undefined;
+  }
+  if (shape === 'bare') {
+    return isProvinceList(body) ? body : undefined;
+  }
+  const provinces = assignmentsOf(body.entries).find((entry) => same(entry.key.value, PROVINCES_KEY));
+  return provinces?.value.kind === 'block' ? provinces.value : undefined;
 }
 
 interface GroupBlock {
@@ -23,12 +50,17 @@ interface GroupBlock {
   readonly block: Block;
 }
 
-function groupBlocks(document: Document): GroupBlock[] {
-  return assignmentsOf(document.entries).flatMap((assignment: Assignment) =>
-    assignment.value.kind === 'block' && isProvinceList(assignment.value)
-      ? [{ name: assignment.key.value, block: assignment.value }]
-      : [],
-  );
+function groupBlocks(document: Document, shape: ProvinceListShape): GroupBlock[] {
+  return assignmentsOf(document.entries).flatMap((assignment: Assignment) => {
+    const block = listBlockOf(assignment, shape);
+    return block ? [{ name: assignment.key.value, block }] : [];
+  });
+}
+
+/** The named block itself, for a group that exists but keeps no id list yet. */
+function bodyOf(document: Document, name: string): Block | undefined {
+  const found = assignmentsOf(document.entries).find((assignment) => same(assignment.key.value, name));
+  return found?.value.kind === 'block' ? found.value : undefined;
 }
 
 function idsOf(block: Block, provinceId: number): Scalar[] {
@@ -37,9 +69,13 @@ function idsOf(block: Block, provinceId: number): Scalar[] {
 }
 
 /** The groups whose id list holds the province, in file order. */
-export function groupsOfProvince(document: Document, provinceId: number): string[] {
+export function groupsOfProvince(
+  document: Document,
+  provinceId: number,
+  shape: ProvinceListShape = 'bare',
+): string[] {
   const names: string[] = [];
-  for (const group of groupBlocks(document)) {
+  for (const group of groupBlocks(document, shape)) {
     if (idsOf(group.block, provinceId).length > 0 && !names.includes(group.name)) {
       names.push(group.name);
     }
@@ -48,9 +84,12 @@ export function groupsOfProvince(document: Document, provinceId: number): string
 }
 
 /** The first group listing each province, in file order: the one the engine puts the province in. */
-export function firstGroupByProvince(document: Document): Map<number, string> {
+export function firstGroupByProvince(
+  document: Document,
+  shape: ProvinceListShape = 'bare',
+): Map<number, string> {
   const first = new Map<number, string>();
-  for (const group of groupBlocks(document)) {
+  for (const group of groupBlocks(document, shape)) {
     for (const entry of group.block.entries) {
       const id = entry.kind === 'scalar' ? Number(entry.value) : NaN;
       if (Number.isInteger(id) && !first.has(id)) {
@@ -85,9 +124,10 @@ export function planGroupEdit(
   document: Document,
   provinceId: number,
   groups: readonly string[],
+  shape: ProvinceListShape = 'bare',
 ): TextPatch[] {
   const wanted = groups.map((name) => name.trim()).filter((name) => name !== '');
-  const blocks = groupBlocks(document);
+  const blocks = groupBlocks(document, shape);
   const patches: TextPatch[] = [];
   for (const group of blocks) {
     if (wanted.some((name) => same(name, group.name))) {
@@ -98,7 +138,7 @@ export function planGroupEdit(
     }
   }
   for (const name of dedupe(wanted)) {
-    const patch = joinPatch(text, blocks, name, provinceId);
+    const patch = joinPatch(text, document, blocks, name, provinceId, shape);
     if (patch) {
       patches.push(patch);
     }
@@ -119,15 +159,20 @@ function dedupe(names: readonly string[]): string[] {
 /**
  * The id after the last one already in the group's list. A group named only by
  * a modifier block — a climate with no provinces yet — gets its id list written
- * at the end of the file, which is where the engine expects to find one.
+ * where `newListPatch` puts it.
  */
-function joinPatch(text: string, blocks: readonly GroupBlock[], name: string, provinceId: number): TextPatch | undefined {
+function joinPatch(
+  text: string,
+  document: Document,
+  blocks: readonly GroupBlock[],
+  name: string,
+  provinceId: number,
+  shape: ProvinceListShape,
+): TextPatch | undefined {
   const lists = blocks.filter((group) => same(group.name, name));
   const block = lists[lists.length - 1]?.block;
   if (!block) {
-    const eol = lineEndingOf(text);
-    const lead = text === '' || text.endsWith('\n') ? '' : eol;
-    return { start: text.length, end: text.length, text: `${lead}${name} = { ${String(provinceId)} }${eol}` };
+    return newListPatch(text, document, name, provinceId, shape);
   }
   if (idsOf(block, provinceId).length > 0) {
     return undefined;
@@ -136,6 +181,31 @@ function joinPatch(text: string, blocks: readonly GroupBlock[], name: string, pr
   const last = numbers[numbers.length - 1];
   const at = last ? last.range.end : block.range.start + 1;
   return { start: at, end: at, text: ' ' + String(provinceId) };
+}
+
+/**
+ * A group with no id list yet. A continent that is already declared gets its
+ * `provinces = { }` written inside the block it already has, so its modifiers
+ * are left where they are; anything else is written as a new block at the end
+ * of the file, which is where the engine expects to find one.
+ */
+function newListPatch(
+  text: string,
+  document: Document,
+  name: string,
+  provinceId: number,
+  shape: ProvinceListShape,
+): TextPatch {
+  const id = String(provinceId);
+  const body = shape === 'nested' ? bodyOf(document, name) : undefined;
+  if (body) {
+    const at = body.range.start + 1;
+    return { start: at, end: at, text: ` ${PROVINCES_KEY} = { ${id} }` };
+  }
+  const eol = lineEndingOf(text);
+  const lead = text === '' || text.endsWith('\n') ? '' : eol;
+  const written = shape === 'nested' ? `${name} = { ${PROVINCES_KEY} = { ${id} } }` : `${name} = { ${id} }`;
+  return { start: text.length, end: text.length, text: `${lead}${written}${eol}` };
 }
 
 /**
@@ -162,9 +232,13 @@ function removePatch(text: string, scalar: Scalar): TextPatch {
 }
 
 /** Where the id list of a group begins, for a file reference pointing at it. */
-export function groupOffsetOf(document: Document, name: string): number | undefined {
+export function groupOffsetOf(
+  document: Document,
+  name: string,
+  shape: ProvinceListShape = 'bare',
+): number | undefined {
   const found = assignmentsOf(document.entries).find(
-    (assignment) => assignment.value.kind === 'block' && isProvinceList(assignment.value) && same(assignment.key.value, name),
+    (assignment) => listBlockOf(assignment, shape) !== undefined && same(assignment.key.value, name),
   );
   return found?.range.start;
 }

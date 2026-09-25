@@ -70,4 +70,6 @@ export interface ModIndex {
   readonly stateOfProvince: ReadonlyMap<string, string>;
   /** Province id → the climate.txt block listing it; a land province needs one. */
   readonly climateOfProvince: ReadonlyMap<string, string>;
+  /** Province id → the continent.txt block listing it; a land province needs one. */
+  readonly continentOfProvince: ReadonlyMap<string, string>;
 }

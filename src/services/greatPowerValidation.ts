@@ -4,7 +4,7 @@ import { NEVER_CANCELLED, throwIfCancelled, type CancelSignal } from '../model/c
 import { compareDates } from '../model/gameDate.js';
 import type { Range } from '../model/range.js';
 import { parseCountryList } from './countryList.js';
-import type { LayeredFile } from './modLayers.js';
+import type { LayeredFile, LoadedLayeredFile } from './modLayers.js';
 import { yieldToEventLoop } from './scheduling.js';
 import { parseDocument } from './syntaxValidation.js';
 
@@ -112,8 +112,12 @@ export interface StartStateReader {
    * layer, and this pass reads thousands of files.
    */
   readonly readFile: (absolutePath: string) => Promise<string | undefined>;
-  /** Merged files under `history/provinces`, the highest layer of each first. */
-  readonly provinceFiles: readonly LayeredFile[];
+  /**
+   * Merged files under `history/provinces`, the highest layer of each first,
+   * with their text: the province history is read once for the whole report and
+   * shared, since more than one audit walks it.
+   */
+  readonly provinceFiles: readonly LoadedLayeredFile[];
   /** Merged files under `history/countries`, the highest layer of each first. */
   readonly countryFiles: readonly LayeredFile[];
   /** Province id → the state region it belongs to, from the mod index. */
@@ -203,28 +207,25 @@ async function ownedStates(
 ): Promise<ReadonlyMap<string, Set<string>>> {
   const byTag = new Map<string, Set<string>>();
   const seenProvinces = new Set<string>();
-  for (let start = 0; start < reader.provinceFiles.length; start += BATCH_SIZE) {
-    throwIfCancelled(signal);
-    const batch = reader.provinceFiles.slice(start, start + BATCH_SIZE);
-    const texts = await Promise.all(batch.map((file) => reader.readFile(file.absolutePath)));
-    batch.forEach((file, position) => {
-      const provinceId = provinceIdOf(file.relativePath);
-      const text = texts[position];
-      // The highest layer of a province comes first; a lower one is the file it replaces.
-      if (provinceId === undefined || text === undefined || seenProvinces.has(provinceId)) {
-        return;
-      }
-      seenProvinces.add(provinceId);
-      const owner = historyValueAtStart(text, 'owner', reader.startDate)?.toUpperCase();
-      const state = reader.stateOfProvince.get(provinceId);
-      if (owner === undefined || state === undefined) {
-        return;
-      }
-      const states = byTag.get(owner) ?? new Set<string>();
-      states.add(state);
-      byTag.set(owner, states);
-    });
-    await yieldToEventLoop();
+  for (const [position, file] of reader.provinceFiles.entries()) {
+    if (position % BATCH_SIZE === 0) {
+      throwIfCancelled(signal);
+      await yieldToEventLoop();
+    }
+    const provinceId = provinceIdOf(file.relativePath);
+    // The highest layer of a province comes first; a lower one is the file it replaces.
+    if (provinceId === undefined || seenProvinces.has(provinceId)) {
+      continue;
+    }
+    seenProvinces.add(provinceId);
+    const owner = historyValueAtStart(file.text, 'owner', reader.startDate)?.toUpperCase();
+    const state = reader.stateOfProvince.get(provinceId);
+    if (owner === undefined || state === undefined) {
+      continue;
+    }
+    const states = byTag.get(owner) ?? new Set<string>();
+    states.add(state);
+    byTag.set(owner, states);
   }
   return byTag;
 }

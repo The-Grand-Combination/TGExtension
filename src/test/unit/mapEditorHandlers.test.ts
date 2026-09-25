@@ -107,7 +107,7 @@ function saveParams(section: SaveParams['section']): SaveParams {
   const base = { ...targetParams, provinceId: 1, popDate: '1836.1.1' };
   switch (section) {
     case 'history':
-      return { ...base, section, data: EMPTY_HISTORY, climate: '', createInFolder: undefined };
+      return { ...base, section, data: EMPTY_HISTORY, climate: '', continent: '', createInFolder: undefined };
     case 'pops':
       return { ...base, section, pops: [], createInFile: undefined };
     case 'positions':
@@ -116,7 +116,7 @@ function saveParams(section: SaveParams['section']): SaveParams {
       return {
         ...base,
         section,
-        history: { data: EMPTY_HISTORY, climate: '', createInFolder: undefined },
+        history: { data: EMPTY_HISTORY, climate: '', continent: '', createInFolder: undefined },
         positions: { data: EMPTY_POSITIONS },
       };
   }
@@ -188,6 +188,7 @@ suite('MapEditorHandlers — a name the code page cannot hold', () => {
     section: 'history',
     data: EMPTY_HISTORY,
     climate: '',
+    continent: '',
     createInFolder: undefined,
     localisation: { text: 'Москва', renameHistoryFile: false },
   };
@@ -253,7 +254,7 @@ suite('MapEditorHandlers — narrowing the province history folders', () => {
 suite('MapEditorHandlers — writing', () => {
   test('a character the code page cannot store is named, in a history save as in a name', async () => {
     const { host } = recordingHost([TARGET], 'windows-1252');
-    const flagged: SaveParams = { ...saveParams('history'), section: 'history', data: { ...EMPTY_HISTORY, setFlags: ['Москва'] }, climate: '', createInFolder: undefined };
+    const flagged: SaveParams = { ...saveParams('history'), section: 'history', data: { ...EMPTY_HISTORY, setFlags: ['Москва'] }, climate: '', continent: '', createInFolder: undefined };
     const result = await new MapEditorHandlers(host).save(flagged);
     assert.strictEqual(result.ok, false);
     assert.ok(result.reason.includes('М'), result.reason);
@@ -428,8 +429,9 @@ suite('MapEditorHandlers — creating a province from a painted colour', () => {
       section: 'history',
       data: EMPTY_HISTORY,
       climate: '',
+      continent: '',
       createInFolder: '',
-      create: { color: COLOR, isSea, name: 'Nova', climate: '', states: [] },
+      create: { color: COLOR, isSea, name: 'Nova', climate: '', continent: '', states: [] },
     };
   }
 
@@ -475,7 +477,7 @@ suite('MapEditorHandlers — creating a province from a painted colour', () => {
 
   test('a name with no ASCII shape is refused, and not one file is written', async () => {
     const { host, written } = maker();
-    const result = await new MapEditorHandlers(host).save({ ...createParams(false), create: { color: COLOR, isSea: false, name: 'Москва', climate: '', states: [] } });
+    const result = await new MapEditorHandlers(host).save({ ...createParams(false), create: { color: COLOR, isSea: false, name: 'Москва', climate: '', continent: '', states: [] } });
     assert.ok(!result.ok);
     assert.ok(result.reason.includes('plain ASCII'), result.reason);
     assert.strictEqual(written.size, 0, 'the definition.csv row must not be written either');
@@ -483,7 +485,7 @@ suite('MapEditorHandlers — creating a province from a painted colour', () => {
 
   test('an accented name is kept, folded, in the file it creates', async () => {
     const { host, written } = maker();
-    const result = await new MapEditorHandlers(host).save({ ...createParams(false), create: { color: COLOR, isSea: false, name: 'São José do Norte', climate: '', states: [] } });
+    const result = await new MapEditorHandlers(host).save({ ...createParams(false), create: { color: COLOR, isSea: false, name: 'São José do Norte', climate: '', continent: '', states: [] } });
     assert.ok(result.ok, result.ok ? '' : result.reason);
     assert.ok(
       [...written.keys()].some((file) => file.endsWith('3 - Sao Jose do Norte.txt')),
@@ -550,6 +552,7 @@ suite('MapEditorHandlers — the folder a history file sits in', () => {
     const all = new Map<string, string>([
       [path.join(ROOT, 'map/climate.txt'), CLIMATE],
       [path.join(ROOT, 'map/region.txt'), REGION],
+      [path.join(ROOT, 'map/continent.txt'), 'europe = { provinces = { 1 } }\n'],
       [path.join(owner, FROM), HISTORY],
     ]);
     const written = new Map<string, string>();
@@ -583,7 +586,7 @@ suite('MapEditorHandlers — the folder a history file sits in', () => {
     return { host, written, renamed };
   }
 
-  const save = { ...targetParams, provinceId: 1, popDate: '1836.1.1', section: 'history' as const, data: EMPTY_HISTORY, climate: 'harsh_climate' };
+  const save = { ...targetParams, provinceId: 1, popDate: '1836.1.1', section: 'history' as const, data: EMPTY_HISTORY, climate: 'harsh_climate', continent: 'europe' };
   const source = path.join(ROOT, FROM);
   const target = path.join(ROOT, 'history/provinces/Asia/1 - One.txt');
 
@@ -644,6 +647,8 @@ suite('MapEditorHandlers — the folder a history file sits in', () => {
 suite('MapEditorHandlers — climate and state', () => {
   const CLIMATE = 'harsh_climate = {\n\tmax_attrition = 5\n}\n\nharsh_climate = {\n\t1 2\n}\n\nmild_climate = {\n\t7\n}\n';
   const REGION = 'ENG_1 = { 1 2 }\nUSA_3 = { 7 }\n';
+  // continent.txt keeps its ids in a provinces block, next to the continent's modifiers.
+  const CONTINENT = 'europe = {\n\tassimilation_rate = 0.1\n\tprovinces = { 1 2 }\n}\n\nasia = {\n\tprovinces = { 7 }\n}\n';
 
   interface Placed {
     readonly host: MapEditorHost;
@@ -655,6 +660,7 @@ suite('MapEditorHandlers — climate and state', () => {
     const all = new Map<string, string>([
       [path.join(ROOT, 'map/climate.txt'), CLIMATE],
       [path.join(ROOT, 'map/region.txt'), REGION],
+      [path.join(ROOT, 'map/continent.txt'), CONTINENT],
       ...files,
     ]);
     const written = new Map<string, string>();
@@ -689,10 +695,11 @@ suite('MapEditorHandlers — climate and state', () => {
   const base = { ...targetParams, provinceId: 1, popDate: '1836.1.1' };
   const climateFile = path.join(ROOT, 'map/climate.txt');
   const regionFile = path.join(ROOT, 'map/region.txt');
+  const continentFile = path.join(ROOT, 'map/continent.txt');
   const GAME = '/game';
   /** The mod over the base game, which is where a name the mod does not define is read from. */
   const UNDER_GAME: ModLayers = { key: 'game+mod', gameRoot: GAME, roots: [GAME, ROOT], hiddenFolders: [], caseInsensitivePaths: false };
-  const NAME_SAVE = { section: 'history', data: EMPTY_HISTORY, climate: 'harsh_climate', createInFolder: '', states: ['ENG_1'] } as const;
+  const NAME_SAVE = { section: 'history', data: EMPTY_HISTORY, climate: 'harsh_climate', continent: 'europe', createInFolder: '', states: ['ENG_1'] } as const;
 
   test('the province reads back the climate and the states it is listed in', async () => {
     const result = await new MapEditorHandlers(placed().host).province(base);
@@ -714,7 +721,7 @@ suite('MapEditorHandlers — climate and state', () => {
   test('a history save moves the province to the climate it carries', async () => {
     const { host, written } = placed();
     const result = await new MapEditorHandlers(host).save({
-      ...base, section: 'history', data: EMPTY_HISTORY, climate: 'mild_climate', createInFolder: '',
+      ...base, section: 'history', data: EMPTY_HISTORY, climate: 'mild_climate', continent: 'europe', createInFolder: '',
     });
     assert.ok(result.ok, result.ok ? '' : result.reason);
     assert.ok(written.get(climateFile)?.includes('\t2\n'), written.get(climateFile));
@@ -722,10 +729,39 @@ suite('MapEditorHandlers — climate and state', () => {
     assert.ok(result.written.includes(climateFile), result.written.join(', '));
   });
 
+  test('the province reads back the continent whose provinces block holds it', async () => {
+    const result = await new MapEditorHandlers(placed().host).province(base);
+    assert.ok(result.kind === 'details', result.kind === 'unavailable' ? result.reason : '');
+    assert.strictEqual(result.details.continent.name, 'europe');
+    assert.deepStrictEqual(result.details.continent.options.map((option) => option.id), ['europe', 'asia']);
+  });
+
+  test('moving the province writes into the provinces block, leaving the modifiers alone', async () => {
+    const { host, written } = placed();
+    const result = await new MapEditorHandlers(host).save({
+      ...base, section: 'history', data: EMPTY_HISTORY, climate: 'harsh_climate', continent: 'asia', createInFolder: '',
+    });
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+    const after = written.get(continentFile) ?? '';
+    assert.ok(after.includes('assimilation_rate = 0.1'), 'the continent keeps its modifiers');
+    assert.ok(after.includes('provinces = { 2 }'), after);
+    assert.ok(after.includes('provinces = { 7 1 }'), after);
+  });
+
+  test('a continent that has no provinces block yet gets one inside the block it already has', async () => {
+    const bare = new Map([[path.join(ROOT, 'map/continent.txt'), 'europe = { provinces = { 1 } }\nasia = { assimilation_rate = 0.2 }\n']]);
+    const { host, written } = placed(bare);
+    const result = await new MapEditorHandlers(host).save({
+      ...base, section: 'history', data: EMPTY_HISTORY, climate: 'harsh_climate', continent: 'asia', createInFolder: '',
+    });
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+    assert.strictEqual(written.get(continentFile), 'europe = { provinces = { } }\nasia = { provinces = { 1 } assimilation_rate = 0.2 }\n');
+  });
+
   test('the Definition tab writes the states its one Save carries', async () => {
     const { host, written } = placed();
     const result = await new MapEditorHandlers(host).save({
-      ...base, section: 'history', data: EMPTY_HISTORY, climate: 'harsh_climate', createInFolder: '',
+      ...base, section: 'history', data: EMPTY_HISTORY, climate: 'harsh_climate', continent: 'europe', createInFolder: '',
       states: ['ENG_1', 'USA_3'],
     });
     assert.ok(result.ok, result.ok ? '' : result.reason);
@@ -736,7 +772,7 @@ suite('MapEditorHandlers — climate and state', () => {
   test('a Save that shows neither leaves both files alone', async () => {
     const { host, written } = placed();
     const result = await new MapEditorHandlers(host).save({
-      ...base, section: 'history', data: EMPTY_HISTORY, climate: 'harsh_climate', createInFolder: '',
+      ...base, section: 'history', data: EMPTY_HISTORY, climate: 'harsh_climate', continent: 'europe', createInFolder: '',
     });
     assert.ok(result.ok, result.ok ? '' : result.reason);
     assert.strictEqual(written.get(regionFile), undefined);
@@ -746,7 +782,7 @@ suite('MapEditorHandlers — climate and state', () => {
   test('the localisation the Definition Save carries is written with the history', async () => {
     const { host, written } = placed();
     const result = await new MapEditorHandlers(host).save({
-      ...base, section: 'history', data: EMPTY_HISTORY, climate: 'harsh_climate', createInFolder: '',
+      ...base, section: 'history', data: EMPTY_HISTORY, climate: 'harsh_climate', continent: 'europe', createInFolder: '',
       states: ['ENG_1'], localisation: { text: 'Nova', renameHistoryFile: false },
     });
     assert.ok(result.ok, result.ok ? '' : result.reason);
@@ -796,10 +832,20 @@ suite('MapEditorHandlers — climate and state', () => {
   test('a save that would leave the province with no climate is refused, and writes nothing', async () => {
     const { host, written } = placed();
     const result = await new MapEditorHandlers(host).save({
-      ...base, section: 'history', data: EMPTY_HISTORY, climate: '', createInFolder: '',
+      ...base, section: 'history', data: EMPTY_HISTORY, climate: '', continent: 'europe', createInFolder: '',
     });
     assert.ok(!result.ok);
     assert.ok(result.reason.includes('no climate'), result.reason);
+    assert.strictEqual(written.size, 0);
+  });
+
+  test('a save that would leave it on no continent is refused the same way', async () => {
+    const { host, written } = placed();
+    const result = await new MapEditorHandlers(host).save({
+      ...base, section: 'history', data: EMPTY_HISTORY, climate: 'harsh_climate', continent: '', createInFolder: '',
+    });
+    assert.ok(!result.ok);
+    assert.ok(result.reason.includes('no continent'), result.reason);
     assert.strictEqual(written.size, 0);
   });
 
@@ -808,7 +854,7 @@ suite('MapEditorHandlers — climate and state', () => {
     const result = await new MapEditorHandlers(host).save({
       ...base,
       section: 'all',
-      history: { data: EMPTY_HISTORY, climate: 'mild_climate', createInFolder: '', states: ['ENG_1'] },
+      history: { data: EMPTY_HISTORY, climate: 'mild_climate', continent: 'europe', createInFolder: '', states: ['ENG_1'] },
       positions: { data: { ...EMPTY_POSITIONS, unit: { x: '4', y: '5' } } },
     });
     assert.ok(result.ok, result.ok ? '' : result.reason);
@@ -823,7 +869,7 @@ suite('MapEditorHandlers — climate and state', () => {
     const result = await new MapEditorHandlers(host).save({
       ...base,
       section: 'all',
-      history: { data: EMPTY_HISTORY, climate: '', createInFolder: '' },
+      history: { data: EMPTY_HISTORY, climate: '', continent: '', createInFolder: '' },
       positions: { data: EMPTY_POSITIONS },
     });
     assert.ok(!result.ok);
@@ -833,7 +879,7 @@ suite('MapEditorHandlers — climate and state', () => {
 
   test('a save that would leave the province in no state is refused', async () => {
     const result = await new MapEditorHandlers(placed().host).save({
-      ...base, section: 'history', data: EMPTY_HISTORY, climate: 'harsh_climate', createInFolder: '', states: ['  '],
+      ...base, section: 'history', data: EMPTY_HISTORY, climate: 'harsh_climate', continent: 'europe', createInFolder: '', states: ['  '],
     });
     assert.ok(!result.ok);
     assert.ok(result.reason.includes('no state'), result.reason);
@@ -882,11 +928,11 @@ suite('MapEditorHandlers — climate and state', () => {
     [path.join(ROOT, 'map/default.map'), 'max_provinces = 3\nsea_starts = {\n\t900\n}\n'],
   ]);
 
-  function createParams(climate: string, states: readonly string[]): SaveParams {
+  function createParams(climate: string, states: readonly string[], continent = 'europe'): SaveParams {
     return {
       ...targetParams, provinceId: 3, popDate: '1836.1.1',
-      section: 'history', data: EMPTY_HISTORY, climate, createInFolder: '',
-      create: { color: 7, isSea: false, name: 'Nova', climate, states },
+      section: 'history', data: EMPTY_HISTORY, climate, continent, createInFolder: '',
+      create: { color: 7, isSea: false, name: 'Nova', climate, continent, states },
     };
   }
 

@@ -72,12 +72,16 @@ a nested block is `stray-block`. Empty blocks are legal (tooltip-only meta-regio
 - A sea zone inside a state, and a block that mixes already-assigned with unassigned provinces,
   are **not** reported. Both are deliberate: mods carve states that exist only to carry a
   localisation key, and those routinely hold sea ids or overlap existing states. The index still
-  replays NCE's state assignment (`stateOfProvince`, see [mod-index.md](mod-index.md)). A land
-  province that replay leaves unassigned is `province-without-state`, reported on its row in
-  `definition.csv` — the file that declares the province, not the one that forgot it.
-- Same-file duplicate names are `duplicate-identifier`. The same name in `region.txt` **and**
-  `super_region.txt` is not reported: mods mirror meta-regions into `region.txt` for the vanilla
-  engine, and NCE keeps the last definition.
+  replays the engine's state assignment over `region.txt` (`stateOfProvince`, see
+  [mod-index.md](mod-index.md)). A land province that replay leaves unassigned is
+  `province-without-state`, reported on its row in `definition.csv` — the file that declares the
+  province, not the one that forgot it. `map/continent.txt` gets the same treatment through
+  `province-without-continent`.
+- Same-file duplicate names are `duplicate-identifier`. All three files are validated the same way,
+  but only `region.txt` **declares states**: `map/default.map` names `region` and `region_sea`,
+  vanilla ships `region_sea.txt` as three empty naval blocks, and no `default.map` names
+  `super_region` at all. A name that appears only in one of the other two is therefore not a state
+  region, and the index does not take it for one (see [mod-index.md](mod-index.md)).
 
 ## `map/continent.txt` → `mapContinent`
 
@@ -89,6 +93,10 @@ a nested block is `stray-block`. Empty blocks are legal (tooltip-only meta-regio
   [modifier keys](common-folder.md#modifier-keys), numeric (`unknown-modifier-key` otherwise).
 - A province in two continents → `province-already-assigned` (warning; NCE keeps the last); the
   same id twice in one continent → `duplicate-province`.
+- The reverse question is asked on `definition.csv`, not here: a land province **no** continent
+  lists is `province-without-continent`, reported on its row the same way
+  `province-without-state` and `province-without-climate` are. There is nowhere in this file to
+  point at a province it never mentions.
 
 ## `map/climate.txt` → `mapClimate`
 
@@ -141,4 +149,6 @@ The `.bmp` files are `unknown` to the per-file pipeline too; they are checked by
 Against the TGC corpus every `map/` file validates clean except four `duplicate-province` warnings
 (three ids listed twice in `THE_AMAZON_FOREST` in `region.txt`, one in `any_land_province` in
 `super_region.txt`), all genuine. The index replay assigns exactly the mod's 2985 land provinces to
-states, with no mixed blocks and no sea zones inside states.
+states, with no mixed blocks and no sea zones inside states, and every one of them sits on a
+continent. Across vanilla, TGC, GFM, MGQ, SWD and TTA the only `province-without-continent` is
+GFM's province 3589 (Las Cruces).

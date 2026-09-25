@@ -8,10 +8,12 @@ import {
   FLAG_FOLDER,
   GOVERNMENTS_FILE,
   POPS_FOLDER,
+  PROVINCE_DEFINITION_FILE,
   PROVINCE_HISTORY_FOLDER,
 } from '../model/gamePaths.js';
 import { NEVER_CANCELLED, throwIfCancelled, type CancelSignal } from '../model/cancellation.js';
 import type { ModDescriptor } from '../model/modDescriptor.js';
+import type { Diagnostic } from '../model/diagnostic.js';
 import type { ModIndex } from '../model/modIndex.js';
 import type { Range } from '../model/range.js';
 import type { ValidationOptions } from '../model/validationOptions.js';
@@ -26,11 +28,13 @@ import {
   listLayeredFilesResolved,
   resolveLayeredFile,
   type LayeredFile,
+  type LoadedLayeredFile,
   type LayerFileSystem,
   type ModLayers,
 } from './modLayers.js';
 import { reportHeading, type ModStackHost } from './modStackHost.js';
 import { auditPops, popsDiagnostics } from './popsValidation.js';
+import { auditProvinceHistory } from './provinceHistoryValidation.js';
 import { renderReportText } from './reportText.js';
 
 export interface FullReportHost extends ModStackHost {
@@ -93,13 +97,75 @@ async function crossFileFindings(
   signal: CancelSignal,
 ): Promise<ExtraFileFindings[]> {
   const countries = await layeredFile(host, target.layers, COUNTRY_LIST_FILE);
-  const provinceFiles = listLayeredFilesResolved(target.layers, host.fileSystem, PROVINCE_HISTORY_FOLDER);
+  // Read once: the great-power audit and the province-history audit both walk it.
+  const provinceFiles = await loadAll(
+    host,
+    listLayeredFilesResolved(target.layers, host.fileSystem, PROVINCE_HISTORY_FOLDER),
+  );
   return [
     ...essentialTagFindings(host, target, countries),
     ...(await flagFindings(host, target, countries)),
     ...(await greatPowerFindings(host, target, index, countries, provinceFiles, signal)),
+    ...(await provinceHistoryFindings(host, target, index, provinceFiles)),
     ...(await popsFindings(host, target)),
   ].filter((entry) => entry.diagnostics.length > 0);
+}
+
+/** Files read together, so their reads overlap. */
+const READ_BATCH = 64;
+
+/** The text of every one of these files; a file that will not read is left out. */
+async function loadAll(
+  host: FullReportHost,
+  files: readonly LayeredFile[],
+): Promise<LoadedLayeredFile[]> {
+  const loaded: LoadedLayeredFile[] = [];
+  for (let start = 0; start < files.length; start += READ_BATCH) {
+    const batch = files.slice(start, start + READ_BATCH);
+    const texts = await Promise.all(batch.map((file) => host.readText(file.absolutePath)));
+    batch.forEach((file, position) => {
+      const text = texts[position];
+      if (text !== undefined) {
+        loaded.push({ ...file, text });
+      }
+    });
+  }
+  return loaded;
+}
+
+/**
+ * Every land province the map declares against the history the stack has for
+ * it. Reported in two places, because the two failures are about two different
+ * files: a province with no history at all is reported where the map declares
+ * it, and a history that leaves out a required key is reported on that file.
+ */
+async function provinceHistoryFindings(
+  host: FullReportHost,
+  target: FileLocation,
+  index: ModIndex,
+  provinceFiles: readonly LoadedLayeredFile[],
+): Promise<ExtraFileFindings[]> {
+  const definition = await layeredFile(host, target.layers, PROVINCE_DEFINITION_FILE);
+  const audit = auditProvinceHistory({
+    definitionText: definition?.text,
+    maxProvinces: index.maxProvinces,
+    seaProvinces: index.seaProvinces,
+    files: provinceFiles,
+  });
+  const onFiles = [...audit.byFile].flatMap((entry) => fileFindings(host, provinceFiles, entry));
+  return [...(definition ? [{ ...definition, diagnostics: audit.definition }] : []), ...onFiles];
+}
+
+function fileFindings(
+  host: FullReportHost,
+  provinceFiles: readonly LoadedLayeredFile[],
+  [relativePath, diagnostics]: readonly [string, readonly Diagnostic[]],
+): ExtraFileFindings[] {
+  const file = provinceFiles.find((candidate) => candidate.relativePath === relativePath);
+  if (file === undefined) {
+    return [];
+  }
+  return [{ path: relativePath, uri: host.fileUri(file.absolutePath), text: file.text, diagnostics }];
 }
 
 /** The tags the engine needs by name, over the stack's `common/countries.txt`. */
@@ -160,7 +226,7 @@ async function greatPowerFindings(
   target: FileLocation,
   index: ModIndex,
   countries: LayeredText | undefined,
-  provinceFiles: readonly LayeredFile[],
+  provinceFiles: readonly LoadedLayeredFile[],
   signal: CancelSignal,
 ): Promise<ExtraFileFindings[]> {
   const defines = await layeredFile(host, target.layers, DEFINES_FILE);

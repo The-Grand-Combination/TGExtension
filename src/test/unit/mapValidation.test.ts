@@ -144,11 +144,17 @@ suite('mapCsvValidation — definition.csv', () => {
     assert.deepStrictEqual(csvCodes('h\n1;1;2;3;x;x\n2;1;2;3;y;x\n', 'mapDefinition'), ['duplicate-color']);
   });
 
-  test('a land province in no climate or no state is an error on its row', () => {
+  test('a land province in no climate, state or continent is an error on its row', () => {
     assert.deepStrictEqual(csvCodes('h\n3;1;2;3;Nova;x\n', 'mapDefinition'), [
       'province-without-climate',
       'province-without-state',
+      'province-without-continent',
     ]);
+  });
+
+  test('a province that has all three is clean', () => {
+    // 1 is in the fixture's climate, region and continent alike.
+    assert.deepStrictEqual(csvCodes('h\n1;1;2;3;Sitka;x\n', 'mapDefinition'), []);
   });
 
   test('a sea province needs neither, and a lake row is not a province', () => {
@@ -157,8 +163,8 @@ suite('mapCsvValidation — definition.csv', () => {
     assert.deepStrictEqual(csvCodes('h\n;1;2;3;Lake;x\n', 'mapDefinition'), []);
   });
 
-  test('a stack with no climate.txt and no region.txt says nothing: that is a missing file, not 3000 provinces', () => {
-    const bare = buildTestIndex({ 'map/climate.txt': '', 'map/region.txt': '', 'map/super_region.txt': '' });
+  test('a stack with none of the three files says nothing: that is a missing file, not 3000 provinces', () => {
+    const bare = buildTestIndex({ 'map/climate.txt': '', 'map/region.txt': '', 'map/continent.txt': '' });
     assert.deepStrictEqual(validateMapCsv('h\n3;1;2;3;Nova;x\n', 'mapDefinition', bare).map((item) => item.code), []);
   });
 

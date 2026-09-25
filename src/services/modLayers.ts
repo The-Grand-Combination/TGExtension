@@ -150,6 +150,11 @@ export function listLayeredFilesRecursive(
   return listLayeredFilesResolved(layers, fileSystem, relativeFolder).map((file) => file.relativePath);
 }
 
+/** A layered file whose text has been read, so several audits can share one read. */
+export interface LoadedLayeredFile extends LayeredFile {
+  readonly text: string;
+}
+
 /** The same merge, keeping the absolute path of the layer each file came from. */
 export function listLayeredFilesResolved(
   layers: ModLayers,

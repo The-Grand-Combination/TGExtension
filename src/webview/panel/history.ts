@@ -73,11 +73,17 @@ export function historySections(current: ProvinceDetails): HistoryPanes {
   const history = current.history;
   const data = forms.carriedHistory ?? history.data ?? emptyHistory();
   forms.carriedHistory = null;
-  const form = historyForm(data, { climate: forms.carriedClimate ?? current.climate.name, state: stateSection(current) });
+  const form = historyForm(data, {
+    climate: forms.carriedClimate ?? current.climate.name,
+    continent: forms.carriedContinent ?? current.continent.name,
+    state: stateSection(current),
+  });
   forms.carriedClimate = null;
+  forms.carriedContinent = null;
   forms.historyRead = form.read;
   forms.historyRendered = JSON.stringify(data);
   forms.climateRendered = form.climate();
+  forms.continentRendered = form.continent();
   // Which subfolder of history/provinces the file sits in: where a new one goes,
   // and where a save puts one that exists — the target's own file is moved, and a
   // file another layer owns is copied there. A sea province has the pane locked.
@@ -96,7 +102,8 @@ export function historySections(current: ProvinceDetails): HistoryPanes {
   function pane(title: string, whole: boolean): (body: Child) => HTMLElement {
     const bar = saveBar(function () {
       postSave({
-        section: 'history', data: form.read(), climate: form.climate(), createInFolder: folder.value,
+        section: 'history', data: form.read(), climate: form.climate(), continent: form.continent(),
+        createInFolder: folder.value,
         ...(whole
           ? {
             localisation: { text: forms.nameInput?.value ?? '', renameHistoryFile: forms.renameInput?.checked === true },
@@ -159,11 +166,14 @@ interface HistoryFormHandle {
   readonly read: () => ProvinceHistory;
   /** The climate the form holds; a dated block has none, and answers ''. */
   readonly climate: () => string;
+  /** The continent the form holds; a dated block has none, and answers ''. */
+  readonly continent: () => string;
 }
 
-/** What only the province's own form carries: its climate, and the State section under it. */
+/** What only the province's own form carries: its climate and continent, and the State section under it. */
 interface HistoryExtras {
   readonly climate: string | undefined;
+  readonly continent: string | undefined;
   readonly state: HTMLElement;
 }
 
@@ -243,8 +253,14 @@ function historyForm(data: ProvinceHistory, extras: HistoryExtras | null): Histo
     grid.append(h('label', null, spec.label), field.node);
   }
   if (topLevel) { inputs.terrain.node.addEventListener('input', function () { showTerrain(inputs.terrain.value); }); }
-  // The climate is not in the history file, but it is the same province and the
-  // same Save: map/climate.txt is written with it.
+  // Neither the continent nor the climate is in the history file, but both are
+  // the same province and the same Save: map/continent.txt and map/climate.txt
+  // are written with it. The continent goes first, being the wider of the two.
+  const continent = extras && state.details ? selectInput(extras.continent, state.details.continent.options, '(none)') : null;
+  if (continent) {
+    forms.continentInput = continent;
+    grid.append(h('label', null, 'Continent'), continent.node);
+  }
   const climate = extras && state.details ? selectInput(extras.climate, state.details.climate.options, '(none)') : null;
   if (climate) {
     forms.climateInput = climate;
@@ -271,6 +287,7 @@ function historyForm(data: ProvinceHistory, extras: HistoryExtras | null): Histo
     buildings: buildingsGroup,
     dated: dated ? dated.node : null,
     climate: function (): string { return climate ? climate.value : ''; },
+    continent: function (): string { return continent ? continent.value : ''; },
     read: function (): ProvinceHistory {
       return {
         owner: valueOf(inputs.owner), controller: valueOf(inputs.controller),

@@ -172,6 +172,7 @@ Shared codes reused here with map-specific messages: `unknown-field`, `unknown-m
 | `duplicate-color` | error | Two `definition.csv` provinces share an RGB color. |
 | `province-without-climate` | error | A land province is in no `map/climate.txt` block. |
 | `province-without-state` | error | A land province is in no `map/region.txt` block, so the engine puts it in no state. |
+| `province-without-continent` | error | A land province is in no `map/continent.txt` block, so it matches no `continent` trigger and nothing scoped by continent reaches it. |
 | `unknown-adjacency-type` | error | An `adjacencies.csv` `Type` is not `sea`, `land`, `impassable`, or `canal`. |
 | `ignored-adjacency` | warning | A row with `To <= 0` and a type other than `impassable`; the engine skips it. |
 | `invalid-canal` | error | A `canal` row lacks the canal province in `Through` or a canal id above zero in `Data`. |
@@ -262,6 +263,39 @@ bookmark that a mod with one bookmark drops, and those mods run.
 | Code | Severity | Reported on | Meaning |
 |---|---|---|---|
 | `missing-pops-file` | error | the `replace_path` line of the mod's `.mod` file, or its first line | A date folder the stack has is missing some of the base game's pops files. One finding per date folder; the message counts them and names the first few. |
+
+## Province history (`provinceHistoryValidation.ts`) — Full Report only
+
+Every land province `map/definition.csv` declares needs a file under `history/provinces`, and what
+those files say has to include `life_rating` and `trade_goods`. Neither key stops the game loading,
+which is what makes a province missing one easy to ship and hard to notice: without `life_rating`
+the province takes no migrants and grows nothing, without `trade_goods` it produces nothing at all.
+
+Three things decide which provinces are judged, and each of them is why the check stays quiet on
+the mods it should:
+
+- **Sea provinces are skipped.** `sea_starts` in `map/default.map` names them, and none of them
+  ships a history file in any mod of the corpus.
+- **Ids at or above `max_provinces` are skipped.** The engine never loads them, so nothing is asked
+  of them, however many rows `definition.csv` carries.
+- **A row with no numeric id is a lake**, not a province.
+
+A province's history is the **merge of every file claiming its id**, not one of them. The engine
+takes the id from the digits the file name starts with and loads them all — vanilla itself ships
+two files for 1396 — so a key one file leaves out may be supplied by another, and the finding goes
+on the last file to claim the id, naming the others so the fix is not tried in the wrong place.
+
+A key set only inside a dated block does not count. The province still has to start with a value;
+a `1861.1.1 = { trade_goods = coal }` says what changes later, not what it produces at the start.
+
+An **empty file still fails** — but only for a province the map declares. That is what keeps the
+check off the thousands of deliberately empty files a total conversion ships: those neutralise
+vanilla provinces its own `definition.csv` no longer has, so nothing asks anything of them.
+
+| Code | Severity | Reported on | Meaning |
+|---|---|---|---|
+| `missing-province-history` | error | the province's id in `map/definition.csv` | A land province the map declares has no file under `history/provinces`. |
+| `incomplete-province-history` | error | the last history file claiming the id, at its first line | Every file the engine reads for the province leaves out `life_rating`, `trade_goods`, or both. |
 
 ## Great powers (`greatPowerValidation.ts`) — Full Report only
 

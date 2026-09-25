@@ -24,12 +24,15 @@ export interface ModFileProvider {
   listFilesRecursive(relativeFolder: string): string[];
 }
 
-/** Region files in the order the engine reads them; later files can only add meta-regions. */
-const MAP_REGION_FILES: readonly string[] = [
-  'map/region.txt',
-  'map/region_sea.txt',
-  'map/super_region.txt',
-];
+/**
+ * The states of the world, and the only file that holds them. `map/default.map`
+ * names `region_sea` as well, but vanilla ships it as three empty blocks and it
+ * describes naval zones rather than states; `super_region.txt` is a mod's own
+ * bookkeeping that no `default.map` names, so the engine never reads it. A
+ * province's state comes from this file or from nowhere.
+ */
+const STATE_REGION_FILE = 'map/region.txt';
+const CONTINENT_FILE = 'map/continent.txt';
 
 export function hasIdentifier(index: ModIndex, category: IdentifierCategory, name: string): boolean {
   return index.identifiers.get(category)?.has(name.toLowerCase()) ?? false;
@@ -195,14 +198,12 @@ function provinceIdsOf(block: Block): string[] {
  */
 function assignProvincesToStates(provider: ModFileProvider): Map<string, string> {
   const owner = new Map<string, string>();
-  for (const filePath of MAP_REGION_FILES) {
-    const document = parseRelative(provider, filePath);
-    for (const state of document ? blockKeysOf(document) : []) {
-      const block = asBlock(state.value);
-      const unassigned = block ? provinceIdsOf(block).filter((id) => !owner.has(id)) : [];
-      for (const id of unassigned) {
-        owner.set(id, state.key.value.toLowerCase());
-      }
+  const document = parseRelative(provider, STATE_REGION_FILE);
+  for (const state of document ? blockKeysOf(document) : []) {
+    const block = asBlock(state.value);
+    const unassigned = block ? provinceIdsOf(block).filter((id) => !owner.has(id)) : [];
+    for (const id of unassigned) {
+      owner.set(id, state.key.value.toLowerCase());
     }
   }
   return owner;
@@ -223,6 +224,37 @@ function assignProvincesToClimates(provider: ModFileProvider): Map<string, strin
     }
   }
   return owner;
+}
+
+/**
+ * Province id → its continent. The ids sit under `provinces = { }`, which is how
+ * the file is written, but a bare id in the continent block counts too. The last
+ * continent to list a province is the one the engine keeps.
+ */
+function assignProvincesToContinents(provider: ModFileProvider): Map<string, string> {
+  const owner = new Map<string, string>();
+  const document = parseRelative(provider, CONTINENT_FILE);
+  for (const continent of document ? blockKeysOf(document) : []) {
+    const block = asBlock(continent.value);
+    for (const id of block ? nestedProvinceIdsOf(block) : []) {
+      owner.set(id, continent.key.value.toLowerCase());
+    }
+  }
+  return owner;
+}
+
+/** `provinceIdsOf`, plus the ids of a `provinces = { }` block inside. */
+function nestedProvinceIdsOf(block: Block): string[] {
+  const ids = provinceIdsOf(block);
+  for (const entry of block.entries) {
+    if (entry.kind === 'assignment' && entry.key.value.toLowerCase() === 'provinces') {
+      const inner = asBlock(entry.value);
+      if (inner) {
+        ids.push(...provinceIdsOf(inner));
+      }
+    }
+  }
+  return ids;
 }
 
 function techSchoolOccurrences(provider: ModFileProvider): IdentifierOccurrence[] {
@@ -555,6 +587,7 @@ class IndexBuild {
   private defaultMap: DefaultMapData = { maxProvinces: undefined, seaProvinces: new Set() };
   private stateOfProvince = new Map<string, string>();
   private climateOfProvince = new Map<string, string>();
+  private continentOfProvince = new Map<string, string>();
   private techFolders: string[] = [];
   /** The per-file work of this build, kept for the next one. */
   private readonly byFile = new Map<string, FileContribution>();
@@ -647,6 +680,7 @@ class IndexBuild {
       seaProvinces: this.defaultMap.seaProvinces,
       stateOfProvince: this.stateOfProvince,
       climateOfProvince: this.climateOfProvince,
+      continentOfProvince: this.continentOfProvince,
       techFolders: this.techFolders,
       researchBonusKeys: new Set(this.techFolders.map(researchBonusKey)),
       minBuildKeys: this.minBuildKeys(),
@@ -739,18 +773,13 @@ class IndexBuild {
 
   private indexMap(): void {
     this.put('province', provinceOccurrences(this.provider), { checkDuplicates: true });
-    // A name may legally appear in both region.txt and super_region.txt (the
-    // engine keeps the last), so duplicates are only checked within one file.
-    const regionFiles = MAP_REGION_FILES.map((filePath) => this.topLevel(filePath));
-    this.put('stateRegion', regionFiles.flat());
-    for (const occurrences of regionFiles) {
-      collectDuplicates('stateRegion', occurrences, this.duplicates);
-    }
-    this.put('continent', this.topLevel('map/continent.txt'));
+    this.put('stateRegion', this.topLevel(STATE_REGION_FILE), { checkDuplicates: true });
+    this.put('continent', this.topLevel(CONTINENT_FILE));
     this.put('terrain', terrainOccurrences(this.provider));
     this.defaultMap = readDefaultMap(this.provider);
     this.stateOfProvince = assignProvincesToStates(this.provider);
     this.climateOfProvince = assignProvincesToClimates(this.provider);
+    this.continentOfProvince = assignProvincesToContinents(this.provider);
   }
 
   private indexTechnology(): void {

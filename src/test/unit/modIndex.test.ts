@@ -88,23 +88,38 @@ suite('modIndex', () => {
     assert.strictEqual(without.seaProvinces.size, 0);
   });
 
-  test('meta-regions from super_region.txt are valid region names', () => {
-    assert.ok(hasIdentifier(index, 'stateRegion', 'big_meta'));
+  test('only region.txt names states: nothing else is a region', () => {
+    // map/default.map names region and region_sea; vanilla ships region_sea as
+    // three empty blocks of naval zones, and no default.map names super_region
+    // at all, so the engine never reads it. A mod that keeps one is keeping
+    // notes, not declaring states.
+    assert.ok(hasIdentifier(index, 'stateRegion', 'eng_1'));
+    assert.ok(!hasIdentifier(index, 'stateRegion', 'big_meta'), 'super_region.txt names no state');
+    const naval = buildTestIndex({ 'map/region_sea.txt': 'BALTIC_SEA_REGION = { 900 }\n' });
+    assert.ok(!hasIdentifier(naval, 'stateRegion', 'baltic_sea_region'));
   });
 
-  test('a region name shared by region.txt and super_region.txt is not a duplicate', () => {
-    const mirrored = buildTestIndex({ 'map/super_region.txt': 'ENG_1 = { 1 2 }\n' });
-    assert.deepStrictEqual(mirrored.duplicates, []);
+  test('a name repeated inside region.txt is a duplicate', () => {
     const doubled = buildTestIndex({ 'map/region.txt': 'ENG_1 = { 1 }\nENG_1 = { 2 }\n' });
     assert.strictEqual(doubled.duplicates.find((entry) => entry.category === 'stateRegion')?.name, 'eng_1');
   });
 
-  test('replays state assignment: meta-regions claim nothing, mixed blocks claim the rest', () => {
+  test('a province takes its state from region.txt, and from nowhere else', () => {
     assert.strictEqual(index.stateOfProvince.get('1'), 'eng_1');
     assert.strictEqual(index.stateOfProvince.get('619'), 'ita_619');
+    // 3 is in no region.txt block; a super_region that lists it changes nothing.
+    assert.strictEqual(index.stateOfProvince.get('3'), undefined);
     const mixed = buildTestIndex({ 'map/super_region.txt': 'MIXED = { 1 3 }\n' });
     assert.strictEqual(mixed.stateOfProvince.get('1'), 'eng_1');
-    assert.strictEqual(mixed.stateOfProvince.get('3'), 'mixed');
+    assert.strictEqual(mixed.stateOfProvince.get('3'), undefined);
+  });
+
+  test('a meta-region inside region.txt still claims nothing', () => {
+    // The rule survives where it applies: a block whose provinces are all taken
+    // is a grouping, and the provinces keep the state that claimed them first.
+    const meta = buildTestIndex({ 'map/region.txt': 'ENG_1 = { 1 2 }\nBIG = { 1 2 }\n' });
+    assert.strictEqual(meta.stateOfProvince.get('1'), 'eng_1');
+    assert.strictEqual(meta.stateOfProvince.get('2'), 'eng_1');
   });
 
   test('indexes technologies, inventions, and units', () => {

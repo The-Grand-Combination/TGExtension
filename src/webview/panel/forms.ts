@@ -14,17 +14,20 @@ export interface Forms {
    * history file goes, and the pops file a block would be created in. */
   historyFolder: (() => string) | null;
   popsFile: (() => string) | null;
-  /** The climate box and the states list, also read when a save has to create the province. */
+  /** The climate and continent boxes and the states list, also read when a save has to create the province. */
   climateInput: Field | null;
+  continentInput: Field | null;
   statesRead: (() => string[]) | null;
   /** What each form was built from, to tell a form that was touched from one that was not. */
   historyRendered: string;
   popsRendered: string;
   climateRendered: string;
+  continentRendered: string;
   statesRendered: string;
   carriedHistory: ProvinceHistory | null;
   carriedPops: readonly PopEntry[] | null;
   carriedClimate: string | null;
+  carriedContinent: string | null;
   carriedStates: readonly string[] | null;
   /** The localisation row: the Definition tab has one Save, and it writes this too. */
   nameInput: Field | null;
@@ -40,14 +43,17 @@ export const forms: Forms = {
   historyFolder: null,
   popsFile: null,
   climateInput: null,
+  continentInput: null,
   statesRead: null,
   historyRendered: '',
   popsRendered: '',
   climateRendered: '',
+  continentRendered: '',
   statesRendered: '',
   carriedHistory: null,
   carriedPops: null,
   carriedClimate: null,
+  carriedContinent: null,
   carriedStates: null,
   nameInput: null,
   seaInput: null,

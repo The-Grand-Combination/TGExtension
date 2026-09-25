@@ -140,13 +140,28 @@ suite('mapEditorMessages', () => {
         data: {},
         provinceId: 9,
         popDate: '1836.1.1',
-        create: { color: 255, isSea: true, name: 'Nova', climate: 'arid_climate', states: ['ENG_1', 7] },
+        create: { color: 255, isSea: true, name: 'Nova', climate: 'arid_climate', continent: 'europe', states: ['ENG_1', 7] },
       },
     });
     assert.ok(message?.type === 'save');
     assert.deepStrictEqual(message.params.create, {
-      color: 255, isSea: true, name: 'Nova', climate: 'arid_climate', states: ['ENG_1'],
+      color: 255, isSea: true, name: 'Nova', climate: 'arid_climate', continent: 'europe', states: ['ENG_1'],
     });
+  });
+
+  test('a create that names no continent carries an empty one, not a missing field', () => {
+    const message = asPageMessage({
+      type: 'save',
+      params: {
+        section: 'positions',
+        data: {},
+        provinceId: 9,
+        popDate: '1836.1.1',
+        create: { color: 255, isSea: false, name: 'Nova', climate: 'arid_climate', states: [] },
+      },
+    });
+    assert.ok(message?.type === 'save');
+    assert.strictEqual(message.params.create?.continent, '');
   });
 
   test('a save with its fields at the top level, not under params, is not a save', () => {

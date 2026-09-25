@@ -128,6 +128,14 @@ function checkProvincePlacement(out: CsvDiagnostics, id: CsvField, index: ModInd
       id.range,
     );
   }
+  if (index.continentOfProvince.size > 0 && !index.continentOfProvince.has(id.text)) {
+    out.error(
+      'province-without-continent',
+      `Province ${id.text} is on no continent: add it to a block of map/continent.txt. ` +
+        'On none of them it matches no `continent` trigger, and nothing scoped by continent reaches it.',
+      id.range,
+    );
+  }
 }
 
 function checkDefinitionColor(

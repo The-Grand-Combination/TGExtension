@@ -296,6 +296,18 @@ export interface ClimateSection {
   readonly options: readonly NamedIdentifier[];
 }
 
+/**
+ * `map/continent.txt`: the one continent whose province list holds the
+ * province. Every land province has exactly one, and a sea province has none.
+ */
+export interface ContinentSection {
+  readonly name: string | undefined;
+  readonly file: FileRef | undefined;
+  readonly inTarget: boolean;
+  /** Every continent the file declares, with its localised name. */
+  readonly options: readonly NamedIdentifier[];
+}
+
 /** `map/region.txt`: the states holding the province. A land province needs at least one. */
 export interface StateSection {
   readonly names: readonly string[];
@@ -316,6 +328,7 @@ export interface ProvinceDetails {
   readonly positions: PositionsSection;
   readonly terrain: TerrainSection;
   readonly climate: ClimateSection;
+  readonly continent: ContinentSection;
   readonly state: StateSection;
 }
 
@@ -346,6 +359,7 @@ export interface LocalisationEdit {
 export interface HistoryEdit {
   readonly data: ProvinceHistory;
   readonly climate: string;
+  readonly continent: string;
   readonly createInFolder: string | undefined;
   readonly localisation?: LocalisationEdit;
   readonly states?: readonly string[];
@@ -383,8 +397,9 @@ export interface NewProvince {
   readonly isSea: boolean;
   /** The name the `definition.csv` row carries. */
   readonly name: string;
-  /** A land province cannot be created without one, nor without a state. */
+  /** A land province cannot be created without one, nor without a continent or a state. */
   readonly climate: string;
+  readonly continent: string;
   readonly states: readonly string[];
 }
 

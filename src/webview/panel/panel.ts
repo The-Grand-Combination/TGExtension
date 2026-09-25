@@ -1,7 +1,7 @@
 import type { FileRef, HistoryEdit, MapEditorMap, PageSaveParams, PopsEdit, ProvinceDetails, SaveResult, SaveSection } from '../../model/mapEditor.js';
 import { render } from '../canvas.js';
 import { h, setStatus, side, sideDock } from '../dom.js';
-import { lock } from '../fields.js';
+import { lock, type Field } from '../fields.js';
 import { post } from '../host.js';
 import { asPositions, clonePoints, refreshPending } from '../positions.js';
 import { definitionById, pendingPositions, POSITION_KIND_SPECS, state, vocabulary, type Draft } from '../state.js';
@@ -329,6 +329,7 @@ function historyEdit(): HistoryEdit | undefined {
   return {
     data: read(),
     climate: forms.climateInput?.value ?? '',
+    continent: forms.continentInput?.value ?? '',
     createInFolder: forms.historyFolder ? forms.historyFolder() : undefined,
     localisation: { text: forms.nameInput?.value ?? '', renameHistoryFile: forms.renameInput?.checked === true },
     states: forms.statesRead ? forms.statesRead() : [],
@@ -367,11 +368,11 @@ export function finishSave(): void {
  */
 function partsOf(payload: PageSaveParams): Set<string> {
   if (payload.section === 'all') {
-    return new Set(['history', 'pops', 'positions', 'climate', 'states', 'localisation']);
+    return new Set(['history', 'pops', 'positions', 'climate', 'continent', 'states', 'localisation']);
   }
   const parts = new Set<string>([payload.section]);
   if (payload.section === 'history') {
-    for (const key of ['climate', 'states', 'localisation'] as const) {
+    for (const key of ['climate', 'continent', 'states', 'localisation'] as const) {
       if (payload[key] !== undefined) { parts.add(key); }
     }
   }
@@ -387,11 +388,17 @@ export function postSave(section: SaveSection): void {
   const create = details.isNew && state.newColor !== null
     ? {
       color: state.newColor, isSea: forms.seaInput?.checked === true, name: forms.nameInput?.value ?? '',
-      // A land province is refused without both: the server writes them with the row.
-      climate: forms.climateInput?.value ?? '', states: forms.statesRead ? forms.statesRead() : [],
+      // A land province is refused without all three: the server writes them with the row.
+      climate: forms.climateInput?.value ?? '', continent: forms.continentInput?.value ?? '',
+      states: forms.statesRead ? forms.statesRead() : [],
     }
     : undefined;
   post({ type: 'save', params: create ? { ...payload, create: create } : payload });
+}
+
+/** A one-box form the save did not write, and only when the box was touched. */
+function carriedValue(parts: ReadonlySet<string>, part: string, input: Field | null, rendered: string): string | null {
+  return !parts.has(part) && input && input.value !== rendered ? input.value : null;
 }
 
 /** What the tabs the save did not write are holding, to be put back after the re-render. */
@@ -405,9 +412,8 @@ export function carryForms(): void {
     const held = forms.popsRead();
     if (JSON.stringify(held) !== forms.popsRendered) { forms.carriedPops = held; }
   }
-  if (!parts.has('climate') && forms.climateInput && forms.climateInput.value !== forms.climateRendered) {
-    forms.carriedClimate = forms.climateInput.value;
-  }
+  forms.carriedClimate = carriedValue(parts, 'climate', forms.climateInput, forms.climateRendered);
+  forms.carriedContinent = carriedValue(parts, 'continent', forms.continentInput, forms.continentRendered);
   if (!parts.has('states') && forms.statesRead) {
     const held = forms.statesRead();
     if (JSON.stringify(held) !== forms.statesRendered) { forms.carriedStates = held; }

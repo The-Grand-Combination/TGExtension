@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import {
   type ClimateSection,
+  type ContinentSection,
   type FileRef,
   type HistorySection,
   type LocSection,
@@ -35,7 +36,14 @@ import type { ModIndex } from '../model/modIndex.js';
 import { decodeBmp } from './bmpDecoder.js';
 import { countryColorOf, countryFilesOf, provinceOwnerOf } from './countryColors.js';
 import { namedIdentifiersOf, vocabularyOf } from './mapEditorVocabulary.js';
-import { firstGroupByProvince, groupNames, groupOffsetOf, groupsOfProvince, planGroupEdit } from './provinceGroupEdit.js';
+import {
+  firstGroupByProvince,
+  groupNames,
+  groupOffsetOf,
+  groupsOfProvince,
+  planGroupEdit,
+  type ProvinceListShape,
+} from './provinceGroupEdit.js';
 import type { LayerFileSystem, ModLayers } from './modLayers.js';
 import { isInsideRoot, type FileLocation } from './modLayout.js';
 import {
@@ -133,6 +141,9 @@ const OWNER_BATCH = 64;
 const POPS_FOLDER = 'history/pops';
 const POSITIONS_FILE = 'map/positions.txt';
 const CLIMATE_FILE = 'map/climate.txt';
+const CONTINENT_FILE = 'map/continent.txt';
+/** `continent.txt` keeps a continent's ids in a `provinces = { }`, next to its modifiers. */
+const CONTINENT_LIST: ProvinceListShape = 'nested';
 const REGION_FILE = 'map/region.txt';
 /** The terrain a sea province shows; the picture for it comes from `mapEditorTerrain`. */
 const OCEAN_TERRAIN = 'ocean';
@@ -339,6 +350,17 @@ export class MapEditorHandlers {
     if (inClimate?.length === 0) {
       return `Province ${id} has no climate: pick one in the History section${orSea}.`;
     }
+    const continent = continentIn(params);
+    const inContinent = await this.placedIn(
+      target,
+      params,
+      CONTINENT_FILE,
+      continent === undefined ? undefined : [continent],
+      CONTINENT_LIST,
+    );
+    if (inContinent?.length === 0) {
+      return `Province ${id} is on no continent: pick one in the History section${orSea}.`;
+    }
     const inState = await this.placedIn(target, params, REGION_FILE, statesIn(params));
     if (inState?.length === 0) {
       return `Province ${id} is in no state: add one under States${orSea}.`;
@@ -372,22 +394,37 @@ export class MapEditorHandlers {
     params: SaveParams,
     relativePath: string,
     carried: readonly string[] | undefined,
+    shape: ProvinceListShape = 'bare',
   ): Promise<string[] | undefined> {
     const file = await this.scriptFile(target.layers, relativePath);
     if (!file) {
       return undefined;
     }
-    const after = carried ?? groupsOfProvince(file.document, params.provinceId);
+    const after = carried ?? groupsOfProvince(file.document, params.provinceId, shape);
     return after.filter((name) => name.trim() !== '');
   }
 
-  /** The climate and the states this save carries, written into their own files. */
+  /** The climate, the continent and the states this save carries, written into their own files. */
   private async savePlacement(target: Target, params: SaveParams): Promise<string[] | string> {
     const climate = climateIn(params);
+    const continent = continentIn(params);
     const states = statesIn(params);
     const written: string[] = [];
     if (climate !== undefined) {
       const done = await this.writeGroups(target, params, CLIMATE_FILE, climate.trim() === '' ? [] : [climate]);
+      if (typeof done === 'string') {
+        return done;
+      }
+      written.push(...done);
+    }
+    if (continent !== undefined) {
+      const done = await this.writeGroups(
+        target,
+        params,
+        CONTINENT_FILE,
+        continent.trim() === '' ? [] : [continent],
+        CONTINENT_LIST,
+      );
       if (typeof done === 'string') {
         return done;
       }
@@ -409,12 +446,13 @@ export class MapEditorHandlers {
     params: SaveParams,
     relativePath: string,
     groups: readonly string[],
+    shape: ProvinceListShape = 'bare',
   ): Promise<string[] | string> {
     const file = await this.scriptFile(target.layers, relativePath);
     if (!file) {
       return groups.length === 0 ? [] : `The picked mods have no ${relativePath}.`;
     }
-    const patches = planGroupEdit(file.text, file.document, params.provinceId, groups);
+    const patches = planGroupEdit(file.text, file.document, params.provinceId, groups, shape);
     if (patches.length === 0) {
       return [];
     }
@@ -646,6 +684,7 @@ export class MapEditorHandlers {
       positions: await this.readPositions(target, provinceId),
       terrain: await this.readTerrain(target, provinceId, history, isSea),
       climate: await this.readClimate(target, provinceId),
+      continent: await this.readContinent(target, provinceId),
       state: await this.readState(target, provinceId),
     };
   }
@@ -656,6 +695,17 @@ export class MapEditorHandlers {
     return {
       name,
       file: file ? { absolutePath: file.absolutePath, line: groupLine(file, name) } : undefined,
+      inTarget: file !== undefined && isInsideRoot(target.root, file.absolutePath),
+      options: namedIdentifiersOf(target.index, file ? groupNames(file.document) : []),
+    };
+  }
+
+  private async readContinent(target: Target, provinceId: number): Promise<ContinentSection> {
+    const file = await this.scriptFile(target.layers, CONTINENT_FILE);
+    const name = file ? groupsOfProvince(file.document, provinceId, CONTINENT_LIST)[0] : undefined;
+    return {
+      name,
+      file: file ? { absolutePath: file.absolutePath, line: groupLine(file, name, CONTINENT_LIST) } : undefined,
       inTarget: file !== undefined && isInsideRoot(target.root, file.absolutePath),
       options: namedIdentifiersOf(target.index, file ? groupNames(file.document) : []),
     };
@@ -1074,12 +1124,17 @@ function climateIn(params: SaveParams): string | undefined {
   return params.section === 'history' ? params.climate : params.create?.climate;
 }
 
+/** The continent this save writes, or undefined when it carries none. */
+function continentIn(params: SaveParams): string | undefined {
+  return params.section === 'history' ? params.continent : params.create?.continent;
+}
+
 function statesIn(params: SaveParams): readonly string[] | undefined {
   return (params.section === 'history' ? params.states : undefined) ?? params.create?.states;
 }
 
-function groupLine(file: ScriptFile, name: string | undefined): number {
-  const offset = name === undefined ? undefined : groupOffsetOf(file.document, name);
+function groupLine(file: ScriptFile, name: string | undefined, shape: ProvinceListShape = 'bare'): number {
+  const offset = name === undefined ? undefined : groupOffsetOf(file.document, name, shape);
   return offset === undefined ? 0 : lineOf(file.text, offset);
 }
 

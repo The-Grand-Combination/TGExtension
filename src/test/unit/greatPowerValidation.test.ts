@@ -7,7 +7,7 @@ import {
   type GreatPowerCandidate,
   type StartStateReader,
 } from '../../services/greatPowerValidation.js';
-import type { LayeredFile } from '../../services/modLayers.js';
+import type { LayeredFile, LoadedLayeredFile } from '../../services/modLayers.js';
 
 const DEFINES = [
   'defines = {',
@@ -135,12 +135,20 @@ function listed(relativePaths: readonly string[]): LayeredFile[] {
   return relativePaths.map((relativePath) => ({ relativePath, absolutePath: relativePath }));
 }
 
+/** Province files come to the audit already read; these carry the fixture text. */
+function loaded(
+  relativePaths: readonly string[],
+  texts: Readonly<Record<string, string>>,
+): LoadedLayeredFile[] {
+  return listed(relativePaths).map((file) => ({ ...file, text: texts[file.relativePath] ?? '' }));
+}
+
 function reader(): StartStateReader {
   const files: Readonly<Record<string, string>> = { ...PROVINCES, ...COUNTRY_HISTORY };
   return {
     startDate: '1836.1.1',
     readFile: (absolutePath) => Promise.resolve(files[absolutePath]),
-    provinceFiles: listed(Object.keys(PROVINCES)),
+    provinceFiles: loaded(Object.keys(PROVINCES), PROVINCES),
     countryFiles: listed(Object.keys(COUNTRY_HISTORY)),
     stateOfProvince: STATE_OF_PROVINCE,
   };
@@ -191,7 +199,7 @@ suite('greatPowerValidation — the world at the start date', () => {
       ...reader(),
       readFile: (absolutePath) => Promise.resolve(files[absolutePath]),
       // Highest layer first, as the layered listing returns it.
-      provinceFiles: listed([mine, theirs]),
+      provinceFiles: loaded([mine, theirs], files),
     });
     assert.strictEqual(found.find((candidate) => candidate.tag === 'ENG')?.stateCount, 1);
     assert.strictEqual(found.find((candidate) => candidate.tag === 'FRA')?.stateCount, 0);
