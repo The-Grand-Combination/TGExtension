@@ -11,7 +11,9 @@ import type {
 } from '../model/modIndex.js';
 import type { Range } from '../model/range.js';
 import type { IdentifierCategory } from '../model/symbols.js';
+import { compareDates } from '../model/gameDate.js';
 import { csvRows } from '../parser/csv.js';
+import { startDateOf } from './greatPowerValidation.js';
 import { runToEnd, YieldBudget, yieldToEventLoop, type WorkUnits } from './scheduling.js';
 import { seaStartsOf } from './mapDefaultEdit.js';
 import { parseDocument } from './syntaxValidation.js';
@@ -376,7 +378,20 @@ export interface FileContribution {
   readonly globalFlags: readonly string[];
   /** In file order; the merge keeps the first definition of a key. */
   readonly locKeys: readonly LocKeyDefinition[];
+  readonly provinceOwner: ProvinceOwnerHistory | undefined;
 }
+
+export interface ProvinceOwnerHistory {
+  readonly id: string;
+  readonly changes: readonly OwnerChange[];
+}
+
+export interface OwnerChange {
+  readonly date: string | undefined;
+  readonly owner: string;
+}
+
+const NO_OWNER: ReadonlySet<string> = new Set(['---', 'null']);
 
 /** The per-file work of a finished build, to hand back to the next one. */
 export interface IndexCarry {
@@ -401,6 +416,7 @@ const NOTHING: FileContribution = {
   countryFlags: [],
   globalFlags: [],
   locKeys: [],
+  provinceOwner: undefined,
 };
 
 function flagsOf(entries: readonly Entry[]): Pick<FileContribution, 'countryFlags' | 'globalFlags'> {
@@ -421,6 +437,47 @@ function decisionContribution(text: string): FileContribution {
 
 function flagContribution(text: string): FileContribution {
   return { ...NOTHING, ...flagsOf(parseDocument(text).document.entries) };
+}
+
+function provinceOwnerContribution(text: string, filePath: string): FileContribution {
+  const id = /^(\d+)/.exec(filePath.slice(filePath.lastIndexOf('/') + 1))?.[1];
+  if (id === undefined) {
+    return NOTHING;
+  }
+  const changes: OwnerChange[] = [];
+  for (const entry of parseDocument(text).document.entries) {
+    if (entry.kind !== 'assignment') {
+      continue;
+    }
+    if (entry.key.type === 'date' && entry.value.kind === 'block') {
+      changes.push(...ownerAssignments(entry.value.entries, entry.key.value));
+    } else {
+      changes.push(...ownerAssignments([entry], undefined));
+    }
+  }
+  return { ...NOTHING, provinceOwner: { id, changes } };
+}
+
+function ownerAssignments(entries: readonly Entry[], date: string | undefined): OwnerChange[] {
+  const found: OwnerChange[] = [];
+  for (const entry of entries) {
+    if (entry.kind === 'assignment' && entry.value.kind === 'scalar' && entry.key.value.toLowerCase() === 'owner') {
+      found.push({ date, owner: entry.value.value });
+    }
+  }
+  return found;
+}
+
+function ownerAtStart(changes: readonly OwnerChange[], startDate: string): string | undefined {
+  let owner = changes.filter((change) => change.date === undefined).at(-1)?.owner;
+  const dated = changes
+    .filter((change): change is OwnerChange & { date: string } => change.date !== undefined)
+    .filter((change) => compareDates(change.date, startDate) <= 0)
+    .sort((a, b) => compareDates(a.date, b.date));
+  for (const change of dated) {
+    owner = change.owner;
+  }
+  return owner;
 }
 
 function eventIdsOf(document: Document): NameAt[] {
@@ -588,6 +645,8 @@ class IndexBuild {
   private stateOfProvince = new Map<string, string>();
   private climateOfProvince = new Map<string, string>();
   private continentOfProvince = new Map<string, string>();
+  private readonly ownerOfProvince = new Map<string, string>();
+  private startDate = startDateOf(undefined);
   private techFolders: string[] = [];
   /** The per-file work of this build, kept for the next one. */
   private readonly byFile = new Map<string, FileContribution>();
@@ -606,6 +665,7 @@ class IndexBuild {
     (): WorkUnits => this.indexEvents(),
     (): WorkUnits => this.indexDecisions(),
     (): WorkUnits => this.indexOtherFlagSources(),
+    (): WorkUnits => this.indexProvinceOwners(),
   ];
 
   private readonly changed: ReadonlySet<string> | undefined;
@@ -627,8 +687,17 @@ class IndexBuild {
     extension: string,
     compute: (text: string, filePath: string) => FileContribution,
   ): WorkUnits {
-    for (const fileName of this.provider.listFiles(folder, extension)) {
-      const filePath = `${folder}/${fileName}`;
+    const paths = this.provider.listFiles(folder, extension).map((fileName) => `${folder}/${fileName}`);
+    yield* this.walkPaths(paths, compute);
+  }
+
+  private *walkTree(folder: string, compute: (text: string, filePath: string) => FileContribution): WorkUnits {
+    const paths = this.provider.listFilesRecursive(folder).filter((filePath) => filePath.toLowerCase().endsWith('.txt'));
+    yield* this.walkPaths(paths, compute);
+  }
+
+  private *walkPaths(paths: readonly string[], compute: (text: string, filePath: string) => FileContribution): WorkUnits {
+    for (const filePath of paths) {
       const kept = this.changed?.has(filePath.toLowerCase()) === false ? this.reuse?.carry.byFile.get(filePath) : undefined;
       if (kept) {
         this.merge(filePath, kept);
@@ -663,6 +732,21 @@ class IndexBuild {
         this.locKeyDefinitions.set(keyLower, definition);
       }
     }
+    if (contribution.provinceOwner) {
+      this.applyOwner(contribution.provinceOwner);
+    }
+  }
+
+  private applyOwner(history: ProvinceOwnerHistory): void {
+    const owner = ownerAtStart(history.changes, this.startDate);
+    if (owner === undefined) {
+      return;
+    }
+    if (NO_OWNER.has(owner.toLowerCase())) {
+      this.ownerOfProvince.delete(history.id);
+    } else {
+      this.ownerOfProvince.set(history.id, owner.toUpperCase());
+    }
   }
 
   finish(): IndexBuildResult {
@@ -685,6 +769,7 @@ class IndexBuild {
       stateOfProvince: this.stateOfProvince,
       climateOfProvince: this.climateOfProvince,
       continentOfProvince: this.continentOfProvince,
+      ownerOfProvince: this.ownerOfProvince,
       techFolders: this.techFolders,
       researchBonusKeys: new Set(this.techFolders.map(researchBonusKey)),
       minBuildKeys: this.minBuildKeys(),
@@ -784,6 +869,11 @@ class IndexBuild {
     this.stateOfProvince = assignProvincesToStates(this.provider);
     this.climateOfProvince = assignProvincesToClimates(this.provider);
     this.continentOfProvince = assignProvincesToContinents(this.provider);
+    this.startDate = startDateOf(this.provider.readFile('common/defines.lua'));
+  }
+
+  private *indexProvinceOwners(): WorkUnits {
+    yield* this.walkTree('history/provinces', provinceOwnerContribution);
   }
 
   private indexTechnology(): void {

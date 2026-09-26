@@ -147,12 +147,15 @@ codes below, the map CSVs and the cross-file duplicates alike. Being a comment, 
 | Code | Meaning |
 |---|---|
 | `unknown-country-history-key` | An unrecognized key in a `history/countries/` entry. |
+| `capital-not-owned` | The top-level `capital` of a `history/countries/` file is a province the tag does not own at the start date, read from `history/provinces` with dated blocks up to `start_date` applied. Reported on the value, in the editor and in the Full Report. A tag that owns no province at all is skipped: that is a releasable country, whose capital sits in someone else's land by design. Silent when the stack has no province history. |
 | `unknown-decision` | A `decision` reference in country history doesn't match any indexed decision. |
 | `unknown-province-history-key` | An unrecognized key in a `history/provinces/` entry. |
 | `unknown-poptype` | A `history/pops/` province entry's key isn't a known pop type. |
 | `unknown-diplomacy-key` | A `history/diplomacy/` top-level key isn't `alliance`/`vassal`/`union`/`substate`/`reparations`. |
 | `unknown-oob-key` | An unrecognized top-level key in a `history/units/` (order of battle) file. |
 | `unknown-war-key` | A `history/wars/` top-level key is neither a date block nor `name`. |
+| `empty-war-history` | A `history/wars/` file with nothing in it. The game crashes on load; fill it or delete it. Reported at the first line. |
+| `broken-war-history` | A `history/wars/` file whose dated blocks never set `add_attacker`, `add_defender` or `war_goal`. The game crashes on load over a war it cannot stand up. Reported at the first line. |
 
 ## `map/` (`mapValidation.ts`, `mapCsvValidation.ts`)
 
@@ -264,6 +267,24 @@ bookmark that a mod with one bookmark drops, and those mods run.
 |---|---|---|---|
 | `missing-pops-file` | error | the `replace_path` line of the mod's `.mod` file, or its first line | A date folder the stack has is missing some of the base game's pops files. One finding per date folder; the message counts them and names the first few. |
 
+## Rebel order of battle (`rebelOobValidation.ts`) — Full Report only
+
+The engine loads the rebels' starting armies by opening `history/units/REB_oob.txt` **by name**, and
+that lookup falls through to the base game whatever `replace_path` says: hiding `history/units`
+hides the folder listing, not a file asked for by its exact path. The base game's copy places the
+Carlist armies in provinces 493 to 501. On a map that does not reach those ids the `location`
+token resolves to a null province, and the game crashes in `unit.cpp` the moment a country is
+picked and Play is pressed — with no order of battle of the mod's own involved. Found on MGQ
+(336 provinces, `replace_path = "history/units"`, no `REB_oob.txt`) on 2026-09-25.
+
+A mod therefore has to ship the file itself; an empty one is enough, since rebels need no starting
+army. The check asks whether any **mod** layer has it — a submod passes on the file of the mod it
+depends on — and never counts the game root, since the game root's copy is the problem.
+
+| Code | Severity | Reported on | Meaning |
+|---|---|---|---|
+| `missing-rebel-oob` | error | the `replace_path` line of the mod's `.mod` file that hides `history` or `history/units`, or its first line | No mod in the stack ships `history/units/REB_oob.txt`, so the base game's copy loads. |
+
 ## Province history (`provinceHistoryValidation.ts`) — Full Report only
 
 Every land province `map/definition.csv` declares needs a file under `history/provinces`, and what
@@ -288,6 +309,10 @@ on the last file to claim the id, naming the others so the fix is not tried in t
 A key set only inside a dated block does not count. The province still has to start with a value;
 a `1861.1.1 = { trade_goods = coal }` says what changes later, not what it produces at the start.
 
+Two files for one id **in the same mod** are a mistake when both have content: the engine merges
+them, and whichever key the later file repeats wins silently. Empty files are exempt, since that is
+the neutralising idiom; a mod may keep an empty vanilla-named file next to its own.
+
 An **empty file still fails** — but only for a province the map declares. That is what keeps the
 check off the thousands of deliberately empty files a total conversion ships: those neutralise
 vanilla provinces its own `definition.csv` no longer has, so nothing asks anything of them.
@@ -296,6 +321,7 @@ vanilla provinces its own `definition.csv` no longer has, so nothing asks anythi
 |---|---|---|---|
 | `missing-province-history` | error | the province's id in `map/definition.csv` | A land province the map declares has no file under `history/provinces`. |
 | `incomplete-province-history` | error | the last history file claiming the id, at its first line | Every file the engine reads for the province leaves out `life_rating`, `trade_goods`, or both. |
+| `duplicate-province-history` | error | the last of the offending files, at its first line | One mod ships two or more files with content for the same province id. Empty files may share a mod; files that say something may not. |
 
 ## Great powers (`greatPowerValidation.ts`) — Full Report only
 

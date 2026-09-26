@@ -12,6 +12,7 @@ import {
   WAR_GOAL_FIELDS,
 } from '../data/historyStructure.js';
 import type { Assignment, Block, Document, Entry } from '../model/ast.js';
+import { diagnostic } from '../model/diagnostic.js';
 import type { FileType } from '../model/fileType.js';
 import type { FieldTable } from '../model/symbols.js';
 import { hasIdentifier, namesOf } from './modIndex.js';
@@ -57,18 +58,21 @@ export function validateHistoryFile(walk: Walk, document: Document, fileType: Fi
   }
 }
 
-function validateCountryHistoryEntries(walk: Walk, entries: readonly Entry[]): void {
+function validateCountryHistoryEntries(walk: Walk, entries: readonly Entry[], atStart = true): void {
   for (const entry of entries) {
     if (entry.kind === 'assignment') {
-      handleCountryHistoryField(walk, entry);
+      handleCountryHistoryField(walk, entry, atStart);
     } else {
       reportStrayEntry(walk, entry);
     }
   }
 }
 
-function handleCountryHistoryField(walk: Walk, entry: Assignment): void {
+function handleCountryHistoryField(walk: Walk, entry: Assignment, atStart: boolean): void {
   const keyLower = entry.key.value.toLowerCase();
+  if (keyLower === 'capital' && atStart) {
+    checkCapitalOwned(walk, entry);
+  }
   if (checkTableField(walk, entry, COUNTRY_HISTORY_FIELDS)) {
     return;
   }
@@ -98,7 +102,7 @@ function handleCountryHistoryField(walk: Walk, entry: Assignment): void {
     return;
   }
   if (DATE_PATTERN.test(keyLower)) {
-    walkBlockValue(walk, entry, (block) => { validateCountryHistoryEntries(walk, block.entries); });
+    walkBlockValue(walk, entry, (block) => { validateCountryHistoryEntries(walk, block.entries, false); });
     return;
   }
   if (handleDynamicCountryHistoryKey(walk, entry, keyLower)) {
@@ -127,6 +131,40 @@ function handleDynamicCountryHistoryKey(walk: Walk, entry: Assignment, keyLower:
     return true;
   }
   return false;
+}
+
+/**
+ * A country's capital has to be a province it owns at the start date. A tag
+ * that owns nothing is a releasable country, and its capital sitting in
+ * someone else's land is exactly how those are written, so it is left alone.
+ * The check stays quiet when the index read no province history at all.
+ */
+function checkCapitalOwned(walk: Walk, entry: Assignment): void {
+  const owners = walk.index.ownerOfProvince;
+  const tag = countryTagOf(walk.currentFile);
+  if (entry.value.kind !== 'scalar' || owners.size === 0 || tag === undefined) {
+    return;
+  }
+  const owner = owners.get(entry.value.value);
+  if (owner === tag || ![...owners.values()].includes(tag)) {
+    return;
+  }
+  const heldBy = owner === undefined ? 'belongs to nobody' : `is owned by ${owner}`;
+  walk.diagnostics.push(
+    diagnostic(
+      'error',
+      'capital-not-owned',
+      `${tag} does not own its capital: province ${entry.value.value} ${heldBy} at the start date. ` +
+        'A capital has to be one of the country\'s own provinces.',
+      entry.value.range,
+    ),
+  );
+}
+
+/** The engine takes the tag from the three characters a `history/countries` file name starts with. */
+function countryTagOf(currentFile: string | undefined): string | undefined {
+  const name = currentFile?.slice(Math.max(currentFile.lastIndexOf('/'), currentFile.lastIndexOf('\\')) + 1);
+  return name === undefined ? undefined : /^([A-Za-z0-9]{3})(?![A-Za-z0-9])/.exec(name)?.[1]?.toUpperCase();
 }
 
 function checkDecisionReference(walk: Walk, entry: Assignment): void {
@@ -336,7 +374,36 @@ function validateOobForce(walk: Walk, block: Block): void {
   }
 }
 
+/**
+ * The engine crashes on load over a war it cannot stand up: an empty file, or
+ * one that never adds an attacker, a defender and a war goal. Every vanilla war
+ * has all three; `name` is optional.
+ */
 function validateWarHistory(walk: Walk, document: Document): void {
+  if (document.entries.length === 0) {
+    walk.diagnostics.push(
+      diagnostic(
+        'error',
+        'empty-war-history',
+        'This war file is empty. The game crashes on load over an empty file under history/wars: ' +
+          'give it a dated block with add_attacker, add_defender and war_goal, or delete it.',
+        { start: 0, end: 0 },
+      ),
+    );
+    return;
+  }
+  const missing = WAR_ESSENTIALS.filter((key) => !warBlocksSet(document, key));
+  if (missing.length > 0) {
+    walk.diagnostics.push(
+      diagnostic(
+        'error',
+        'broken-war-history',
+        `This war never sets ${missing.map((key) => `'${key}'`).join(', ')} in any dated block. ` +
+          'The game crashes on load over a war under history/wars without an attacker, a defender and a war goal.',
+        { start: 0, end: 0 },
+      ),
+    );
+  }
   for (const entry of document.entries) {
     if (entry.kind !== 'assignment') {
       reportStrayEntry(walk, entry);
@@ -352,6 +419,19 @@ function validateWarHistory(walk: Walk, document: Document): void {
     }
     report(walk, entry, 'unknown-war-key', `Unknown war history key '${entry.key.value}' (expected a date block or 'name').`);
   }
+}
+
+const WAR_ESSENTIALS: readonly string[] = ['add_attacker', 'add_defender', 'war_goal'];
+
+/** Whether any dated block of the war sets the key. */
+function warBlocksSet(document: Document, key: string): boolean {
+  return document.entries.some(
+    (entry) =>
+      entry.kind === 'assignment' &&
+      entry.key.type === 'date' &&
+      entry.value.kind === 'block' &&
+      entry.value.entries.some((inner) => inner.kind === 'assignment' && inner.key.value.toLowerCase() === key),
+  );
 }
 
 function validateWarBlock(walk: Walk, block: Block): void {

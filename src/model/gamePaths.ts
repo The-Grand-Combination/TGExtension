@@ -19,3 +19,5 @@ export const TERRAIN_FILE = 'map/terrain.txt';
 export const PROVINCES_BMP = 'map/provinces.bmp';
 export const RIVERS_BMP = 'map/rivers.bmp';
 export const TERRAIN_BMP = 'map/terrain.bmp';
+export const UNIT_HISTORY_FOLDER = 'history/units';
+export const REBEL_OOB_FILE = 'history/units/REB_oob.txt';

@@ -102,3 +102,86 @@ suite('historyValidation — history files', () => {
     );
   });
 });
+
+suite('historyValidation — a capital the country does not own', () => {
+  const PROVINCES = {
+    'history/provinces/1 - One.txt': 'owner = ENG\n',
+    'history/provinces/2 - Two.txt': 'owner = FRA\n',
+    'history/provinces/3 - Three.txt': 'owner = ---\n',
+  };
+  const ENG = 'history/countries/ENG - England.txt';
+
+  function found(text: string, file: string, extra: Readonly<Record<string, string>> = PROVINCES): string[] {
+    const { document } = parseDocument(text);
+    return validateSemantics(document, 'historyCountry', buildTestIndex(extra), file).map((item) => item.code);
+  }
+
+  test('a capital the tag owns is fine', () => {
+    assert.deepStrictEqual(found('capital = 1', ENG), []);
+  });
+
+  test('a capital another tag owns is an error, on the value', () => {
+    const { document } = parseDocument('capital = 2');
+    const [finding] = validateSemantics(document, 'historyCountry', buildTestIndex(PROVINCES), ENG);
+    assert.strictEqual(finding?.code, 'capital-not-owned');
+    assert.strictEqual(finding.severity, 'error');
+    assert.match(finding.message, /ENG does not own its capital: province 2 is owned by FRA/);
+    assert.strictEqual('capital = 2'.slice(finding.range.start, finding.range.end), '2');
+  });
+
+  test('a capital nobody owns is an error too', () => {
+    assert.deepStrictEqual(found('capital = 3', ENG), ['capital-not-owned']);
+  });
+
+  test('a tag that owns no province is a releasable country, and its capital is left alone', () => {
+    assert.deepStrictEqual(found('capital = 2', 'history/countries/SCO - Scotland.txt'), []);
+  });
+
+  test('a capital inside a dated block is a later change, not the start', () => {
+    assert.deepStrictEqual(found('capital = 1\n1861.1.1 = { capital = 2 }', ENG), []);
+  });
+
+  test('the tag comes from the file name, whatever the case', () => {
+    assert.deepStrictEqual(found('capital = 2', 'history/countries/eng - England.txt'), ['capital-not-owned']);
+  });
+
+  test('without province history in the stack there is nothing to check against', () => {
+    assert.deepStrictEqual(found('capital = 2', ENG, {}), []);
+  });
+});
+
+suite('historyValidation — a war the game cannot load', () => {
+  const WAR = 'history/wars/x.txt';
+  const war = (text: string): string[] => codes(text, 'historyWars', WAR);
+
+  test('an empty file is an error: the game crashes over it', () => {
+    assert.deepStrictEqual(war(''), ['empty-war-history']);
+    assert.deepStrictEqual(war('# only a comment\n'), ['empty-war-history']);
+  });
+
+  test('a war without an attacker, a defender or a goal is an error naming what is missing', () => {
+    assert.deepStrictEqual(war('name = "x"\n1861.1.1 = { add_attacker = ENG }'), ['broken-war-history']);
+    const { document } = parseDocument('1861.1.1 = { add_attacker = ENG }');
+    const [finding] = validateSemantics(document, 'historyWars', index, WAR);
+    assert.match(finding?.message ?? '', /never sets 'add_defender', 'war_goal'/);
+    assert.deepStrictEqual(finding?.range, { start: 0, end: 0 });
+  });
+
+  test('a name alone is not a war', () => {
+    assert.deepStrictEqual(war('name = "The Empty War"'), ['broken-war-history']);
+  });
+
+  test('the essentials may be spread over several dated blocks', () => {
+    const text = `1861.1.1 = { add_attacker = ENG }
+      1861.2.1 = { add_defender = FRA }
+      1861.3.1 = { war_goal = { casus_belli = acquire_all_cores actor = ENG receiver = FRA } }`;
+    assert.deepStrictEqual(war(text), []);
+  });
+
+  test('an attacker at the top level does not count: the engine reads it inside a date', () => {
+    assert.deepStrictEqual(
+      war('add_attacker = ENG\n1861.1.1 = { add_defender = FRA war_goal = { casus_belli = acquire_all_cores } }'),
+      ['broken-war-history', 'unknown-war-key'],
+    );
+  });
+});

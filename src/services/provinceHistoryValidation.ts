@@ -74,6 +74,9 @@ export function* provinceHistoryAuditUnits(input: ProvinceHistoryAuditInput, int
     if (missing.length > 0) {
       addTo(into.byFile, reportedOn(claiming), incomplete(province, claiming, missing));
     }
+    for (const twins of contentFilesByLayer(claiming)) {
+      addTo(into.byFile, reportedOn(twins), duplicated(province, twins));
+    }
     yield claiming.reduce((size, file) => size + file.text.length, 0);
   }
 }
@@ -99,6 +102,25 @@ function filesByProvinceId(files: readonly LoadedLayeredFile[]): ReadonlyMap<str
 function provinceIdOf(relativePath: string): string | undefined {
   const name = relativePath.slice(relativePath.lastIndexOf('/') + 1);
   return name.toLowerCase().endsWith('.txt') ? /^(\d+)/.exec(name)?.[1] : undefined;
+}
+
+function contentFilesByLayer(claiming: readonly LoadedLayeredFile[]): LoadedLayeredFile[][] {
+  const byLayer = new Map<string, LoadedLayeredFile[]>();
+  for (const file of claiming) {
+    if (file.document().entries.length === 0) {
+      continue;
+    }
+    const layer = layerRootOf(file);
+    const twins = byLayer.get(layer) ?? [];
+    twins.push(file);
+    byLayer.set(layer, twins);
+  }
+  return [...byLayer.values()].filter((twins) => twins.length > 1);
+}
+
+/** The layer's folder: the absolute path with the mod-relative path taken off its end. */
+function layerRootOf(file: LoadedLayeredFile): string {
+  return file.absolutePath.slice(0, file.absolutePath.length - file.relativePath.length);
 }
 
 /** The top-level keys every file claiming the province sets between them. */
@@ -148,6 +170,18 @@ function incomplete(
     `${describeProvince(province)} does not set ${list(missing)}. A land province needs both "life_rating" and ` +
       '"trade_goods": without the first it takes no migrants, without the second it produces nothing.' +
       alsoClaimed,
+    { start: 0, end: 0 },
+  );
+}
+
+function duplicated(province: DeclaredProvince, twins: readonly LoadedLayeredFile[]): Diagnostic {
+  const others = twins.slice(0, -1).map((file) => `"${file.relativePath}"`);
+  return diagnostic(
+    'error',
+    'duplicate-province-history',
+    `${describeProvince(province)} has ${String(twins.length)} files with content in the same mod: this one and ` +
+      `${others.join(', ')}. The engine reads them all, so the province gets both histories merged. Keep one file; ` +
+      'a second file for the same id may stay only if it is empty.',
     { start: 0, end: 0 },
   );
 }

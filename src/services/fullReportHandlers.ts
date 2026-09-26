@@ -10,6 +10,8 @@ import {
   POPS_FOLDER,
   PROVINCE_DEFINITION_FILE,
   PROVINCE_HISTORY_FOLDER,
+  REBEL_OOB_FILE,
+  UNIT_HISTORY_FOLDER,
 } from '../model/gamePaths.js';
 import { NEVER_CANCELLED, throwIfCancelled, type CancelSignal } from '../model/cancellation.js';
 import type { ModDescriptor } from '../model/modDescriptor.js';
@@ -35,6 +37,7 @@ import {
 } from './modLayers.js';
 import { reportHeading, type ModStackHost } from './modStackHost.js';
 import { auditPops, popsDiagnostics } from './popsValidation.js';
+import { auditRebelOob } from './rebelOobValidation.js';
 import { emptyAudit, provinceHistoryAuditUnits } from './provinceHistoryValidation.js';
 import { readInBatches, YieldBudget } from './scheduling.js';
 import { renderReportText } from './reportText.js';
@@ -110,7 +113,7 @@ async function crossFileFindings(
     ...(await flagFindings(host, target, countries)),
     ...(await greatPowerFindings(host, target, index, countries, provinceFiles, signal)),
     ...(await provinceHistoryFindings(host, target, index, provinceFiles, signal)),
-    ...(await popsFindings(host, target)),
+    ...(await descriptorFindings(host, target)),
   ].filter((entry) => entry.diagnostics.length > 0);
 }
 
@@ -190,12 +193,12 @@ function essentialTagFindings(
 }
 
 /**
- * The pops audit, reported on the mod's `.mod` file: the missing files are a
- * fact about a folder, and the descriptor is the one file that stands for the
- * mod as a whole. It is anchored on the `replace_path` that hid the base game's
- * pops when there is one, since that line is what made them the mod's to own.
+ * The audits about a folder rather than a file — the pops set and the rebels'
+ * order of battle — reported on the mod's `.mod` file, the one file that stands
+ * for the mod as a whole. Each is anchored on the `replace_path` line that made
+ * the folder the mod's to own when there is one, and on the first line otherwise.
  */
-async function popsFindings(host: FullReportHost, target: FileLocation): Promise<ExtraFileFindings[]> {
+async function descriptorFindings(host: FullReportHost, target: FileLocation): Promise<ExtraFileFindings[]> {
   const descriptorPath = host.descriptorOf(target.root)?.descriptorPath;
   if (descriptorPath === undefined) {
     return [];
@@ -204,20 +207,31 @@ async function popsFindings(host: FullReportHost, target: FileLocation): Promise
   if (text === undefined) {
     return [];
   }
-  const audit = auditPops(listLayeredFilesRecursive(target.layers, host.fileSystem, POPS_FOLDER));
+  const pops = auditPops(listLayeredFilesRecursive(target.layers, host.fileSystem, POPS_FOLDER));
   return [
     {
       path: relativeToRoot(target.root, descriptorPath),
       uri: host.fileUri(descriptorPath),
       text,
-      diagnostics: popsDiagnostics(audit, replacePathRange(text)),
+      diagnostics: [
+        ...popsDiagnostics(pops, replacePathRange(text, POPS_FOLDER)),
+        ...auditRebelOob(modLayersHave(host, target.layers, REBEL_OOB_FILE), replacePathRange(text, UNIT_HISTORY_FOLDER)),
+      ],
     },
   ];
 }
 
-/** The `replace_path` line that hid the base game's pops, or the start of the file when there is none. */
-function replacePathRange(descriptorText: string): Range {
-  const match = /^[ \t]*replace_path[ \t]*=[ \t]*"history(?:\/pops[^"]*)?"/im.exec(descriptorText);
+/** Whether a mod layer — never the game root — ships the file. */
+function modLayersHave(host: FullReportHost, layers: ModLayers, relativePath: string): boolean {
+  return layers.roots
+    .filter((root) => root !== layers.gameRoot)
+    .some((root) => host.fileSystem.fileExists(path.join(root, relativePath)));
+}
+
+/** The `replace_path` line that hid the base game's copy of the folder, or the start of the file when there is none. */
+function replacePathRange(descriptorText: string, folder: string): Range {
+  const pattern = new RegExp(`^[ \t]*replace_path[ \t]*=[ \t]*"(?:history|${folder}[^"]*)"`, 'im');
+  const match = pattern.exec(descriptorText);
   return match ? { start: match.index, end: match.index + match[0].length } : { start: 0, end: 0 };
 }
 

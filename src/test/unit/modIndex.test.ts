@@ -301,3 +301,66 @@ suite('modIndex — reusing the last build', () => {
     assert.strictEqual(second.index.locKeyDefinitions.get('shared')?.text, 'First');
   });
 });
+
+suite('modIndex — who owns each province at the start date', () => {
+  const owners = (extra: Readonly<Record<string, string>>): ReadonlyMap<string, string> =>
+    buildTestIndex(extra).ownerOfProvince;
+
+  test('the top-level owner, from files in any subfolder, uppercased', () => {
+    const found = owners({
+      'history/provinces/europe/1 - One.txt': 'owner = eng\n',
+      'history/provinces/2 - Two.txt': 'owner = FRA\n',
+    });
+    assert.deepStrictEqual([...found], [['1', 'ENG'], ['2', 'FRA']]);
+  });
+
+  test('a dated block up to the start date changes the owner; a later one does not', () => {
+    const found = owners({
+      'history/provinces/1 - One.txt': 'owner = ENG\n1861.1.1 = { owner = PRU }\n1830.1.1 = { owner = FRA }\n',
+    });
+    assert.strictEqual(found.get('1'), 'FRA');
+  });
+
+  test('start_date in defines.lua decides which dated blocks count', () => {
+    const found = owners({
+      'common/defines.lua': "defines = { start_date = '1861.1.1' }\n",
+      'history/provinces/1 - One.txt': 'owner = ENG\n1861.1.1 = { owner = PRU }\n',
+    });
+    assert.strictEqual(found.get('1'), 'PRU');
+  });
+
+  test('--- and null leave the province unowned', () => {
+    const found = owners({
+      'history/provinces/1 - One.txt': 'owner = ---\n',
+      'history/provinces/2 - Two.txt': 'owner = ENG\n1830.1.1 = { owner = null }\n',
+    });
+    assert.deepStrictEqual([...found], []);
+  });
+
+  test('a later file claiming the same id has the final say, as the engine reads them all', () => {
+    const found = owners({
+      'history/provinces/a/1 - One.txt': 'owner = ENG\n',
+      'history/provinces/b/1 - One.txt': 'owner = FRA\n',
+    });
+    assert.strictEqual(found.get('1'), 'FRA');
+  });
+
+  test('a file that never mentions owner leaves the earlier answer alone', () => {
+    const found = owners({
+      'history/provinces/a/1 - One.txt': 'owner = ENG\n',
+      'history/provinces/b/1 - One.txt': 'life_rating = 30\n',
+    });
+    assert.strictEqual(found.get('1'), 'ENG');
+  });
+
+  test('a file whose name starts with no digits owns nothing', () => {
+    assert.deepStrictEqual([...owners({ 'history/provinces/README.txt': 'owner = ENG\n' })], []);
+  });
+
+  test('a reuse recomputes the owner even for files it did not read again', async () => {
+    const tree = files({ 'history/provinces/1 - One.txt': 'owner = ENG\n' });
+    const first = await build(tree);
+    const second = await build(tree, { carry: first.carry, changed: new Set() });
+    assert.strictEqual(second.index.ownerOfProvince.get('1'), 'ENG');
+  });
+});

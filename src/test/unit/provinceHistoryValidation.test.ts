@@ -18,9 +18,9 @@ const DEFINITION = [
 
 const COMPLETE = 'owner = ENG\nlife_rating = 35\ntrade_goods = cattle\n';
 
-function file(relativePath: string, text: string): LoadedLayeredFile {
+function file(relativePath: string, text: string, root = '/mod/'): LoadedLayeredFile {
   return loadLayeredFile(
-    { relativePath: `history/provinces/${relativePath}`, absolutePath: `/mod/history/provinces/${relativePath}` },
+    { relativePath: `history/provinces/${relativePath}`, absolutePath: `${root}history/provinces/${relativePath}` },
     text,
   );
 }
@@ -126,8 +126,9 @@ suite('provinceHistoryValidation — the two required keys', () => {
 
 suite('provinceHistoryValidation — provinces described by more than one file', () => {
   // The engine loads every file claiming an id; vanilla itself ships two for 1396.
+  // These sit in different mods: two with content in one mod is its own finding.
   const twice = (first: string, second: string): LoadedLayeredFile[] => [
-    file('a/1 - Sitka.txt', first),
+    file('a/1 - Sitka.txt', first, '/game/'),
     file('b/1 - Sitka again.txt', second),
     file('2 - Yakutat.txt', COMPLETE),
   ];
@@ -151,6 +152,52 @@ suite('provinceHistoryValidation — provinces described by more than one file',
   test('one file alone says nothing about others', () => {
     const result = audit([file('1 - Sitka.txt', 'owner = ENG\n'), file('2 - Yakutat.txt', COMPLETE)]);
     assert.ok(!(result.byFile.get('history/provinces/1 - Sitka.txt')?.[0]?.message ?? '').includes('more file'));
+  });
+});
+
+suite('provinceHistoryValidation — two files with content in one mod', () => {
+  const yakutat = file('2 - Yakutat.txt', COMPLETE);
+
+  test('two files with content for one id in the same mod is an error, on the last one', () => {
+    const result = audit([file('a/1 - Sitka.txt', COMPLETE), file('b/1 - Sitka.txt', 'owner = ENG\n'), yakutat]);
+    const [finding] = result.byFile.get('history/provinces/b/1 - Sitka.txt') ?? [];
+    assert.strictEqual(finding?.code, 'duplicate-province-history');
+    assert.strictEqual(finding.severity, 'error');
+    assert.match(finding.message, /2 files with content in the same mod/);
+    assert.match(finding.message, /"history\/provinces\/a\/1 - Sitka\.txt"/);
+  });
+
+  test('an empty twin is the neutralising idiom and is allowed', () => {
+    const result = audit([file('a/1 - Sitka.txt', COMPLETE), file('b/1 - Sitka.txt', ''), yakutat]);
+    assert.deepStrictEqual(allCodes(result), []);
+  });
+
+  test('a file of only comments is empty', () => {
+    const result = audit([file('a/1 - Sitka.txt', COMPLETE), file('b/1 - Sitka.txt', '# nothing\n'), yakutat]);
+    assert.deepStrictEqual(allCodes(result), []);
+  });
+
+  test('the same id with content in two different mods is the layering the game expects', () => {
+    const result = audit([file('a/1 - Sitka.txt', COMPLETE), file('b/1 - Sitka.txt', COMPLETE, '/game/'), yakutat]);
+    assert.deepStrictEqual(allCodes(result), []);
+  });
+
+  test('three files with content in one mod is one finding naming the other two', () => {
+    const result = audit([
+      file('a/1 - Sitka.txt', COMPLETE),
+      file('b/1 - Sitka.txt', COMPLETE),
+      file('c/1 - Sitka.txt', COMPLETE),
+      yakutat,
+    ]);
+    assert.deepStrictEqual(allCodes(result), ['duplicate-province-history']);
+    const message = result.byFile.get('history/provinces/c/1 - Sitka.txt')?.[0]?.message ?? '';
+    assert.match(message, /3 files with content/);
+    assert.match(message, /"history\/provinces\/a\/1 - Sitka\.txt", "history\/provinces\/b\/1 - Sitka\.txt"/);
+  });
+
+  test('a province declared nowhere is not judged, however many files it has', () => {
+    const result = audit([...BOTH_PROVINCES, file('a/5 - Nowhere.txt', COMPLETE), file('b/5 - Nowhere.txt', COMPLETE)]);
+    assert.deepStrictEqual(allCodes(result), []);
   });
 });
 
