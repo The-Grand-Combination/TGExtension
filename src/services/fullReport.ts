@@ -26,6 +26,7 @@ export const REPORT_FOLDERS: readonly string[] = [
   'news',
   'history',
   'map',
+  'localisation',
 ];
 
 /**

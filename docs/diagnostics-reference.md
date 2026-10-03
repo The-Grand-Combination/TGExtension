@@ -180,6 +180,14 @@ Shared codes reused here with map-specific messages: `unknown-field`, `unknown-m
 | `ignored-adjacency` | warning | A row with `To <= 0` and a type other than `impassable`; the engine skips it. |
 | `invalid-canal` | error | A `canal` row lacks the canal province in `Through` or a canal id above zero in `Data`. |
 
+## Localisation (`localisationValidation.ts`)
+
+Runs on every `localisation/**/*.csv`, open in the editor and in the Full Report.
+
+| Code | Severity | Meaning |
+|---|---|---|
+| `event-desc-too-long` | warning | A language column of a key matching `victorianTools.localisation.eventDescPattern` (default `^EVTDESC`) is longer than `victorianTools.localisation.eventDescMaxLength` (default 1000 characters). The event window draws the description in a box of fixed size, so the text will probably overflow it. Reported on the column, once per language. An empty pattern measures every key. |
+
 ## Map bitmaps (`mapImageAudit.ts`, `riverAnalysis.ts`) — Map Report only
 
 Reported by the side bar action **Map Report**, one section per mod, with pixel positions (x, y from

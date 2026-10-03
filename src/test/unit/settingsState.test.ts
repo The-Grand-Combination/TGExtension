@@ -22,11 +22,15 @@ function current(
   provinceFolderPattern = '',
   nullTagSuppress = true,
   paintUndoSteps = 20,
+  eventDescPattern = '^EVTDESC',
+  eventDescMaxLength = 1000,
 ): CurrentSettings {
   return {
     gamePathSetting,
     selected,
     locKeyPattern,
+    eventDescPattern,
+    eventDescMaxLength,
     flagNamePattern,
     nullTagPattern,
     nullTagSuppress,

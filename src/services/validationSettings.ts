@@ -7,6 +7,8 @@ import { compilePattern, type ValidationOptions } from '../model/validationOptio
  */
 export interface ValidationSettingsSource {
   readonly locKeyPattern: string;
+  readonly eventDescPattern: string;
+  readonly eventDescMaxLength: number;
   readonly flagNamePattern: string;
   readonly nullTagPattern: string;
   readonly nullTagSuppressWarnings: boolean;
@@ -26,6 +28,8 @@ export class CompiledValidationOptions {
       this.sources = sources;
       this.options = {
         locKeyPattern: compilePattern(source.locKeyPattern),
+        eventDescPattern: compilePattern(source.eventDescPattern),
+        eventDescMaxLength: source.eventDescMaxLength,
         flagNamePattern: compilePattern(source.flagNamePattern),
         nullTagPattern: compilePattern(source.nullTagPattern, this.nullTagFlags),
         suppressNullTagWarnings: source.nullTagSuppressWarnings,
@@ -39,6 +43,8 @@ export class CompiledValidationOptions {
 function sourcesOf(source: ValidationSettingsSource): readonly string[] {
   return [
     source.locKeyPattern,
+    source.eventDescPattern,
+    String(source.eventDescMaxLength),
     source.flagNamePattern,
     source.nullTagPattern,
     String(source.nullTagSuppressWarnings),

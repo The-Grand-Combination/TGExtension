@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
 import {
+  clampEventDescMaxLength,
+  DEFAULT_EVENT_DESC_MAX_LENGTH,
+  DEFAULT_EVENT_DESC_PATTERN,
   DEFAULT_FLAG_NAME_PATTERN,
   DEFAULT_LOC_KEY_PATTERN,
   DEFAULT_IGNORE_MARKER,
@@ -50,6 +53,35 @@ export function readLocKeyPattern(): string {
 
 export function writeLocKeyPattern(pattern: string): Thenable<void> {
   return vscode.workspace.getConfiguration(SETTINGS_SECTION).update(SETTING.locKeyPattern, pattern, patternTarget());
+}
+
+/**
+ * The regex picking the loc keys measured as event descriptions, as stored in
+ * `victorianTools.localisation.eventDescPattern`. Empty measures every key.
+ */
+export function readEventDescPattern(): string {
+  const value = vscode.workspace.getConfiguration(SETTINGS_SECTION).get<unknown>(SETTING.eventDescPattern);
+  return typeof value === 'string' ? value : DEFAULT_EVENT_DESC_PATTERN;
+}
+
+export function writeEventDescPattern(pattern: string): Thenable<void> {
+  return vscode.workspace.getConfiguration(SETTINGS_SECTION).update(SETTING.eventDescPattern, pattern, patternTarget());
+}
+
+/**
+ * How many characters an event description may hold, as stored in
+ * `victorianTools.localisation.eventDescMaxLength`; clamped to the manifest bounds.
+ */
+export function readEventDescMaxLength(): number {
+  return clampEventDescMaxLength(vscode.workspace.getConfiguration(SETTINGS_SECTION).get<unknown>(SETTING.eventDescMaxLength));
+}
+
+/** A rule of the mod's text, so it goes to the workspace when there is one. */
+export function writeEventDescMaxLength(limit: number): Thenable<void> {
+  const clamped = clampEventDescMaxLength(limit);
+  return vscode.workspace
+    .getConfiguration(SETTINGS_SECTION)
+    .update(SETTING.eventDescMaxLength, clamped === DEFAULT_EVENT_DESC_MAX_LENGTH ? undefined : clamped, patternTarget());
 }
 
 /**
@@ -168,7 +200,7 @@ export function affectsMapEditorView(event: vscode.ConfigurationChangeEvent): bo
 
 /** True when a configuration change touches anything the settings page shows. */
 export function affectsSettingsPage(event: vscode.ConfigurationChangeEvent): boolean {
-  const keys = [SETTING.activeMods, SETTING.gamePath, SETTING.locKeyPattern, SETTING.flagNamePattern, SETTING.nullTagPattern, SETTING.nullTagSuppress, SETTING.ignoreMarker, SETTING.countryColorsTint, SETTING.paintUndoSteps, SETTING.provinceFolderPattern];
+  const keys = [SETTING.activeMods, SETTING.gamePath, SETTING.locKeyPattern, SETTING.eventDescPattern, SETTING.eventDescMaxLength, SETTING.flagNamePattern, SETTING.nullTagPattern, SETTING.nullTagSuppress, SETTING.ignoreMarker, SETTING.countryColorsTint, SETTING.paintUndoSteps, SETTING.provinceFolderPattern];
   return keys.some((key) => event.affectsConfiguration(qualifiedSettingKey(key)));
 }
 

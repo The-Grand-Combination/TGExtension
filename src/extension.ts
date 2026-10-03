@@ -66,6 +66,7 @@ export function activate(context: vscode.ExtensionContext): void {
       { scheme: 'file', pattern: '**/units/**/*.txt' },
       { scheme: 'file', pattern: '**/map/**/*.txt' },
       { scheme: 'file', pattern: '**/map/**/*.csv' },
+      { scheme: 'file', pattern: '**/localisation/**/*.csv' },
       { scheme: 'file', pattern: '**/map/default.map' },
       { scheme: 'file', pattern: '**/interface/**/*.txt' },
       { scheme: 'file', pattern: '**/battleplans/**/*.txt' },

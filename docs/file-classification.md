@@ -13,8 +13,9 @@ mod's own `common/` folder is ever considered.
 
 ## Order of checks
 
-0. Extension gate: anything that is not `.txt` or `.map` is `unknown`, except a `.csv` which only
-   the `map/` table below may classify (`definition.csv`, `adjacencies.csv`). A `.vbs` helper in
+0. Extension gate: anything that is not `.txt` or `.map` is `unknown`, except a `.csv`, which is
+   `localisation` under `localisation/` and otherwise only the `map/` table below may classify
+   (`definition.csv`, `adjacencies.csv`). A `.vbs` helper in
    `history/pops/`, a `.lua` in `common/`, or a `.bmp` in `map/` never reaches a file validator
    (the map bitmaps are read by the side bar's Map Report, [map-images.md](map-images.md)).
 1. `events/` anywhere in the path → `event`
@@ -92,6 +93,12 @@ server skips the script parser for them and hands the raw text to the CSV valida
 | `positions.txt` | `mapPositions` |
 | any other `map/**/*.txt` (`province_flag_sprites/*.txt`, `trees.txt`) | `mapOther` (syntax only) |
 | any other extension (`.bmp`, other `.csv`) | `unknown` (`.bmp`: the Map Report action) |
+
+## `localisation`
+
+Every `localisation/**/*.csv` is `localisation`. It is CSV, never script: the server hands the raw
+text to `localisationValidation.ts` (the event description length check, see
+[diagnostics-reference.md](diagnostics-reference.md)), and the Full Report scans the folder.
 
 ## `commonOther`
 

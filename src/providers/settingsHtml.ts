@@ -26,6 +26,10 @@ export interface SettingsState {
   readonly order: readonly string[];
   /** `victorianTools.localisation.keyPattern`; empty means every value is checked. */
   readonly locKeyPattern: string;
+  /** `victorianTools.localisation.eventDescPattern`; empty means every key is measured. */
+  readonly eventDescPattern: string;
+  /** `victorianTools.localisation.eventDescMaxLength`, in characters. */
+  readonly eventDescMaxLength: number;
   /** `victorianTools.flags.namePattern`; empty means every flag is checked. */
   readonly flagNamePattern: string;
   /** `victorianTools.nullTags.pattern`; empty means no tag is treated as null. */
@@ -47,6 +51,8 @@ export interface CurrentSettings {
   readonly gamePathSetting: string;
   readonly selected: readonly string[];
   readonly locKeyPattern: string;
+  readonly eventDescPattern: string;
+  readonly eventDescMaxLength: number;
   readonly flagNamePattern: string;
   readonly nullTagPattern: string;
   readonly nullTagSuppress: boolean;
@@ -68,6 +74,8 @@ export function settingsState(installed: ModsResult, current: CurrentSettings): 
     selected: current.selected,
     order: stack.map((mod) => mod.name),
     locKeyPattern: current.locKeyPattern,
+    eventDescPattern: current.eventDescPattern,
+    eventDescMaxLength: current.eventDescMaxLength,
     flagNamePattern: current.flagNamePattern,
     nullTagPattern: current.nullTagPattern,
     nullTagSuppress: current.nullTagSuppress,
@@ -103,8 +111,8 @@ function entryOf(mod: ModDescriptor): ModEntry {
  * the Map Editor tint and the mod selection) and **Regex Patterns** (every field
  * that is a regular expression). It holds no data of its own beyond which tab is
  * open: it renders the `state` messages it receives and posts `gamePath`,
- * `browse`, `select`, `locKeyPattern`, `flagNamePattern`, `nullTagPattern`,
- * `provinceFolderPattern`, `ignoreMarker`, `countryColorsTint`, `paintUndoSteps` or `refresh`.
+ * `browse`, `select`, `locKeyPattern`, `eventDescPattern`, `eventDescMaxLength`, `flagNamePattern`,
+ * `nullTagPattern`, `provinceFolderPattern`, `ignoreMarker`, `countryColorsTint`, `paintUndoSteps` or `refresh`.
  * Styling uses the editor's theme variables.
  */
 export function settingsHtml(cspSource: string): string {
@@ -186,6 +194,14 @@ export function settingsHtml(cspSource: string): string {
 </div>
 <div id="ignoreStatus" class="status"></div>
 
+<h2>Event description length limit</h2>
+<p class="hint">How many characters an event description may hold before <code>event-desc-too-long</code> warns. The event window draws the text in a box of fixed size, so a longer description probably overflows it. Measured on the keys the <b>Event description pattern</b> matches (Regex Patterns tab), in every language column. Default <code>1000</code>. (<code>victorianTools.localisation.eventDescMaxLength</code>)</p>
+<div class="field">
+  <input id="eventDescLimit" type="range" min="100" max="5000" step="50">
+  <span id="eventDescLimitValue" class="value"></span>
+  <button id="eventDescLimitDefault" class="secondary">Default</button>
+</div>
+
 <h2>Map Editor: Country Colors tint</h2>
 <p class="hint">How much of a province's colour comes from its owner when the <b>Country Colors</b> layer is on. <code>0</code> shows the plain map; <code>100</code> paints a whole country alike. Default <code>82</code>. (<code>victorianTools.mapEditor.countryColorsTint</code>)</p>
 <div class="field">
@@ -218,6 +234,15 @@ export function settingsHtml(cspSource: string): string {
   <button id="locSave" class="secondary">Save</button>
 </div>
 <div id="locStatus" class="status"></div>
+
+<h2>Event description pattern</h2>
+<p class="hint">Which <code>localisation/*.csv</code> keys are event descriptions, measured against the <b>Event description length limit</b> (Extension tab). A key that does not match is never measured. Empty measures every key. Default <code>^EVTDESC</code>. (<code>victorianTools.localisation.eventDescPattern</code>)</p>
+<div class="field">
+  <input id="eventDescPattern" type="text" placeholder="Empty: measure every key" spellcheck="false">
+  <button id="eventDescDefault" class="secondary">Default</button>
+  <button id="eventDescSave" class="secondary">Save</button>
+</div>
+<div id="eventDescStatus" class="status"></div>
 
 <h2>Flag name pattern</h2>
 <p class="hint">Which flags the never-set check applies to. A flag whose name does not match is exempt &mdash; for flags the mod sets outside the indexed files. Empty checks every flag. (<code>victorianTools.flags.namePattern</code>)</p>
@@ -335,6 +360,16 @@ export function settingsHtml(cspSource: string): string {
       matching: 'Checking values that match'
     });
 
+  const renderEventDescPattern = patternField(
+    { input: 'eventDescPattern', status: 'eventDescStatus', save: 'eventDescSave', reset: 'eventDescDefault' },
+    'eventDescPattern',
+    '^EVTDESC',
+    {
+      empty: 'Every localisation key is measured against the length limit.',
+      invalid: 'measure every key',
+      matching: 'Measuring keys that match'
+    });
+
   const renderFlagPattern = patternField(
     { input: 'flagPattern', status: 'flagStatus', save: 'flagSave', reset: 'flagDefault' },
     'flagNamePattern',
@@ -434,6 +469,17 @@ export function settingsHtml(cspSource: string): string {
     if (document.activeElement !== nullTagSuppress) nullTagSuppress.checked = value;
   }
 
+  const eventDescLimit = document.getElementById('eventDescLimit');
+  const eventDescLimitValue = document.getElementById('eventDescLimitValue');
+  const showEventDescLimit = () => { eventDescLimitValue.textContent = eventDescLimit.value; };
+  eventDescLimit.addEventListener('input', showEventDescLimit);
+  eventDescLimit.addEventListener('change', () => vscode.postMessage({ type: 'eventDescMaxLength', value: Number(eventDescLimit.value) }));
+  document.getElementById('eventDescLimitDefault').addEventListener('click', () => { eventDescLimit.value = '1000'; showEventDescLimit(); vscode.postMessage({ type: 'eventDescMaxLength', value: 1000 }); });
+  function renderEventDescLimit(value) {
+    if (document.activeElement !== eventDescLimit) eventDescLimit.value = String(value);
+    showEventDescLimit();
+  }
+
   const tint = document.getElementById('tint');
   const tintValue = document.getElementById('tintValue');
   const showTint = () => { tintValue.textContent = tint.value + '%'; };
@@ -458,6 +504,8 @@ export function settingsHtml(cspSource: string): string {
       selected = new Set(state.selected);
       renderGame();
       renderLocPattern(state.locKeyPattern);
+      renderEventDescPattern(state.eventDescPattern);
+      renderEventDescLimit(state.eventDescMaxLength);
       renderFlagPattern(state.flagNamePattern);
       renderNullTagPattern(state.nullTagPattern);
       renderNullTagSuppress(state.nullTagSuppress);

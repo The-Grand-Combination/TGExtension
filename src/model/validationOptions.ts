@@ -7,6 +7,13 @@ export interface ValidationOptions {
    */
   readonly locKeyPattern: RegExp | undefined;
   /**
+   * Which localisation keys are event descriptions, measured against
+   * `eventDescMaxLength`. `undefined` measures every key.
+   */
+  readonly eventDescPattern: RegExp | undefined;
+  /** Characters an event description may hold before the event window likely overflows. */
+  readonly eventDescMaxLength: number;
+  /**
    * Which country/global flag names the never-set check applies to. A flag
    * whose name does not match is not reported. `undefined` checks every flag.
    */
@@ -34,6 +41,23 @@ export interface ValidationOptions {
 /** Mirrors the manifest default of `victorianTools.localisation.keyPattern`. */
 export const DEFAULT_LOC_KEY_PATTERN = '^EVT';
 
+/** Mirrors the manifest default of `victorianTools.localisation.eventDescPattern`. */
+export const DEFAULT_EVENT_DESC_PATTERN = '^EVTDESC';
+
+/** Mirrors the manifest default of `victorianTools.localisation.eventDescMaxLength`. */
+export const DEFAULT_EVENT_DESC_MAX_LENGTH = 1000;
+
+/** The bounds the manifest sets on `victorianTools.localisation.eventDescMaxLength`. */
+export const EVENT_DESC_MAX_LENGTH_RANGE = { min: 100, max: 5000 } as const;
+
+/** A length read from any source: rounded and kept inside the manifest bounds; the default when it is not a number. */
+export function clampEventDescMaxLength(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return DEFAULT_EVENT_DESC_MAX_LENGTH;
+  }
+  return Math.min(EVENT_DESC_MAX_LENGTH_RANGE.max, Math.max(EVENT_DESC_MAX_LENGTH_RANGE.min, Math.round(value)));
+}
+
 /** Mirrors the manifest default of `victorianTools.flags.namePattern`: every flag. */
 export const DEFAULT_FLAG_NAME_PATTERN = '';
 
@@ -55,6 +79,8 @@ export const DEFAULT_IGNORE_MARKER = '#VT - Skip Validation';
 
 export const DEFAULT_VALIDATION_OPTIONS: ValidationOptions = {
   locKeyPattern: new RegExp(DEFAULT_LOC_KEY_PATTERN),
+  eventDescPattern: new RegExp(DEFAULT_EVENT_DESC_PATTERN),
+  eventDescMaxLength: DEFAULT_EVENT_DESC_MAX_LENGTH,
   flagNamePattern: undefined,
   nullTagPattern: new RegExp(DEFAULT_NULL_TAG_PATTERN, NULL_TAG_FLAGS),
   suppressNullTagWarnings: DEFAULT_SUPPRESS_NULL_TAG_WARNINGS,

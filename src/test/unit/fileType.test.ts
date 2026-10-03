@@ -36,6 +36,8 @@ suite('fileType — classifyFile', () => {
     assert.strictEqual(classifyFile('map/province_flag_sprites/suez_canal.txt'), 'mapOther');
     assert.strictEqual(classifyFile('map/trees.txt'), 'mapOther');
     assert.strictEqual(classifyFile('map/other.csv'), 'unknown');
+    assert.strictEqual(classifyFile('localisation/text.csv'), 'localisation');
+    assert.strictEqual(classifyFile('F:\\game\\mod\\TGC\\localisation\\extra\\events.csv'), 'localisation');
     assert.strictEqual(classifyFile('map/provinces.bmp'), 'unknown');
     assert.strictEqual(classifyFile('f:/SteamLibrary/steamapps/common/Victoria 2/mod/TGC/map/Region.txt'), 'mapRegion');
   });

@@ -8,6 +8,8 @@ import {
 
 const SETTINGS: ValidationSettingsSource = {
   locKeyPattern: '^EVT',
+  eventDescPattern: '^EVTDESC',
+  eventDescMaxLength: 1000,
   flagNamePattern: '',
   nullTagPattern: '^(QQQ)$',
   nullTagSuppressWarnings: true,

@@ -2,7 +2,7 @@
   "name": "victorian-tools",
   "displayName": "Victorian Tools",
   "description": "Tooling for Victoria 2 mod files: a language server that parses Paradox script and validates it inline.",
-  "version": "5.0.0",
+  "version": "5.1.0",
   "publisher": "TGCModdingTeam",
   "private": true,
   "license": "MIT",
@@ -192,6 +192,18 @@
       "type": "string",
       "default": "^EVT",
       "markdownDescription": "Regular expression deciding which `title` / `desc` / `name` values are localisation keys. A value that does not match is treated as literal display text and never reported as a missing key, so `desc = \"Death of Dom Pedro II\"` stays silent while `desc = \"EVTDESC48300\"` is still checked against `localisation/`. Leave empty to check every value."
+    },
+    "victorianTools.localisation.eventDescPattern": {
+      "type": "string",
+      "default": "^EVTDESC",
+      "markdownDescription": "Regular expression picking the `localisation/*.csv` keys that are event descriptions, whose text is measured against `victorianTools.localisation.eventDescMaxLength`. A key that does not match is never measured. Leave empty to measure every key."
+    },
+    "victorianTools.localisation.eventDescMaxLength": {
+      "type": "number",
+      "default": 1000,
+      "minimum": 100,
+      "maximum": 5000,
+      "markdownDescription": "How many characters an event description may hold before the extension warns (`event-desc-too-long`). The event window draws the text in a fixed box, so a longer description probably overflows it. Applies to the keys `victorianTools.localisation.eventDescPattern` matches, in every language column."
     },
     "victorianTools.flags.namePattern": {
       "type": "string",

@@ -461,6 +461,8 @@ suite('serverConfig', () => {
       activeMods: [],
       encoding: 'windows-1252',
       locKeyPattern: '^EVT',
+      eventDescPattern: '^EVTDESC',
+      eventDescMaxLength: 1000,
       flagNamePattern: '',
       nullTagPattern: '^(QQQ|---|null)$',
       nullTagSuppressWarnings: true,

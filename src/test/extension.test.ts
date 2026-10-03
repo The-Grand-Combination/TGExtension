@@ -5,6 +5,8 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   DEFAULT_FLAG_NAME_PATTERN,
+  DEFAULT_EVENT_DESC_MAX_LENGTH,
+  DEFAULT_EVENT_DESC_PATTERN,
   DEFAULT_LOC_KEY_PATTERN,
   DEFAULT_IGNORE_MARKER,
   DEFAULT_NULL_TAG_PATTERN,
@@ -148,6 +150,8 @@ suite('Victorian Tools — integration', () => {
       [SETTING.activeMods]: [],
       [SETTING.encoding]: DEFAULT_CODEPAGE,
       [SETTING.locKeyPattern]: DEFAULT_LOC_KEY_PATTERN,
+      [SETTING.eventDescPattern]: DEFAULT_EVENT_DESC_PATTERN,
+      [SETTING.eventDescMaxLength]: DEFAULT_EVENT_DESC_MAX_LENGTH,
       [SETTING.flagNamePattern]: DEFAULT_FLAG_NAME_PATTERN,
       [SETTING.nullTagPattern]: DEFAULT_NULL_TAG_PATTERN,
       [SETTING.nullTagSuppress]: DEFAULT_SUPPRESS_NULL_TAG_WARNINGS,

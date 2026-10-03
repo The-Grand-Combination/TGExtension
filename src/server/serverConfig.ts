@@ -1,5 +1,8 @@
 import type { Connection } from 'vscode-languageserver/node';
 import {
+  clampEventDescMaxLength,
+  DEFAULT_EVENT_DESC_MAX_LENGTH,
+  DEFAULT_EVENT_DESC_PATTERN,
   DEFAULT_FLAG_NAME_PATTERN,
   DEFAULT_LOC_KEY_PATTERN,
   DEFAULT_IGNORE_MARKER,
@@ -27,6 +30,10 @@ export interface ServerConfig {
   readonly encoding: Codepage;
   /** Regex source deciding which loc field values are keys; empty checks every value. */
   readonly locKeyPattern: string;
+  /** Regex source picking the loc keys measured as event descriptions; empty measures every key. */
+  readonly eventDescPattern: string;
+  /** Characters an event description may hold before it is reported. */
+  readonly eventDescMaxLength: number;
   /** Regex source narrowing the never-set flag check; empty checks every flag. */
   readonly flagNamePattern: string;
   /** Regex source of the tags meaning "no country"; empty allows no exception. */
@@ -48,6 +55,8 @@ export const DEFAULT_CONFIG: ServerConfig = {
   activeMods: [],
   encoding: DEFAULT_CODEPAGE,
   locKeyPattern: DEFAULT_LOC_KEY_PATTERN,
+  eventDescPattern: DEFAULT_EVENT_DESC_PATTERN,
+  eventDescMaxLength: DEFAULT_EVENT_DESC_MAX_LENGTH,
   flagNamePattern: DEFAULT_FLAG_NAME_PATTERN,
   nullTagPattern: DEFAULT_NULL_TAG_PATTERN,
   nullTagSuppressWarnings: DEFAULT_SUPPRESS_NULL_TAG_WARNINGS,
@@ -82,6 +91,8 @@ export function readServerConfig(configuration: unknown): ServerConfig {
     activeMods: readStringList(at(root, SETTING.activeMods)),
     encoding: readCodepage(at(root, SETTING.encoding)),
     locKeyPattern: readPattern(at(root, SETTING.locKeyPattern), DEFAULT_LOC_KEY_PATTERN),
+    eventDescPattern: readPattern(at(root, SETTING.eventDescPattern), DEFAULT_EVENT_DESC_PATTERN),
+    eventDescMaxLength: clampEventDescMaxLength(at(root, SETTING.eventDescMaxLength)),
     flagNamePattern: readPattern(at(root, SETTING.flagNamePattern), DEFAULT_FLAG_NAME_PATTERN),
     nullTagPattern: readPattern(at(root, SETTING.nullTagPattern), DEFAULT_NULL_TAG_PATTERN),
     nullTagSuppressWarnings: readBoolean(
@@ -133,6 +144,8 @@ export function configEquals(left: ServerConfig, right: ServerConfig): boolean {
     left.indexRebuildDelayMs === right.indexRebuildDelayMs &&
     left.indexOnStartup === right.indexOnStartup &&
     left.locKeyPattern === right.locKeyPattern &&
+    left.eventDescPattern === right.eventDescPattern &&
+    left.eventDescMaxLength === right.eventDescMaxLength &&
     left.flagNamePattern === right.flagNamePattern &&
     left.nullTagPattern === right.nullTagPattern &&
     left.nullTagSuppressWarnings === right.nullTagSuppressWarnings &&

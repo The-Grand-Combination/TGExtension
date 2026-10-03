@@ -4,6 +4,8 @@ import {
   affectsSettingsPage,
   readActiveMods,
   readCountryColorsTint,
+  readEventDescMaxLength,
+  readEventDescPattern,
   readPaintUndoSteps,
   readFlagNamePattern,
   readGamePath,
@@ -14,6 +16,8 @@ import {
   readProvinceFolderPattern,
   writeActiveMods,
   writeCountryColorsTint,
+  writeEventDescMaxLength,
+  writeEventDescPattern,
   writePaintUndoSteps,
   writeFlagNamePattern,
   writeGamePath,
@@ -32,6 +36,8 @@ type SettingsMessage =
   | { readonly type: 'browse' }
   | { readonly type: 'select'; readonly mods: readonly string[] }
   | { readonly type: 'locKeyPattern'; readonly value: string }
+  | { readonly type: 'eventDescPattern'; readonly value: string }
+  | { readonly type: 'eventDescMaxLength'; readonly value: number }
   | { readonly type: 'flagNamePattern'; readonly value: string }
   | { readonly type: 'nullTagPattern'; readonly value: string }
   | { readonly type: 'nullTagSuppress'; readonly value: boolean }
@@ -43,9 +49,10 @@ type SettingsMessage =
 
 /**
  * The **Victorian Tools Settings** editor tab, itself in two tabs: *Extension*
- * (the game folder, typed or browsed; the skip marker; the Map Editor tint; the
- * mods being worked on, in any combination) and *Regex Patterns* (localisation
- * keys, flag names, null tags and the Map Editor's province folders). All are
+ * (the game folder, typed or browsed; the skip marker; the event description
+ * length limit; the Map Editor tint; the mods being worked on, in any
+ * combination) and *Regex Patterns* (localisation keys, event descriptions,
+ * flag names, null tags and the Map Editor's province folders). All are
  * plain settings; the page redraws when they change and when the server has
  * re-read the install, so what it shows is what the server uses.
  */
@@ -111,45 +118,18 @@ export class SettingsPanel implements vscode.Disposable {
 
   private async handle(message: unknown): Promise<void> {
     const parsed = asMessage(message);
-    switch (parsed?.type) {
-      case 'gamePath':
-        await writeGamePath(parsed.value);
-        return;
+    if (parsed === undefined) {
+      return;
+    }
+    switch (parsed.type) {
       case 'browse':
         await this.browse();
-        return;
-      case 'select':
-        await writeActiveMods(parsed.mods);
-        return;
-      case 'locKeyPattern':
-        await writeLocKeyPattern(parsed.value);
-        return;
-      case 'flagNamePattern':
-        await writeFlagNamePattern(parsed.value);
-        return;
-      case 'nullTagPattern':
-        await writeNullTagPattern(parsed.value);
-        return;
-      case 'nullTagSuppress':
-        await writeNullTagSuppress(parsed.value);
-        return;
-      case 'ignoreMarker':
-        await writeIgnoreMarker(parsed.value);
-        return;
-      case 'provinceFolderPattern':
-        await writeProvinceFolderPattern(parsed.value);
-        return;
-      case 'countryColorsTint':
-        await writeCountryColorsTint(parsed.value);
-        return;
-      case 'paintUndoSteps':
-        await writePaintUndoSteps(parsed.value);
         return;
       case 'refresh':
         await this.refresh();
         return;
-      case undefined:
-        return;
+      default:
+        await writeSetting(parsed);
     }
   }
 
@@ -176,6 +156,8 @@ export class SettingsPanel implements vscode.Disposable {
       gamePathSetting: readGamePath(),
       selected: readActiveMods(),
       locKeyPattern: readLocKeyPattern(),
+      eventDescPattern: readEventDescPattern(),
+      eventDescMaxLength: readEventDescMaxLength(),
       flagNamePattern: readFlagNamePattern(),
       nullTagPattern: readNullTagPattern(),
       nullTagSuppress: readNullTagSuppress(),
@@ -184,6 +166,38 @@ export class SettingsPanel implements vscode.Disposable {
       countryColorsTint: readCountryColorsTint(),
       paintUndoSteps: readPaintUndoSteps(),
     });
+  }
+}
+
+type SettingMessage = Exclude<SettingsMessage, { readonly type: 'browse' | 'refresh' }>;
+
+/** Every message that carries a value is one setting written as is. */
+function writeSetting(message: SettingMessage): Thenable<void> {
+  switch (message.type) {
+    case 'gamePath':
+      return writeGamePath(message.value);
+    case 'select':
+      return writeActiveMods(message.mods);
+    case 'locKeyPattern':
+      return writeLocKeyPattern(message.value);
+    case 'eventDescPattern':
+      return writeEventDescPattern(message.value);
+    case 'eventDescMaxLength':
+      return writeEventDescMaxLength(message.value);
+    case 'flagNamePattern':
+      return writeFlagNamePattern(message.value);
+    case 'nullTagPattern':
+      return writeNullTagPattern(message.value);
+    case 'nullTagSuppress':
+      return writeNullTagSuppress(message.value);
+    case 'ignoreMarker':
+      return writeIgnoreMarker(message.value);
+    case 'provinceFolderPattern':
+      return writeProvinceFolderPattern(message.value);
+    case 'countryColorsTint':
+      return writeCountryColorsTint(message.value);
+    case 'paintUndoSteps':
+      return writePaintUndoSteps(message.value);
   }
 }
 
@@ -207,6 +221,7 @@ function asMessage(message: unknown): SettingsMessage | undefined {
       return typeof record['value'] === 'boolean' ? { type: 'nullTagSuppress', value: record['value'] } : undefined;
     case 'countryColorsTint':
     case 'paintUndoSteps':
+    case 'eventDescMaxLength':
       return asNumberMessage(type, record['value']);
     case 'select':
       return Array.isArray(record['mods'])
@@ -221,6 +236,7 @@ function asMessage(message: unknown): SettingsMessage | undefined {
 const TEXT_MESSAGES = [
   'gamePath',
   'locKeyPattern',
+  'eventDescPattern',
   'flagNamePattern',
   'nullTagPattern',
   'ignoreMarker',
@@ -231,6 +247,6 @@ function isTextMessage(type: unknown): type is (typeof TEXT_MESSAGES)[number] {
   return typeof type === 'string' && (TEXT_MESSAGES as readonly string[]).includes(type);
 }
 
-function asNumberMessage(type: 'countryColorsTint' | 'paintUndoSteps', value: unknown): SettingsMessage | undefined {
+function asNumberMessage(type: 'countryColorsTint' | 'paintUndoSteps' | 'eventDescMaxLength', value: unknown): SettingsMessage | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? { type, value } : undefined;
 }

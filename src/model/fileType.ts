@@ -48,6 +48,7 @@ export type FileType =
   | 'mapTerrain'
   | 'mapPositions'
   | 'mapOther'
+  | 'localisation'
   | 'unknown';
 
 /** File types whose content is CSV, not Paradox script. */
@@ -113,7 +114,7 @@ export function classifyFile(pathOrUri: string): FileType {
   // Only script files and the two map CSVs are mod data; scripts, images, and
   // notes sitting next to them (a .vbs in history/pops/, a .bmp in map/) are not.
   if (!normalized.endsWith('.txt') && !normalized.endsWith('.map')) {
-    return normalized.endsWith('.csv') ? classifyMapFile(normalized) ?? 'unknown' : 'unknown';
+    return normalized.endsWith('.csv') ? classifyCsvFile(normalized) : 'unknown';
   }
   return (
     classifyByFolder(normalized) ??
@@ -144,6 +145,15 @@ function classifyHistoryFile(normalized: string): FileType | undefined {
   }
   return HISTORY_FILE_TYPES[historyFolder] ?? 'historyOther';
 }
+
+function classifyCsvFile(normalized: string): FileType {
+  if (LOCALISATION_CSV.test(normalized)) {
+    return 'localisation';
+  }
+  return classifyMapFile(normalized) ?? 'unknown';
+}
+
+const LOCALISATION_CSV = /(?:^|\/)localisation\/.*\.csv$/;
 
 function classifyMapFile(normalized: string): FileType | undefined {
   const mapFile = /(?:^|\/)map\/([^/]+\.(?:txt|csv|map))$/.exec(normalized)?.[1];

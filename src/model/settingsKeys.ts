@@ -12,6 +12,8 @@ export const SETTING = {
   gamePath: 'gamePath',
   ignoreMarker: 'ignoreMarker',
   locKeyPattern: 'localisation.keyPattern',
+  eventDescPattern: 'localisation.eventDescPattern',
+  eventDescMaxLength: 'localisation.eventDescMaxLength',
   flagNamePattern: 'flags.namePattern',
   nullTagPattern: 'nullTags.pattern',
   nullTagSuppress: 'nullTags.suppressWarnings',
