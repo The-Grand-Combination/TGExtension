@@ -106,9 +106,44 @@ function validateDecisionBody(walk: Walk, body: Block): void {
     } else if (DECISION_EFFECT_FIELDS.has(keyLower)) {
       walkBlockValue(walk, entry, (block) => { walkEffectEntries(walk, block.entries, 'country'); });
     } else if (keyLower === 'ai_will_do') {
-      walkBlockValue(walk, entry, (block) => { walkWeightBlock(walk, block, 'country'); });
+      walkBlockValue(walk, entry, (block) => {
+        checkDecisionFactors(walk, block);
+        walkWeightBlock(walk, block, 'country');
+      });
     } else {
       report(walk, entry, 'unknown-decision-field', `Unknown decision field '${entry.key.value}'.`);
     }
   });
+}
+
+/**
+ * A decision's `ai_will_do` is a yes-or-no answer, not a weight: the engine
+ * takes the decision when the result is above zero, so the main `factor` and
+ * every modifier's `factor` are 0 or 1. A fraction reads as a probability it
+ * never is.
+ */
+function checkDecisionFactors(walk: Walk, body: Block): void {
+  for (const entry of findByKey(body.entries, 'factor')) {
+    if (entry.value.kind === 'scalar' && !isZeroOrOne(entry.value.value)) {
+      walk.diagnostics.push(
+        diagnostic(
+          'error',
+          'decision-ai-factor',
+          `A decision's ai_will_do takes factor = 0 or factor = 1, in the block and in each modifier; '${entry.value.value}' is neither. The AI takes the decision when the result is above zero, so there is no weighing to do.`,
+          entry.value.range,
+        ),
+      );
+    }
+  }
+  for (const nested of [...findByKey(body.entries, 'modifier'), ...findByKey(body.entries, 'group')]) {
+    const block = asBlock(nested.value);
+    if (block) {
+      checkDecisionFactors(walk, block);
+    }
+  }
+}
+
+function isZeroOrOne(text: string): boolean {
+  const value = Number(text);
+  return value === 0 || value === 1;
 }

@@ -100,6 +100,7 @@ codes below, the map CSVs and the cross-file duplicates alike. Being a comment, 
 | `duplicate-event-id` | error | An event `id` is also defined elsewhere in the mod (or twice in the same file). |
 | `unknown-decision-field` | error | A decision body key isn't recognized. |
 | `duplicate-decision-name` | error | A decision name is also defined in another file (cross-file; see also the same-parse structural check above). |
+| `decision-ai-factor` | error | A decision's `ai_will_do` has a `factor` that is not 0 or 1, at the top of the block, in a `modifier` or in a `group`. The AI takes the decision when the result is above zero, so the factors are a yes-or-no answer; a fraction like `0.3` is not a probability. Events (`ai_chance`) are not affected. |
 
 ## `common/` file validators (one `*Validation.ts` service per grammar)
 

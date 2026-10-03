@@ -43,6 +43,28 @@ suite('decisionValidation — decisions', () => {
   });
 });
 
+suite('decisionValidation — ai_will_do factors', () => {
+  function factors(aiWillDo: string): string[] {
+    const text = `political_decisions = { d = { potential = { } allow = { } effect = { } ai_will_do = { ${aiWillDo} } } }`;
+    return codes(text, 'decision', 'decisions/Test.txt').filter((code) => code !== 'missing-localisation');
+  }
+
+  test('0 and 1 are the only factors, spelled as numbers', () => {
+    assert.deepStrictEqual(factors('factor = 1 modifier = { factor = 0 war = yes } modifier = { factor = 1.0 exists = yes }'), []);
+  });
+
+  test('a fraction is an error, at the top and in every modifier', () => {
+    const found = factors('factor = 0 modifier = { factor = 0.3 exists = yes } modifier = { factor = 0.3 exists = yes }');
+    assert.deepStrictEqual(found, ['decision-ai-factor', 'decision-ai-factor']);
+    assert.deepStrictEqual(factors('factor = 0.5'), ['decision-ai-factor']);
+    assert.deepStrictEqual(factors('factor = 2'), ['decision-ai-factor']);
+  });
+
+  test('a factor inside a group of modifiers is checked too', () => {
+    assert.deepStrictEqual(factors('factor = 1 group = { modifier = { factor = 0.3 exists = yes } }'), ['decision-ai-factor']);
+  });
+});
+
 suite('decisionValidation — same-file duplicates', () => {
   test('flags a name defined twice in one file', () => {
     const text = `political_decisions = {
