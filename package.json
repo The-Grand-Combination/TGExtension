@@ -2,7 +2,7 @@
   "name": "victorian-tools",
   "displayName": "Victorian Tools",
   "description": "Tooling for Victoria 2 mod files: a language server that parses Paradox script and validates it inline.",
-  "version": "5.1.0",
+  "version": "5.1.1",
   "publisher": "TGCModdingTeam",
   "private": true,
   "license": "MIT",
@@ -189,43 +189,43 @@
           "markdownDescription": "Index every mod in the workspace when the server starts, so mod-wide errors (duplicate identifiers) appear without opening a file. Turn off to index a mod only when one of its files is opened."
         },
         "victorianTools.localisation.keyPattern": {
-      "type": "string",
-      "default": "^EVT",
-      "markdownDescription": "Regular expression deciding which `title` / `desc` / `name` values are localisation keys. A value that does not match is treated as literal display text and never reported as a missing key, so `desc = \"Death of Dom Pedro II\"` stays silent while `desc = \"EVTDESC48300\"` is still checked against `localisation/`. Leave empty to check every value."
-    },
-    "victorianTools.localisation.eventDescPattern": {
-      "type": "string",
-      "default": "^EVTDESC",
-      "markdownDescription": "Regular expression picking the `localisation/*.csv` keys that are event descriptions, whose text is measured against `victorianTools.localisation.eventDescMaxLength`. A key that does not match is never measured. Leave empty to measure every key."
-    },
-    "victorianTools.localisation.eventDescMaxLength": {
-      "type": "number",
-      "default": 1000,
-      "minimum": 100,
-      "maximum": 5000,
-      "markdownDescription": "How many characters an event description may hold before the extension warns (`event-desc-too-long`). The event window draws the text in a fixed box, so a longer description probably overflows it. Applies to the keys `victorianTools.localisation.eventDescPattern` matches, in every language column."
-    },
-    "victorianTools.flags.namePattern": {
-      "type": "string",
-      "default": "",
-      "markdownDescription": "Regular expression narrowing the never-set flag check. A country or global flag whose name does not match is never reported as checked-but-never-set, which exempts flags a mod sets outside the indexed files. Empty (the default) checks every flag."
-    },
-    "victorianTools.nullTags.pattern": {
-      "type": "string",
-      "default": "^(QQQ|---|null)$",
-      "markdownDescription": "Regular expression matching the tags a script uses to mean *no country*. A country value that matches is reported as a warning (`null-country-tag`) instead of an unknown-tag error, so `war = { target = --- }` and `secede_province = QQQ` stay legible. Matched case-insensitively. Leave empty to allow no exception: every unknown tag is then an error."
-    },
-    "victorianTools.nullTags.suppressWarnings": {
-      "type": "boolean",
-      "default": true,
-      "markdownDescription": "Report nothing at all for a tag `victorianTools.nullTags.pattern` matches: `null-country-tag`, `null-tag-exploit` and the `uncolonize-province` warning for `secede_province = QQQ` all go quiet. On by default, because a script that writes a null tag wrote it on purpose. Turn it off to audit those spots. A tag the pattern does **not** match is unaffected — `secede_province = ZZZ` still warns, and an unknown tag elsewhere is still an error — and with an empty pattern this setting does nothing, since nothing is a null tag."
-    },
-    "victorianTools.ignoreMarker": {
-      "type": "string",
-      "default": "#VT - Skip Validation",
-      "markdownDescription": "A marker that silences every finding on the line it appears on. Write it as a comment (`prestige = 5 #VT - Skip Validation`) so the game ignores it. Matched anywhere in the line, case-insensitively, and it silences every rule: syntax, structure, semantics, the map CSVs and cross-file duplicates. Leave empty to turn the escape hatch off."
-    },
-    "victorianTools.gamePath": {
+          "type": "string",
+          "default": "^EVT",
+          "markdownDescription": "Regular expression deciding which `title` / `desc` / `name` values are localisation keys. A value that does not match is treated as literal display text and never reported as a missing key, so `desc = \"Death of Dom Pedro II\"` stays silent while `desc = \"EVTDESC48300\"` is still checked against `localisation/`. Leave empty to check every value."
+        },
+        "victorianTools.localisation.eventDescPattern": {
+          "type": "string",
+          "default": "^EVTDESC",
+          "markdownDescription": "Regular expression picking the `localisation/*.csv` keys that are event descriptions, whose text is measured against `victorianTools.localisation.eventDescMaxLength`. A key that does not match is never measured. Leave empty to measure every key."
+        },
+        "victorianTools.localisation.eventDescMaxLength": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 100,
+          "maximum": 5000,
+          "markdownDescription": "How many characters an event description may hold before the extension warns (`event-desc-too-long`). The event window draws the text in a fixed box, so a longer description probably overflows it. Applies to the keys `victorianTools.localisation.eventDescPattern` matches, in every language column."
+        },
+        "victorianTools.flags.namePattern": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Regular expression narrowing the never-set flag check. A country or global flag whose name does not match is never reported as checked-but-never-set, which exempts flags a mod sets outside the indexed files. Empty (the default) checks every flag."
+        },
+        "victorianTools.nullTags.pattern": {
+          "type": "string",
+          "default": "^(QQQ|---|null)$",
+          "markdownDescription": "Regular expression matching the tags a script uses to mean *no country*. A country value that matches is reported as a warning (`null-country-tag`) instead of an unknown-tag error, so `war = { target = --- }` and `secede_province = QQQ` stay legible. Matched case-insensitively. Leave empty to allow no exception: every unknown tag is then an error."
+        },
+        "victorianTools.nullTags.suppressWarnings": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report nothing at all for a tag `victorianTools.nullTags.pattern` matches: `null-country-tag`, `null-tag-exploit` and the `uncolonize-province` warning for `secede_province = QQQ` all go quiet. On by default, because a script that writes a null tag wrote it on purpose. Turn it off to audit those spots. A tag the pattern does **not** match is unaffected — `secede_province = ZZZ` still warns, and an unknown tag elsewhere is still an error — and with an empty pattern this setting does nothing, since nothing is a null tag."
+        },
+        "victorianTools.ignoreMarker": {
+          "type": "string",
+          "default": "#VT - Skip Validation",
+          "markdownDescription": "A marker that silences every finding on the line it appears on. Write it as a comment (`prestige = 5 #VT - Skip Validation`) so the game ignores it. Matched anywhere in the line, case-insensitively, and it silences every rule: syntax, structure, semantics, the map CSVs and cross-file duplicates. Leave empty to turn the escape hatch off."
+        },
+        "victorianTools.gamePath": {
           "type": "string",
           "default": "",
           "scope": "machine-overridable",
@@ -314,6 +314,9 @@
     "npm-run-all": "^4.1.5",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.69.0"
+  },
+  "overrides": {
+    "mocha": "$mocha"
   },
   "dependencies": {
     "vscode-languageclient": "^10.1.1",
