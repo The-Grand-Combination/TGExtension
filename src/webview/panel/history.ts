@@ -130,7 +130,7 @@ export function historySections(current: ProvinceDetails): HistoryPanes {
 /**
  * `map/region.txt`: the states the province belongs to. The engine puts it in
  * the first one that claims it, and a land province in none of them is in no
- * state at all, so a Save is refused until the list has one.
+ * state at all. An empty list is still saved, as a draft; the validator reports it.
  */
 function stateSection(current: ProvinceDetails): HTMLElement {
   const section = current.state;

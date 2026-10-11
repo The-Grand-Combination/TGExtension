@@ -395,7 +395,7 @@ export function postSave(section: SaveSection): void {
   const create = details.isNew && state.newColor !== null
     ? {
       color: state.newColor, isSea: forms.seaInput?.checked === true, name: forms.nameInput?.value ?? '',
-      // A land province is refused without all three: the server writes them with the row.
+      // The server writes whichever of the three is filled in with the row.
       climate: forms.climateInput?.value ?? '', continent: forms.continentInput?.value ?? '',
       states: forms.statesRead ? forms.statesRead() : [],
     }

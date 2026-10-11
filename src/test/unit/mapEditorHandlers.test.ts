@@ -830,24 +830,20 @@ suite('MapEditorHandlers — climate and state', () => {
     assert.ok(written.get(path.join(ROOT, 'localisation', 'provinces.csv'))?.includes('PROV1;Nova;'), [...written.keys()].join(', '));
   });
 
-  test('a save that would leave the province with no climate is refused, and writes nothing', async () => {
+  test('a draft with no climate is saved, and the province leaves the climate file', async () => {
     const { host, written } = placed();
     const result = await new MapEditorHandlers(host).save({
       ...base, section: 'history', data: EMPTY_HISTORY, climate: '', continent: 'europe', createInFolder: '',
     });
-    assert.ok(!result.ok);
-    assert.ok(result.reason.includes('no climate'), result.reason);
-    assert.strictEqual(written.size, 0);
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+    assert.ok(written.has(climateFile), [...written.keys()].join(', '));
   });
 
-  test('a save that would leave it on no continent is refused the same way', async () => {
-    const { host, written } = placed();
-    const result = await new MapEditorHandlers(host).save({
+  test('a draft on no continent is saved the same way', async () => {
+    const result = await new MapEditorHandlers(placed().host).save({
       ...base, section: 'history', data: EMPTY_HISTORY, climate: 'harsh_climate', continent: '', createInFolder: '',
     });
-    assert.ok(!result.ok);
-    assert.ok(result.reason.includes('no continent'), result.reason);
-    assert.strictEqual(written.size, 0);
+    assert.ok(result.ok, result.ok ? '' : result.reason);
   });
 
   test('two positions saves at once both land: the second plans against what the first wrote', async () => {
@@ -878,31 +874,21 @@ suite('MapEditorHandlers — climate and state', () => {
     assert.ok(files.some((file) => file.includes('provinces')), files.join(', '));
   });
 
-  test('Save All is refused before anything is written when its history part leaves no climate', async () => {
-    const { host, written } = placed();
-    const result = await new MapEditorHandlers(host).save({
+  test('Save All goes through with every placement field empty', async () => {
+    const result = await new MapEditorHandlers(placed().host).save({
       ...base,
       section: 'all',
       history: { data: EMPTY_HISTORY, climate: '', continent: '', createInFolder: '' },
       positions: { data: EMPTY_POSITIONS },
     });
-    assert.ok(!result.ok);
-    assert.ok(result.reason.includes('no climate'), result.reason);
-    assert.strictEqual(written.size, 0);
+    assert.ok(result.ok, result.ok ? '' : result.reason);
   });
 
-  test('a save that would leave the province in no state is refused', async () => {
+  test('a draft in no state is saved', async () => {
     const result = await new MapEditorHandlers(placed().host).save({
       ...base, section: 'history', data: EMPTY_HISTORY, climate: 'harsh_climate', continent: 'europe', createInFolder: '', states: ['  '],
     });
-    assert.ok(!result.ok);
-    assert.ok(result.reason.includes('no state'), result.reason);
-  });
-
-  test('a new province is told the Sea province box is the other way out', async () => {
-    const result = await new MapEditorHandlers(placed(NEW).host).save(createParams('', ['USA_3']));
-    assert.ok(!result.ok);
-    assert.ok(result.reason.includes('tick Sea province'), result.reason);
+    assert.ok(result.ok, result.ok ? '' : result.reason);
   });
 
   test('a sea province being created needs neither, and gets no history file', async () => {
@@ -922,12 +908,11 @@ suite('MapEditorHandlers — climate and state', () => {
     assert.ok(result.ok, result.ok ? '' : result.reason);
   });
 
-  test('a province in neither file cannot be saved at all', async () => {
+  test('a province in neither file is saved all the same', async () => {
     const result = await new MapEditorHandlers(placed().host).save({
       ...base, provinceId: 9, section: 'positions', data: EMPTY_POSITIONS,
     });
-    assert.ok(!result.ok);
-    assert.ok(result.reason.includes('no climate'), result.reason);
+    assert.ok(result.ok, result.ok ? '' : result.reason);
   });
 
   test('a sea province is in neither file and is saved all the same', async () => {
@@ -970,18 +955,13 @@ suite('MapEditorHandlers — climate and state', () => {
     assert.deepStrictEqual(plan.written, real.written);
   });
 
-  test('a province cannot be created without a climate, and nothing is written trying', async () => {
+  test('a land province can be created as a draft, with no climate, continent or state', async () => {
     const { host, written } = placed(NEW);
-    const result = await new MapEditorHandlers(host).save(createParams('', ['USA_3']));
-    assert.ok(!result.ok);
-    assert.ok(result.reason.includes('no climate'), result.reason);
-    assert.strictEqual(written.size, 0);
-  });
-
-  test('a province cannot be created without a state either', async () => {
-    const result = await new MapEditorHandlers(placed(NEW).host).save(createParams('mild_climate', []));
-    assert.ok(!result.ok);
-    assert.ok(result.reason.includes('no state'), result.reason);
+    const result = await new MapEditorHandlers(host).save(createParams('', [], ''));
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+    assert.ok(written.get(path.join(ROOT, 'map/definition.csv'))?.includes('\n3;'), [...written.keys()].join(', '));
+    assert.strictEqual(written.get(climateFile), undefined, 'nothing to add to climate.txt');
+    assert.strictEqual(written.get(regionFile), undefined, 'nothing to add to region.txt');
   });
 });
 

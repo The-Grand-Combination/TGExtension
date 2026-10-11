@@ -72,13 +72,13 @@ shows, which for the Definition tab is four files (the localisation CSV, `map/cl
 `map/region.txt` and the history file) and for the Buildings and Extra Dates tabs is one: they show
 neither the name nor the climate nor the states, so they touch none of them.
 
-**Every land province has a climate and a state.** Without the first it carries no climate modifier;
-without the second the engine leaves it out of every state, so nothing can own, develop or trade with
-it. So no Save of a land province goes through while either is missing — the reason says which one
-and where to fill it in — and a province cannot be created without both. A **sea province** is in
-neither file and is saved without them, and never gets a history file created for it either; for one
-being created that is what the **Sea province** tick decides, so the reason says so. A mod stack with
-no `climate.txt` or no `region.txt` at all is not held to the rule: there would be nothing to pick.
+**No field is required to save.** A land province needs a climate, a continent and a state to work
+in game: without a climate it carries no climate modifier, and without a state the engine leaves it
+out of every state, so nothing can own, develop or trade with it. The editor still saves a province
+missing any of them, created or not, so a draft can be kept as it stands. The validator reports what
+is missing on the province's row (`province-without-climate`, `province-without-continent`,
+`province-without-state`). A **sea province** is in none of those files and never gets a history file
+created for it; for one being created that is what the **Sea province** tick decides.
 
 Moved points are kept when the next province is clicked, so a run of provinces can be fixed in one
 go: they stay drawn on the map, the province keeps them when it is clicked again, and a **Save N
@@ -329,8 +329,8 @@ anything is written, a modal names every file the save will touch:
 2. `map/default.map` gets room for the id — `max_provinces` is a count, so it has to end up *over*
    the new id, and the engine ignores any province at or past it — and, with **Sea province** ticked,
    the id joins `sea_starts`;
-3. the id joins its climate in `map/climate.txt` and its states in `map/region.txt` — a land
-   province with neither is refused before anything is written at all;
+3. the id joins its climate in `map/climate.txt`, its continent in `map/continent.txt` and its
+   states in `map/region.txt`, for whichever of them is filled in;
 4. the section saves what it would have saved anyway (the history file of a new province is named
    after the name being created).
 

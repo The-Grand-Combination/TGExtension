@@ -30,7 +30,7 @@ import type { MapEditorWriter } from './mapEditorWriter.js';
 import type { LayerFileSystem } from './modLayers.js';
 import { isInsideRoot } from './modLayout.js';
 import { appendDefinitionRow, rowOfColor } from './provinceDefinitionEdit.js';
-import { groupsOfProvince, planGroupEdit, type ProvinceListShape } from './provinceGroupEdit.js';
+import { planGroupEdit, type ProvinceListShape } from './provinceGroupEdit.js';
 import {
   findHistoryFile,
   historyFolderOf,
@@ -92,10 +92,6 @@ export class MapEditorSave {
   async save(target: Target, params: SaveParams): Promise<SaveResult> {
     const parts = sectionsOf(params);
     const lead = parts[0] ?? params;
-    const missing = await this.placementReason(target, lead);
-    if (missing !== undefined) {
-      return { ok: false, reason: missing };
-    }
     const unwritable = fileNameReason(lead);
     if (unwritable !== undefined) {
       return { ok: false, reason: unwritable };
@@ -125,54 +121,11 @@ export class MapEditorSave {
 
   // --- Placement ----------------------------------------------------------------
 
-  /** A land province needs a climate, a continent and a state once this save is written. */
-  private async placementReason(target: Target, params: SaveParams): Promise<string | undefined> {
-    if (await this.isSeaProvince(target, params)) {
-      return undefined;
-    }
-    const id = String(params.provinceId);
-    const orSea = params.create ? ', or tick Sea province' : '';
-    const climate = climateIn(params);
-    const inClimate = await this.placedIn(target, params, CLIMATE_FILE, climate === undefined ? undefined : [climate]);
-    if (inClimate?.length === 0) {
-      return `Province ${id} has no climate: pick one in the History section${orSea}.`;
-    }
-    const continent = continentIn(params);
-    const inContinent = await this.placedIn(
-      target,
-      params,
-      CONTINENT_FILE,
-      continent === undefined ? undefined : [continent],
-      CONTINENT_LIST,
-    );
-    if (inContinent?.length === 0) {
-      return `Province ${id} is on no continent: pick one in the History section${orSea}.`;
-    }
-    const inState = await this.placedIn(target, params, REGION_FILE, statesIn(params));
-    if (inState?.length === 0) {
-      return `Province ${id} is in no state: add one under States${orSea}.`;
-    }
-    return undefined;
-  }
+  // A province left with no climate, continent or state is still written: a
+  // draft is saved as it stands, and the validator reports what is missing.
 
   private async isSeaProvince(target: Target, params: SaveParams): Promise<boolean> {
     return params.create ? params.create.isSea : (await this.details.seaProvinces(target)).has(String(params.provinceId));
-  }
-
-  /** The groups the province is in once this save is written; undefined when the stack has no such file. */
-  private async placedIn(
-    target: Target,
-    params: SaveParams,
-    relativePath: string,
-    carried: readonly string[] | undefined,
-    shape: ProvinceListShape = 'bare',
-  ): Promise<string[] | undefined> {
-    const file = await this.stack.scriptFile(target.layers, relativePath);
-    if (!file) {
-      return undefined;
-    }
-    const after = carried ?? groupsOfProvince(file.document, params.provinceId, shape);
-    return after.filter((name) => name.trim() !== '');
   }
 
   private async savePlacement(target: Target, params: SaveParams): Promise<string[] | string> {

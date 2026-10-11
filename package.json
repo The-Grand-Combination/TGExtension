@@ -2,7 +2,7 @@
   "name": "victorian-tools",
   "displayName": "Victorian Tools",
   "description": "Tooling for Victoria 2 mod files: a language server that parses Paradox script and validates it inline.",
-  "version": "5.1.1",
+  "version": "5.2.0",
   "publisher": "TGCModdingTeam",
   "private": true,
   "license": "MIT",
