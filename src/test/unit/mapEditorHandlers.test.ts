@@ -790,6 +790,18 @@ suite('MapEditorHandlers — climate and state', () => {
     assert.ok([...written.keys()].some((file) => file.includes('localisation')), [...written.keys()].join(', '));
   });
 
+  test('a name the mod already holds as it is leaves the localisation file unwritten', async () => {
+    const own = path.join(ROOT, 'localisation', '00_map.csv');
+    const { host, written } = placed(new Map([[own, 'CODE;ENGLISH;x\r\nPROV1;Nova;x\r\nPROV2;Two;x\r\n']]));
+    const result = await new MapEditorHandlers(host).save({
+      ...base, ...NAME_SAVE, localisation: { text: 'Nova', renameHistoryFile: false },
+    });
+    assert.ok(result.ok, result.ok ? '' : result.reason);
+    assert.ok(![...written.keys()].some((file) => file.includes('localisation')), [...written.keys()].join(', '));
+    assert.ok(!result.written.some((file) => file.includes('localisation')), result.written.join(', '));
+    assert.strictEqual(result.details.localisation.file?.absolutePath, own);
+  });
+
   test('a name the mod does not define yet makes it a province file of its own, header and all', async () => {
     const { host, written } = placed();
     const result = await new MapEditorHandlers(host).save({

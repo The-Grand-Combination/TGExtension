@@ -65,6 +65,11 @@ interface HistoryWrite {
   readonly moved: boolean;
 }
 
+interface LocWrite {
+  readonly file: FileRef;
+  readonly changed: boolean;
+}
+
 interface HistoryMove {
   readonly destination: string;
   readonly folder: string;
@@ -281,7 +286,7 @@ export class MapEditorSave {
     if (written === undefined) {
       return { ok: false, reason: 'The localisation file could not be written.' };
     }
-    const files = [written.absolutePath];
+    const files = written.changed ? [written.file.absolutePath] : [];
     if (renameHistoryFile) {
       const renamed = await this.renameHistoryFile(target, params.provinceId, text, params.dryRun === true);
       if (typeof renamed === 'object') {
@@ -292,12 +297,12 @@ export class MapEditorSave {
       }
     }
     const details = await this.details.of(target, params.provinceId, params.popDate);
-    const localisation: LocSection = { key, text: text.trim(), file: written, inTarget: true };
+    const localisation: LocSection = { key, text: text.trim(), file: written.file, inTarget: true };
     return { ok: true, written: files, details: { ...details, localisation } };
   }
 
   /** Patch the key where the target defines it, else add it to the target's province file. */
-  private async writeLocalisation(target: Target, key: string, text: string, dryRun: boolean): Promise<FileRef | undefined> {
+  private async writeLocalisation(target: Target, key: string, text: string, dryRun: boolean): Promise<LocWrite | undefined> {
     const current = this.details.localisation(target, Number(key.slice('PROV'.length)));
     const absolutePath =
       current.file !== undefined && current.inTarget
@@ -305,10 +310,11 @@ export class MapEditorSave {
         : path.join(target.root, LOCALISATION_FOLDER, await this.locFileForNewKey(target.root));
     const existing = await this.host.readText(absolutePath);
     if (dryRun) {
-      return { absolutePath, line: existing === undefined ? 1 : (locKeyLine(existing, key) ?? 0) };
+      return { file: { absolutePath, line: existing === undefined ? 1 : (locKeyLine(existing, key) ?? 0) }, changed: true };
     }
     if (existing === undefined) {
-      return (await this.writer.writeTextPlain(absolutePath, newProvinceLocFile(key, text))) ? { absolutePath, line: 1 } : undefined;
+      const ok = await this.writer.writeTextPlain(absolutePath, newProvinceLocFile(key, text));
+      return ok ? { file: { absolutePath, line: 1 }, changed: true } : undefined;
     }
     const line = locKeyLine(existing, key);
     const patch = line === undefined ? appendProvinceLoc(existing, key, text) : patchProvinceLoc(existing, line, text);
@@ -316,8 +322,11 @@ export class MapEditorSave {
       return undefined;
     }
     const updated = applyPatches(existing, [patch]);
+    if (updated === existing) {
+      return { file: { absolutePath, line: line ?? 0 }, changed: false };
+    }
     const ok = await this.writer.writeTextPlain(absolutePath, updated);
-    return ok ? { absolutePath, line: locKeyLine(updated, key) ?? 0 } : undefined;
+    return ok ? { file: { absolutePath, line: locKeyLine(updated, key) ?? 0 }, changed: true } : undefined;
   }
 
   private async locFileForNewKey(root: string): Promise<string> {

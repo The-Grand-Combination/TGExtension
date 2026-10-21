@@ -18,6 +18,7 @@ import {
  */
 export class ReferenceStore {
   readonly folder: vscode.Uri;
+  private lastRendered: string | undefined;
 
   constructor(targetRoot: string) {
     this.folder = vscode.Uri.file(path.join(targetRoot, ...REFERENCES_FOLDER.split('/')));
@@ -31,15 +32,23 @@ export class ReferenceStore {
   async read(): Promise<ReferenceLayer[]> {
     try {
       const bytes = await vscode.workspace.fs.readFile(this.manifest);
-      return parseReferences(Buffer.from(bytes).toString('utf8'));
+      const layers = parseReferences(Buffer.from(bytes).toString('utf8'));
+      this.lastRendered = renderReferences(layers);
+      return layers;
     } catch {
+      this.lastRendered = undefined;
       return [];
     }
   }
 
   async write(layers: readonly ReferenceLayer[]): Promise<void> {
+    const rendered = renderReferences(layers);
+    if (rendered === this.lastRendered) {
+      return;
+    }
     await vscode.workspace.fs.createDirectory(this.folder);
-    await vscode.workspace.fs.writeFile(this.manifest, Buffer.from(renderReferences(layers), 'utf8'));
+    await vscode.workspace.fs.writeFile(this.manifest, Buffer.from(rendered, 'utf8'));
+    this.lastRendered = rendered;
   }
 
   /**
