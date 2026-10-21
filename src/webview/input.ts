@@ -144,7 +144,7 @@ function showTooltip(event: MouseEvent): void {
   if (id === undefined || id === null) { showColorTooltip(event, place); return; }
   const definition = definitionById.get(id);
   tooltip.textContent = handle
-    ? handleLabel(handle) + ' · ' + String(id) + (handle === 'text_rotation' ? ' (drag to turn the name)' : ' (drag to move)')
+    ? handleLabel(handle) + ' · ' + String(id) + (handle === 'text_rotation' ? ' (drag to turn the name)' : handle === 'naval_base_rotation' ? ' (drag to turn the port)' : ' (drag to move)')
     : String(id) + (definition?.name ? ' · ' + definition.name : '') + (seaIds.has(id) ? ' (sea)' : '') + editedNote(place);
   placeTooltip(event);
 }

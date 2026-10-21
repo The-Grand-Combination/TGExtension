@@ -24,11 +24,13 @@ suite('mapEditorMessages', () => {
         unit: { x: '1.00', y: '2.00' },
         city: undefined,
         factory: undefined,
+        building_construction: undefined,
         fort: undefined,
         railroad: undefined,
         naval_base: undefined,
         text_rotation: '5.544018',
         text_scale: undefined,
+        naval_base_rotation: undefined,
       },
     });
     // A kind without both coordinates is a cleared point, not a half-written one.

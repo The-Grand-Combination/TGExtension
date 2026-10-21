@@ -1,6 +1,7 @@
 import {
   isPaintLayer,
   POSITION_KINDS,
+  POSITION_SCALARS,
   type HistoryEdit,
   type LocalisationEdit,
   type NewProvince,
@@ -11,6 +12,7 @@ import {
   type PositionsEdit,
   type PositionKind,
   type PositionPoint,
+  type PositionScalar,
   type ProvinceHistory,
   type ProvincePositions,
   type SaveSection,
@@ -263,11 +265,14 @@ function asPositions(value: unknown): ProvincePositions | undefined {
     }
     positions[kind] = point && point.x !== '' && point.y !== '' ? point : undefined;
   }
-  // Every kind was assigned just above.
+  const scalars: Partial<Record<PositionScalar, string | undefined>> = {};
+  for (const scalar of POSITION_SCALARS) {
+    scalars[scalar] = asWritten(record[scalar]);
+  }
+  // Every kind and every scalar was assigned just above.
   return {
     ...(positions as Readonly<Record<PositionKind, PositionPoint | undefined>>),
-    text_rotation: asWritten(record['text_rotation']),
-    text_scale: asWritten(record['text_scale']),
+    ...(scalars as Readonly<Record<PositionScalar, string | undefined>>),
   };
 }
 

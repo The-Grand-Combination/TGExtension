@@ -3,7 +3,7 @@ import { render, selectionCenter } from '../canvas.js';
 import { h, setStatus } from '../dom.js';
 import { lock, removeButton, textInput } from '../fields.js';
 import { asPositions, capturePending, degreesOf, editableHere, setDraftPoint } from '../positions.js';
-import { POSITION_KIND_SPECS, state } from '../state.js';
+import { POSITION_KIND_SPECS, state, type AngleKey } from '../state.js';
 import { layerNote, postSave, saveBar, sectionHeader } from './panel.js';
 
 // Positions: one row per kind, the swatch doubling as the map legend. Typing
@@ -11,7 +11,7 @@ import { layerNote, postSave, saveBar, sectionHeader } from './panel.js';
 export function positionsSection(current: ProvinceDetails): HTMLElement {
   const section = current.positions;
   state.positionInputs = {};
-  state.labelInputs = null;
+  state.angleInputs = {};
   const rows = h('div', { class: 'rows' });
   for (const spec of POSITION_KIND_SPECS) {
     const point = state.draft?.[spec.kind];
@@ -42,8 +42,13 @@ export function positionsSection(current: ProvinceDetails): HTMLElement {
     const row = h('div', { class: 'row pos-row' }, swatch, h('span', { class: 'pos-label' }, spec.label), center, xInput, yInput, clear);
     if (!editableHere(spec.kind, current.isSea)) { lock(row); }
     rows.append(row);
-    // The name's angle and size hang under its point: they are how it is drawn from there.
-    if (spec.kind === 'text_position') { rows.append(...nameRows()); }
+    // The name's angle and size, and the port's angle, hang under their point: they are how it is drawn from there.
+    if (spec.kind === 'text_position') { rows.append(angleRow('Name Rotation', 'text_rotation'), scaleRow()); }
+    if (spec.kind === 'naval_base') {
+      const angle = angleRow('Port Rotation', 'naval_base_rotation');
+      if (!editableHere(spec.kind, current.isSea)) { lock(angle); }
+      rows.append(angle);
+    }
   }
   const bar = saveBar(function () {
     postSave({ section: 'positions', data: asPositions(state.draft ?? {}) });
@@ -53,43 +58,48 @@ export function positionsSection(current: ProvinceDetails): HTMLElement {
     layerNote(section),
     h('p', { class: 'hint' }, current.isSea
       ? 'A sea province carries where the game draws its name and where it draws fleets in it. y counts from the bottom of the map. Zoom in until the points show; drag one to move it, or type here.'
-      : 'Where the game draws the province\'s name, unit, city, factory and buildings. y counts from the bottom of the map. Zoom in until the points show; drag one to move it, or type here.'),
+      : 'Where the game draws the province\'s name, unit, city, factory, construction site and buildings. y counts from the bottom of the map. Zoom in until the points show; drag one to move it, or type here. The triangle beside the port points the way it faces: drag it to turn the port.'),
     h('div', { class: 'head pos-head' }, h('span', null, 'x'), h('span', null, 'y')),
     rows,
     bar);
 }
 
 /**
- * How the game draws the name from its point: the angle it turns it by and the
- * size it draws it at, one row each under the Name row, with no legend dot
- * because they are not places on the map. The file keeps the angle in radians,
- * so the field does too, with the degrees beside it; dragging the grip at the
- * end of the name on the map writes there.
+ * An angle the game turns something by, under the row of its point, with no
+ * legend dot because it is not a place on the map. The file keeps it in
+ * radians, so the field does too, with the degrees beside it; dragging the grip
+ * on the map writes here.
  */
-function nameRows(): HTMLElement[] {
-  const rotation = textInput(state.draft?.text_rotation ?? '', 'number');
-  const scale = textInput(state.draft?.text_scale ?? '', 'number');
-  const degrees = h('span', { class: 'deg' }, degreesOf(state.draft?.text_rotation));
-  const rotationRow = h('div', { class: 'row pos-row name-row' }, h('span', { class: 'pos-label' }, 'Name Rotation'), rotation.node, degrees);
-  const scaleRow = h('div', { class: 'row pos-row name-row' }, h('span', { class: 'pos-label' }, 'Name Scale'), scale.node);
-  const rotationInput = rotation.input;
-  const scaleInput = scale.input;
-  if (!rotationInput || !scaleInput) { return [rotationRow, scaleRow]; }
-  rotationInput.step = '0.01'; rotationInput.placeholder = 'radians';
-  scaleInput.step = '0.01'; scaleInput.min = '0'; scaleInput.placeholder = 'scale';
-  function changed(): void {
-    if (state.draft) {
-      state.draft.text_rotation = written(rotation.value);
-      state.draft.text_scale = written(scale.value);
-    }
-    degrees.textContent = degreesOf(rotation.value);
+function angleRow(label: string, key: AngleKey): HTMLElement {
+  const angle = textInput(state.draft?.[key] ?? '', 'number');
+  const degrees = h('span', { class: 'deg' }, degreesOf(state.draft?.[key]));
+  const row = h('div', { class: 'row pos-row scalar-row' }, h('span', { class: 'pos-label' }, label), angle.node, degrees);
+  const input = angle.input;
+  if (!input) { return row; }
+  input.step = '0.01'; input.placeholder = 'radians';
+  input.addEventListener('input', function () {
+    if (state.draft) { state.draft[key] = written(angle.value); }
+    degrees.textContent = degreesOf(angle.value);
     capturePending();
     render();
-  }
-  rotationInput.addEventListener('input', changed);
-  scaleInput.addEventListener('input', changed);
-  state.labelInputs = { rotation: rotationInput, degrees: degrees };
-  return [rotationRow, scaleRow];
+  });
+  state.angleInputs[key] = { input: input, degrees: degrees };
+  return row;
+}
+
+/** The size the game draws the name at, under its angle. */
+function scaleRow(): HTMLElement {
+  const scale = textInput(state.draft?.text_scale ?? '', 'number');
+  const row = h('div', { class: 'row pos-row scalar-row' }, h('span', { class: 'pos-label' }, 'Name Scale'), scale.node);
+  const input = scale.input;
+  if (!input) { return row; }
+  input.step = '0.01'; input.min = '0'; input.placeholder = 'scale';
+  input.addEventListener('input', function () {
+    if (state.draft) { state.draft.text_scale = written(scale.value); }
+    capturePending();
+    render();
+  });
+  return row;
 }
 
 function written(value: string): string | undefined {

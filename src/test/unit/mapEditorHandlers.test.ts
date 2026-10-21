@@ -99,9 +99,11 @@ const EMPTY_POSITIONS: ProvincePositions = {
   unit: undefined,
   city: undefined,
   factory: undefined,
+  building_construction: undefined,
   fort: undefined,
   railroad: undefined,
   naval_base: undefined,
+  naval_base_rotation: undefined,
 };
 
 function saveParams(section: SaveParams['section']): SaveParams {

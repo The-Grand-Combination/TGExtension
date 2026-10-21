@@ -1,8 +1,9 @@
-import type { PositionKind, PositionsSection, ProvincePositions, PositionPoint } from '../model/mapEditor.js';
+import type { PositionKind, PositionsSection, ProvincePositions, PositionPoint, PositionScalar } from '../model/mapEditor.js';
+import { POSITION_SCALARS } from '../model/mapEditor.js';
 import { render } from './canvas.js';
 import { ctx, mapArea, saveAllButton } from './dom.js';
 import { post } from './host.js';
-import { definitionById, COLOR_OF, locNameById, MARKER_MIN_SCALE, pendingPositions, POSITION_KIND_SPECS, state, type DecodedImage, type Draft, type Point } from './state.js';
+import { definitionById, COLOR_OF, locNameById, MARKER_MIN_SCALE, pendingPositions, POSITION_KIND_SPECS, state, type AngleKey, type DecodedImage, type Draft, type Point } from './state.js';
 
 /**
  * The points of map/positions.txt: the file's own, drawn small once the view is
@@ -10,9 +11,20 @@ import { definitionById, COLOR_OF, locNameById, MARKER_MIN_SCALE, pendingPositio
  * provinces moved and not yet written, which go out together on Save all.
  */
 
-/** What the map lets one grab: the province's points, and the grip that turns its name. */
-export type PositionHandle = PositionKind | 'text_rotation';
+/** What the map lets one grab: the province's points, and the grips that turn its name and its port. */
+export type PositionHandle = PositionKind | AngleKey;
 
+/** The point each angle turns around. */
+const ANGLE_ORIGIN: Readonly<Record<AngleKey, PositionKind>> = { text_rotation: 'text_position', naval_base_rotation: 'naval_base' };
+/**
+ * The way the port faces for the file's angle, in the map's own terms (radians
+ * counter-clockwise from east, the way the name's angle is kept). The game
+ * turns the port model clockwise from west: 0 faces west, π/2 faces south. The
+ * mapping is its own inverse, so it also turns a facing back into the angle.
+ */
+function portFacing(angle: number): number {
+  return Math.PI - angle;
+}
 /**
  * Map pixels of letter height a `text_scale` unit buys. The game sizes the name
  * by the scale alone — a long name is drawn longer, not smaller, so NCE's
@@ -82,7 +94,40 @@ function drawFileMarkers(
     if (px < left - 1 || px > right || py < top - 1 || py > bottom) { continue; }
     ctx.fillStyle = COLOR_OF[marker.kind] ?? '#fff';
     ctx.fillRect(px, py, 1, 1);
+    if (marker.kind === 'naval_base') { drawPointer(px + 0.5, py + 0.5, marker.rotation ?? 0, 1); }
   }
+}
+
+/**
+ * The port's pointer: a triangle beside the dot, its base as wide as the dot
+ * and half a dot away, the tip pointing the way `building_rotation` turns the
+ * port. The angle is counter-clockwise in map coordinates, where y goes up, so
+ * it is turned back on the canvas.
+ */
+function drawPointer(cx: number, cy: number, angle: number, size: number): void {
+  const dx = Math.cos(portFacing(angle));
+  const dy = -Math.sin(portFacing(angle));
+  const base = size;
+  const tip = size * 2;
+  const half = size / 2;
+  ctx.beginPath();
+  ctx.moveTo(cx + dx * tip, cy + dy * tip);
+  ctx.lineTo(cx + dx * base - dy * half, cy + dy * base + dx * half);
+  ctx.lineTo(cx + dx * base + dy * half, cy + dy * base - dx * half);
+  ctx.closePath();
+  ctx.fill();
+}
+
+/** The pointer with a white rim, for the province being edited. */
+function drawRimmedPointer(cx: number, cy: number, angle: number, size: number, rim: number): void {
+  ctx.fillStyle = '#fff';
+  ctx.lineWidth = rim * 2;
+  ctx.strokeStyle = '#fff';
+  ctx.lineJoin = 'round';
+  drawPointer(cx, cy, angle, size);
+  ctx.stroke();
+  ctx.fillStyle = COLOR_OF.naval_base ?? '#fff';
+  drawPointer(cx, cy, angle, size);
 }
 
 /** The names as map/positions.txt has them, for every province the page is not holding an edit of. */
@@ -119,6 +164,9 @@ function drawPendingMarkers(currentImage: DecodedImage, size: number): void {
       if (!isFinite(x) || !isFinite(y)) { continue; }
       ctx.fillStyle = spec.color;
       ctx.fillRect(Math.floor(x), Math.floor(currentImage.height - y), size, size);
+      if (spec.kind === 'naval_base') {
+        drawPointer(Math.floor(x) + size / 2, Math.floor(currentImage.height - y) + size / 2, draftNumber(points.naval_base_rotation) ?? 0, size);
+      }
     }
   }
 }
@@ -153,7 +201,16 @@ function drawDraftMarkers(currentImage: DecodedImage, size: number): void {
     ctx.fillRect(x - rim, y - rim, size + 2 * rim, size + 2 * rim);
     ctx.fillStyle = spec.color;
     ctx.fillRect(x, y, size, size);
+    if (spec.kind === 'naval_base') {
+      drawRimmedPointer(x + size / 2, y + size / 2, draftNumber(state.draft.naval_base_rotation) ?? 0, size, rim);
+    }
   }
+}
+
+/** The middle of the pointer: grabbing it swings the pointer, and the angle, around the dot. */
+function portGrip(cx: number, cy: number, angle: number, size: number): Point {
+  const reach = size * 1.5;
+  return { x: cx + reach * Math.cos(portFacing(angle)), y: cy - reach * Math.sin(portFacing(angle)) };
 }
 
 /**
@@ -279,6 +336,7 @@ export function editableHere(kind: PositionKind, isSea: boolean): boolean {
 /** What the tooltip calls a handle. */
 export function handleLabel(handle: PositionHandle): string {
   if (handle === 'text_rotation') { return 'Name rotation'; }
+  if (handle === 'naval_base_rotation') { return 'Port rotation'; }
   return POSITION_KIND_SPECS.find(function (spec) { return spec.kind === handle; })?.label ?? handle;
 }
 
@@ -301,13 +359,12 @@ export function clonePoints(points: Draft | null | undefined): Draft {
     const point = points?.[spec.kind];
     out[spec.kind] = point ? { x: point.x, y: point.y } : undefined;
   }
-  out.text_rotation = points?.text_rotation;
-  out.text_scale = points?.text_scale;
+  for (const scalar of POSITION_SCALARS) { out[scalar] = points?.[scalar]; }
   return out;
 }
 
 function samePoints(one: Draft | null, other: Draft | null): boolean {
-  if (one?.text_rotation !== other?.text_rotation || one?.text_scale !== other?.text_scale) { return false; }
+  if (POSITION_SCALARS.some(function (scalar) { return one?.[scalar] !== other?.[scalar]; })) { return false; }
   return POSITION_KIND_SPECS.every(function (spec) {
     const a = one?.[spec.kind];
     const b = other?.[spec.kind];
@@ -349,14 +406,19 @@ export function sendPending(): void {
 
 /** A draft as a full positions record: every kind present, unset ones undefined. */
 export function asPositions(points: Draft): ProvincePositions {
-  const out = {} as Record<PositionKind, PositionPoint | undefined>;
+  const out = {} as Record<PositionKind, PositionPoint | undefined> & Record<PositionScalar, string | undefined>;
   for (const spec of POSITION_KIND_SPECS) { out[spec.kind] = points[spec.kind]; }
-  return { ...out, text_rotation: points.text_rotation, text_scale: points.text_scale };
+  for (const scalar of POSITION_SCALARS) { out[scalar] = points[scalar]; }
+  return out;
 }
 
 /** The draft's point of a kind as numbers, or null when unset or not numeric. */
-export function draftPoint(kind: PositionKind): { x: number; y: number } | null {
-  const point = state.draft?.[kind];
+export function draftPoint(kind: PositionKind): Point | null {
+  return numericPoint(state.draft?.[kind]);
+}
+
+/** A written point as numbers, or null when unset or not numeric. */
+function numericPoint(point: PositionPoint | undefined): Point | null {
   if (!point) { return null; }
   const x = Number(point.x);
   const y = Number(point.y);
@@ -374,39 +436,58 @@ export function markerAt(clientX: number, clientY: number): PositionHandle | nul
   const py = clientY - rect.top;
   let best: PositionHandle | null = null;
   let bestDistance = Math.max(6, view.scale / 2 + 2);
+  const isSea = state.details?.isSea === true;
   for (const spec of POSITION_KIND_SPECS) {
-    if (!editableHere(spec.kind, state.details?.isSea === true)) { continue; }
-    const point = draftPoint(spec.kind);
-    if (!point) { continue; }
-    const sx = view.x + (Math.floor(point.x) + 0.5) * view.scale;
-    const sy = view.y + (Math.floor(currentImage.height - point.y) + 0.5) * view.scale;
-    const distance = Math.hypot(sx - px, sy - py);
+    const distance = editableHere(spec.kind, isSea) ? dotDistance(spec.kind, currentImage, px, py) : Infinity;
     if (distance <= bestDistance) { best = spec.kind; bestDistance = distance; }
   }
   const layout = state.showTextLabels ? labelLayout() : null;
-  if (layout) {
-    const grip = labelGrip(layout);
-    const distance = Math.hypot(view.x + (grip.x + 0.5) * view.scale - px, view.y + (grip.y + 0.5) * view.scale - py);
-    if (distance <= bestDistance) { best = 'text_rotation'; }
-  }
+  const labelDistance = layout ? gripDistance(labelGrip(layout), px, py) : Infinity;
+  if (labelDistance <= bestDistance) { best = 'text_rotation'; bestDistance = labelDistance; }
+  const port = editableHere('naval_base', isSea) ? draftPortGrip(currentImage) : null;
+  if (port && gripDistance(port, px, py) <= bestDistance) { best = 'naval_base_rotation'; }
   return best;
 }
 
-/** Move a handle to a map place (x right, y up from the bottom): a point goes there, the grip turns the name. */
+/** Screen pixels from the pointer to the draft's dot of a kind; none, infinitely far. */
+function dotDistance(kind: PositionKind, currentImage: DecodedImage, px: number, py: number): number {
+  const point = draftPoint(kind);
+  return point ? gripDistance({ x: Math.floor(point.x), y: Math.floor(currentImage.height - point.y) }, px, py) : Infinity;
+}
+
+/** Screen pixels from the pointer to a grip drawn at a map place. */
+function gripDistance(grip: Point, px: number, py: number): number {
+  const view = state.view;
+  return Math.hypot(view.x + (grip.x + 0.5) * view.scale - px, view.y + (grip.y + 0.5) * view.scale - py);
+}
+
+/** Where the selected province's port grip is drawn, or null when it has no port. */
+function draftPortGrip(currentImage: DecodedImage): Point | null {
+  const port = draftPoint('naval_base');
+  if (!port) { return null; }
+  const size = Math.max(1, 3 / state.view.scale);
+  const grip = portGrip(Math.floor(port.x) + size / 2, Math.floor(currentImage.height - port.y) + size / 2, draftNumber(state.draft?.naval_base_rotation) ?? 0, size);
+  // The grip is measured from a pixel's corner like the dots; the half-pixel the distance adds is taken off here.
+  return { x: grip.x - 0.5, y: grip.y - 0.5 };
+}
+
+/** Move a handle to a map place (x right, y up from the bottom): a point goes there, a grip turns what it belongs to. */
 export function moveHandle(handle: PositionHandle, x: number, y: number): void {
-  if (handle === 'text_rotation') { setDraftRotation(x, y); return; }
+  if (handle === 'text_rotation' || handle === 'naval_base_rotation') { setDraftAngle(handle, x, y); return; }
   setDraftPoint(handle, x, y);
 }
 
-/** Turn the name towards a map place: the angle from its own point, in the radians the file keeps. */
-function setDraftRotation(x: number, y: number): void {
-  const point = draftPoint('text_position');
+/** Turn the name or the port towards a map place: the angle from its own point, in the radians the file keeps. */
+function setDraftAngle(key: AngleKey, x: number, y: number): void {
+  const point = draftPoint(ANGLE_ORIGIN[key]);
   if (!state.draft || !point) { return; }
-  const angle = Math.atan2(y - point.y, x - point.x);
-  const text = (angle < 0 ? angle + 2 * Math.PI : angle).toFixed(6);
-  state.draft.text_rotation = text;
-  const inputs = state.labelInputs;
-  if (inputs) { inputs.rotation.value = text; inputs.degrees.textContent = degreesOf(text); }
+  const facing = Math.atan2(y - point.y, x - point.x);
+  const angle = key === 'naval_base_rotation' ? portFacing(facing) : facing;
+  const turn = 2 * Math.PI;
+  const text = (((angle % turn) + turn) % turn).toFixed(6);
+  state.draft[key] = text;
+  const inputs = state.angleInputs[key];
+  if (inputs) { inputs.input.value = text; inputs.degrees.textContent = degreesOf(text); }
   capturePending();
   render();
 }
@@ -432,10 +513,11 @@ export function replaceMarkers(id: number, positions: PositionsSection | undefin
   const data = positions?.data;
   if (!data) { return; }
   for (const spec of POSITION_KIND_SPECS) {
-    const point = data[spec.kind];
-    const x = point ? Number(point.x) : NaN;
-    const y = point ? Number(point.y) : NaN;
-    if (isFinite(x) && isFinite(y)) { state.markers.push({ id: id, kind: spec.kind, x: x, y: y }); }
+    const point = numericPoint(data[spec.kind]);
+    if (!point) { continue; }
+    state.markers.push(spec.kind === 'naval_base'
+      ? { id: id, kind: spec.kind, x: point.x, y: point.y, rotation: draftNumber(data.naval_base_rotation) ?? 0 }
+      : { id: id, kind: spec.kind, x: point.x, y: point.y });
   }
   const named = data.text_position;
   const x = named ? Number(named.x) : NaN;

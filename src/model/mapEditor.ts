@@ -197,14 +197,18 @@ export interface PopsSection {
 }
 
 /**
- * The `map/positions.txt` points the editor moves: the four top-level
+ * The `map/positions.txt` points the editor moves: the five top-level
  * `<kind> = { x y }` blocks and the three inside `building_position`. The
- * order is the order of the file, of the panel's rows and of the map legend.
+ * order is the order of the panel's rows and of the map legend.
  */
-export type PositionKind = 'text_position' | 'unit' | 'city' | 'factory' | 'fort' | 'railroad' | 'naval_base';
-export const POSITION_KINDS: readonly PositionKind[] = ['text_position', 'unit', 'city', 'factory', 'fort', 'railroad', 'naval_base'];
+export type PositionKind = 'text_position' | 'unit' | 'city' | 'factory' | 'building_construction' | 'fort' | 'railroad' | 'naval_base';
+export const POSITION_KINDS: readonly PositionKind[] = ['text_position', 'unit', 'city', 'factory', 'building_construction', 'fort', 'railroad', 'naval_base'];
 /** The kinds that sit inside `building_position = { ... }` rather than at the top of the province block. */
 export const BUILDING_POSITION_KINDS: readonly PositionKind[] = ['fort', 'railroad', 'naval_base'];
+
+/** The single values of a block the editor writes, besides the points. */
+export type PositionScalar = 'text_rotation' | 'text_scale' | 'naval_base_rotation';
+export const POSITION_SCALARS: readonly PositionScalar[] = ['text_rotation', 'text_scale', 'naval_base_rotation'];
 
 /** Coordinates as written in the file; `y` counts from the bottom of the map. */
 export interface PositionPoint {
@@ -218,6 +222,8 @@ export interface ProvincePositions extends Readonly<Record<PositionKind, Positio
   readonly text_rotation: string | undefined;
   /** `text_scale`: the multiplier on the name's size, as written. */
   readonly text_scale: string | undefined;
+  /** `building_rotation = { naval_base = ... }`: the angle in radians the port model is turned by, as written. */
+  readonly naval_base_rotation: string | undefined;
 }
 
 export interface PositionsSection {
@@ -232,6 +238,8 @@ export interface PositionMarker {
   readonly kind: PositionKind;
   readonly x: number;
   readonly y: number;
+  /** A `naval_base` point's `building_rotation`, in radians counter-clockwise; 0 when the block has none. */
+  readonly rotation?: number;
 }
 
 /** Where the game draws one province's name, for the map to draw it too. */

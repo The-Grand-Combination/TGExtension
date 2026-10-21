@@ -6,6 +6,7 @@ import type {
   PositionKind,
   PositionMarker,
   PositionPoint,
+  PositionScalar,
   ProvinceDefinition,
   ProvinceLabel,
   ProvinceDetails,
@@ -75,11 +76,11 @@ export interface Point {
   readonly y: number;
 }
 
-/** A province's points as the form holds them, with the name's angle and size; an absent kind has no block. */
-export type Draft = Partial<Record<PositionKind, PositionPoint | undefined>> & {
-  text_rotation?: string | undefined;
-  text_scale?: string | undefined;
-};
+/** A province's points as the form holds them, with the name's angle and size and the port's angle; an absent kind has no block. */
+export type Draft = Partial<Record<PositionKind, PositionPoint | undefined>> & Partial<Record<PositionScalar, string | undefined>>;
+
+/** The angles the map turns with a grip: the name's and the port's. */
+export type AngleKey = 'text_rotation' | 'naval_base_rotation';
 
 export interface View {
   scale: number;
@@ -128,6 +129,7 @@ export const POSITION_KIND_SPECS: readonly PositionKindSpec[] = [
   { kind: 'unit', label: 'Unit', color: '#ff3b30' },
   { kind: 'city', label: 'City', color: '#ffd60a' },
   { kind: 'factory', label: 'Factory', color: '#ff9f0a' },
+  { kind: 'building_construction', label: 'Construction', color: '#c9a27e' },
   { kind: 'fort', label: 'Fort', color: '#30d158' },
   { kind: 'railroad', label: 'Railroad', color: '#0a84ff' },
   { kind: 'naval_base', label: 'Naval base', color: '#bf5af2' },
@@ -161,8 +163,8 @@ export interface State {
   draftBaseline: Draft | null;
   /** Kind -> the Positions tab inputs, kept in step with a drag. */
   positionInputs: Partial<Record<PositionKind, { x: HTMLInputElement; y: HTMLInputElement }>>;
-  /** The Positions tab's rotation field and the degrees beside it, so turning the name on the map shows there too. */
-  labelInputs: { rotation: HTMLInputElement; degrees: HTMLElement } | null;
+  /** Angle -> the Positions tab's field and the degrees beside it, so turning the name or the port on the map shows there too. */
+  angleInputs: Partial<Record<AngleKey, { input: HTMLInputElement; degrees: HTMLElement }>>;
   showPositions: boolean;
   /** The Text Positions switch: with it off no name is drawn, not even the selected province's. */
   showTextLabels: boolean;
@@ -204,7 +206,7 @@ export const state: State = {
   draft: null,
   draftBaseline: null,
   positionInputs: {},
-  labelInputs: null,
+  angleInputs: {},
   showPositions: true,
   showTextLabels: true,
   tintMode: null,

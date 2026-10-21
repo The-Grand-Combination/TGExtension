@@ -18,9 +18,10 @@ a province shows and edits five things about it:
    them, are kept as they are.
 5. **Positions** — the `<id> = { ... }` block of `map/positions.txt`: where the game draws the
    province's name (`text_position`, with the `text_rotation` and `text_scale` it draws it by), its
-   `unit`, `city` and `factory`, and the `fort`, `railroad` and `naval_base` inside
-   `building_position`. `y` counts from the bottom of the map. The other entries of the block
-   (construction points, `building_rotation`, ...) are kept as they are.
+   `unit`, `city`, `factory` and `building_construction`, the `fort`, `railroad` and `naval_base`
+   inside `building_position`, and the port's angle inside `building_rotation`. `y` counts from the
+   bottom of the map. The other entries of the block (`military_construction`,
+   `spawn_railway_track`, ...) are kept as they are.
 
 The first three are one tab with **one Save** at the bottom of it: the name, the climate, the states
 and the history file are what a province *is*, and they are written together. Pops and Positions are
@@ -44,7 +45,12 @@ any zoom and whatever the Positions layer switch says, with a white rim around t
 coordinate moves the dot, dragging a dot fills in the coordinates, and the target button on a row
 drops the point near the province's centre of mass — scattered a little, more in a big province, so
 points dropped one after another do not pile up on one pixel, and moved to the nearest pixel the
-province owns, so a crescent-shaped one does not send it to a neighbour. Nothing is written until **Save**; **Cancel**,
+province owns, so a crescent-shaped one does not send it to a neighbour. The **Naval base** dot has a
+triangle beside it, as wide as the dot, pointing the way `building_rotation` turns the port model
+(the game turns the model clockwise from west: 0 faces west, π/2 south; the name's angle runs the
+other way, counter-clockwise from east, and the page converts between the two); the dot is dragged to move the port, and for the
+selected province the triangle is dragged to turn it: it swings around the dot and writes the angle,
+which the **Port Rotation** row under the Naval base row holds in radians with the degrees beside it. Nothing is written until **Save**; **Cancel**,
 next to every Save, puts the whole form back as the file has it.
 
 With the **Text Positions** switch on, every province's **name** is drawn from its **Name** point,
@@ -521,10 +527,11 @@ mod's own code page — see [encoding.md](encoding.md).
   province has a block of its own.
 - **Positions** (`services/provincePositionsEdit.ts`): a moved point rewrites only the `x` / `y`
   values that differ (compared as numbers, written with the game's six decimals); `text_rotation`
-  (six decimals) and `text_scale` (two) are patched the same way, as single values; a cleared point
-  or value loses its lines and the blank line after them; a new point is added before the closing brace of
-  the province block, inside `building_position` for the building kinds (created when missing, and
-  removed when its last point goes and nothing else is in it). Both the TGC layout
+  (six decimals), `text_scale` (two) and the port's `building_rotation` (six) are patched the same
+  way, as single values; a cleared point or value loses its lines and the blank line after them; a new
+  point is added before the closing brace of the province block, inside `building_position` for the
+  building kinds, and the port's angle inside `building_rotation` (each created when missing, and
+  removed when its last entry goes and nothing else is in it). Both the TGC layout
   (`x = 643.710000`, four-space indent) and the game's (`x=711.000000`, braces on their own lines,
   tabs) are patched in place. Without a block for the province, one is appended to the file.
 

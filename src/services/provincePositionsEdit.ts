@@ -21,27 +21,30 @@ import {
 
 /**
  * `map/positions.txt`: one `<province id> = { ... }` block per province holding
- * where the game draws things. The editor moves `text_position`, `unit`, `city`
- * and `factory` (`<kind> = { x y }` at the top of the block) and `fort`,
- * `railroad` and `naval_base` inside `building_position = { ... }`, and writes
- * the name's `text_rotation` and `text_scale`. Everything else in a block
- * (construction points, `building_rotation`, ...) is kept as written.
+ * where the game draws things. The editor moves `text_position`, `unit`, `city`,
+ * `factory` and `building_construction` (`<kind> = { x y }` at the top of the
+ * block) and `fort`, `railroad` and `naval_base` inside `building_position = { ... }`,
+ * and writes the name's `text_rotation` and `text_scale` and the port's angle
+ * inside `building_rotation = { ... }`. Everything else in a block
+ * (`military_construction`, `spawn_railway_track`, ...) is kept as written.
  * `y` counts from the bottom of the map.
  */
 
 const BUILDING_POSITION = 'building_position';
+const BUILDING_ROTATION = 'building_rotation';
+const NAVAL_BASE = 'naval_base';
 const COORDINATE_DECIMALS = 6;
+const ANGLE_DECIMALS = 6;
 const TOP_KINDS: readonly PositionKind[] = POSITION_KINDS.filter((kind) => !BUILDING_POSITION_KINDS.includes(kind));
 /** The name's scalars, each with the decimals the game writes it with. */
-const TEXT_SCALARS: readonly (readonly [PositionScalar, number])[] = [['text_rotation', 6], ['text_scale', 2]];
-
-type PositionScalar = 'text_rotation' | 'text_scale';
+const TEXT_SCALARS: readonly (readonly ['text_rotation' | 'text_scale', number])[] = [['text_rotation', ANGLE_DECIMALS], ['text_scale', 2]];
 
 const EMPTY_POINTS: Readonly<Record<PositionKind, PositionPoint | undefined>> = {
   text_position: undefined,
   unit: undefined,
   city: undefined,
   factory: undefined,
+  building_construction: undefined,
   fort: undefined,
   railroad: undefined,
   naval_base: undefined,
@@ -51,6 +54,7 @@ export const EMPTY_PROVINCE_POSITIONS: ProvincePositions = {
   ...EMPTY_POINTS,
   text_rotation: undefined,
   text_scale: undefined,
+  naval_base_rotation: undefined,
 };
 
 /** The top-level `<id> = { ... }` assignment of a province, if the file has one. */
@@ -66,10 +70,12 @@ export function parseProvincePositions(block: Block): ProvincePositions {
     const container = BUILDING_POSITION_KINDS.includes(kind) ? buildings : block;
     positions[kind] = container ? pointOf(container, kind) : undefined;
   }
+  const rotations = blockOf(block, BUILDING_ROTATION);
   return {
     ...positions,
     text_rotation: scalarValueOf(block.entries, 'text_rotation'),
     text_scale: scalarValueOf(block.entries, 'text_scale'),
+    naval_base_rotation: rotations ? scalarValueOf(rotations.entries, NAVAL_BASE) : undefined,
   };
 }
 
@@ -93,7 +99,7 @@ export function positionMarkersOf(document: Document): PositionMarker[] {
       const x = point === undefined ? Number.NaN : Number(point.x);
       const y = point === undefined ? Number.NaN : Number(point.y);
       if (Number.isFinite(x) && Number.isFinite(y)) {
-        markers.push({ id, kind, x, y });
+        markers.push(kind === NAVAL_BASE ? { id, kind, x, y, rotation: numberOr(positions.naval_base_rotation, 0) } : { id, kind, x, y });
       }
     }
   }
@@ -172,7 +178,7 @@ export function renderPositionsBlock(
       body.push(...scalarLines(positions));
     }
   }
-  body.push(...buildingLines(positions, unit));
+  body.push(...buildingLines(positions, unit), ...rotationLines(positions, unit));
   const lines = [`${String(provinceId)} = {`, ...body.map((line) => unit + line), '}'];
   return lines.map((line) => indent + line).join(eol);
 }
@@ -213,6 +219,7 @@ export function planPositionsEdit(
     patchScalar(text, block, key, after[key], decimals, patches, additions);
   }
   additions.push(...patchBuildings(text, block, after, unit, eol, patches));
+  additions.push(...patchRotation(text, block, after.naval_base_rotation, unit, eol, patches));
   if (additions.length > 0) {
     patches.push(insertIntoBlock(text, block, additions, unit, eol));
   }
@@ -254,6 +261,40 @@ function patchBuildings(
   }
   if (additions.length > 0) {
     patches.push(insertIntoBlock(text, buildings, additions, unit, eol));
+  }
+  return [];
+}
+
+/**
+ * The port's angle lives in `building_rotation`, one level down like the
+ * building points. Returns lines to add to the province block when it has no
+ * `building_rotation` yet; an existing one is patched in place, or removed
+ * whole when the angle is cleared and nothing else is inside.
+ */
+function patchRotation(
+  text: string,
+  block: Block,
+  wanted: string | undefined,
+  unit: string,
+  eol: string,
+  patches: TextPatch[],
+): string[] {
+  const entry = firstByKey(block.entries, BUILDING_ROTATION);
+  const rotations = entry?.value.kind === 'block' ? entry.value : undefined;
+  if (!entry || !rotations) {
+    return rotationLines({ naval_base_rotation: wanted }, unit);
+  }
+  const onlyPort = rotations.entries.every((item) => item.kind === 'assignment' && item.key.value.toLowerCase() === NAVAL_BASE);
+  if ((wanted?.trim() ?? '') === '' && onlyPort) {
+    if (rotations.entries.length > 0) {
+      patches.push(deleteEntryPatch(text, entry.range));
+    }
+    return [];
+  }
+  const additions: string[] = [];
+  patchScalar(text, rotations, NAVAL_BASE, wanted, ANGLE_DECIMALS, patches, additions);
+  if (additions.length > 0) {
+    patches.push(insertIntoBlock(text, rotations, additions, unit, eol));
   }
   return [];
 }
@@ -302,14 +343,14 @@ function patchPoint(
 }
 
 /**
- * Make the province block's `text_rotation` / `text_scale` match `wanted`: a
- * value that differs is rewritten, a cleared one loses its line, and one the
- * block lacks is rendered into `additions` for the caller to place.
+ * Make the block's `<key> = <number>` match `wanted`: a value that differs is
+ * rewritten, a cleared one loses its line, and one the block lacks is rendered
+ * into `additions` for the caller to place.
  */
 function patchScalar(
   text: string,
   block: Block,
-  key: PositionScalar,
+  key: string,
   wanted: string | undefined,
   decimals: number,
   patches: TextPatch[],
@@ -355,6 +396,12 @@ function buildingLines(positions: ProvincePositions, unit: string): string[] {
     }
   }
   return inner.length === 0 ? [] : [`${BUILDING_POSITION} = {`, ...inner, '}'];
+}
+
+/** `building_rotation = { naval_base = ... }` lines when the port has an angle; none when it has none. */
+function rotationLines(positions: Pick<ProvincePositions, 'naval_base_rotation'>, unit: string): string[] {
+  const value = positions.naval_base_rotation?.trim() ?? '';
+  return value === '' ? [] : [`${BUILDING_ROTATION} = {`, `${unit}${NAVAL_BASE} = ${formatNumber(value, ANGLE_DECIMALS)}`, '}'];
 }
 
 function pointLines(kind: PositionKind, point: PositionPoint, unit: string): string[] {

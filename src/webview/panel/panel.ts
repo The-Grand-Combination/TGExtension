@@ -1,4 +1,4 @@
-import type { FileRef, HistoryEdit, MapEditorMap, PageSaveParams, PopsEdit, ProvinceDetails, SaveResult, SaveSection } from '../../model/mapEditor.js';
+import { POSITION_SCALARS, type FileRef, type HistoryEdit, type MapEditorMap, type PageSaveParams, type PopsEdit, type ProvinceDetails, type SaveResult, type SaveSection } from '../../model/mapEditor.js';
 import { render } from '../canvas.js';
 import { h, setStatus, side, sideDock } from '../dom.js';
 import { lock, type Field } from '../fields.js';
@@ -140,8 +140,7 @@ function resetDraft(current: ProvinceDetails): void {
     const point = current.positions.data?.[spec.kind];
     fresh[spec.kind] = point ? { x: point.x, y: point.y } : undefined;
   }
-  fresh.text_rotation = current.positions.data?.text_rotation;
-  fresh.text_scale = current.positions.data?.text_scale;
+  for (const scalar of POSITION_SCALARS) { fresh[scalar] = current.positions.data?.[scalar]; }
   state.draft = fresh;
   state.draftBaseline = clonePoints(fresh);
   const held = pendingPositions.get(current.id);

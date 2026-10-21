@@ -99,9 +99,11 @@ suite('provincePositionsEdit', () => {
       unit: { x: '633.650000', y: '2502.135000' },
       city: { x: '650.975000', y: '2472.840000' },
       factory: { x: '649.820000', y: '2478.195000' },
+      building_construction: undefined,
       fort: { x: '642.240000', y: '2478.073333' },
       railroad: undefined,
       naval_base: { x: '654.326667', y: '2463.536667' },
+      naval_base_rotation: '5.704918',
     });
     assert.deepStrictEqual(positionsOf(FILE, 2), { ...EMPTY_PROVINCE_POSITIONS, unit: { x: '664.687500', y: '2518.958334' } });
     assert.deepStrictEqual(positionsOf(FILE, 2985), EMPTY_PROVINCE_POSITIONS);
@@ -126,6 +128,34 @@ suite('provincePositionsEdit', () => {
         [2, 'unit', 664.6875, 2518.958334],
       ],
     );
+    // Only the port carries an angle: the triangle on the map points the way the file turns it.
+    assert.deepStrictEqual(markers.map((marker) => marker.rotation), [undefined, undefined, undefined, undefined, undefined, 5.704918, undefined]);
+  });
+
+  test('the construction site is a point like the others, at the top of the block', () => {
+    const withSite = FILE.replace('    factory = {', '    building_construction = {\r\n        x = 640.5\r\n        y = 2480\r\n    }\r\n\r\n    factory = {');
+    assert.deepStrictEqual(positionsOf(withSite, 1).building_construction, { x: '640.5', y: '2480' });
+    const moved = edit(withSite, 1, { ...positionsOf(withSite, 1), building_construction: { x: '641', y: '2480' } });
+    assert.strictEqual(moved, withSite.replace('x = 640.5', 'x = 641.000000'));
+    const added = edit(FILE, 2, { ...positionsOf(FILE, 2), building_construction: { x: '1', y: '2' } });
+    assert.ok(added.includes('    }\r\n\r\n    building_construction = {\r\n        x = 1.000000\r\n        y = 2.000000\r\n    }\r\n} # Kenai'), added);
+  });
+
+  test('the port\'s angle is rewritten, cleared with its block, and added with one', () => {
+    const before = positionsOf(FILE, 1);
+    const turned = edit(FILE, 1, { ...before, naval_base_rotation: '1.5' });
+    assert.strictEqual(turned, FILE.replace('naval_base = 5.704918', 'naval_base = 1.500000'));
+    assert.deepStrictEqual(planPositionsEdit(FILE, parseDocument(FILE).document, 1, { ...before, naval_base_rotation: '5.7049180' }), []);
+    const cleared = edit(FILE, 1, { ...before, naval_base_rotation: undefined });
+    assert.strictEqual(cleared, FILE.replace('    building_rotation = {\r\n        naval_base = 5.704918\r\n    }\r\n\r\n', ''));
+    const added = edit(FILE, 2, { ...positionsOf(FILE, 2), naval_base_rotation: '0.25' });
+    assert.ok(added.includes('    }\r\n\r\n    building_rotation = {\r\n        naval_base = 0.250000\r\n    }\r\n} # Kenai'), added);
+    // A block holding another building's angle keeps it, and the port's line joins or leaves it alone.
+    const withFort = FILE.replace('        naval_base = 5.704918', '        fort = 0.5\r\n        naval_base = 5.704918');
+    const kept = edit(withFort, 1, { ...positionsOf(withFort, 1), naval_base_rotation: undefined });
+    assert.ok(kept.includes('    building_rotation = {\r\n        fort = 0.5\r\n    }'), kept);
+    const joined = edit(withFort.replace('        naval_base = 5.704918\r\n', ''), 1, { ...before, naval_base_rotation: '2' });
+    assert.ok(joined.includes('    building_rotation = {\r\n        fort = 0.5\r\n        naval_base = 2.000000\r\n    }'), joined);
   });
 
   test('lists where each province name is drawn, filling in what the block leaves out', () => {
@@ -229,8 +259,8 @@ suite('provincePositionsEdit', () => {
   test('an empty one-line block is opened up, and a missing province is appended', () => {
     const opened = edit(FILE, 2985, { ...EMPTY_PROVINCE_POSITIONS, unit: { x: '10', y: '20' } });
     assert.ok(opened.includes('2985 = {\r\n    unit = {\r\n        x = 10.000000\r\n        y = 20.000000\r\n    }\r\n} # Todos Santos Bay'), opened);
-    const appended = edit(FILE, 4000, { ...EMPTY_PROVINCE_POSITIONS, naval_base: { x: '5', y: '6' } });
-    assert.ok(appended.endsWith('# Todos Santos Bay\r\n4000 = {\r\n    building_position = {\r\n        naval_base = {\r\n            x = 5.000000\r\n            y = 6.000000\r\n        }\r\n    }\r\n}\r\n'), appended);
+    const appended = edit(FILE, 4000, { ...EMPTY_PROVINCE_POSITIONS, naval_base: { x: '5', y: '6' }, naval_base_rotation: '3' });
+    assert.ok(appended.endsWith('# Todos Santos Bay\r\n4000 = {\r\n    building_position = {\r\n        naval_base = {\r\n            x = 5.000000\r\n            y = 6.000000\r\n        }\r\n    }\r\n    building_rotation = {\r\n        naval_base = 3.000000\r\n    }\r\n}\r\n'), appended);
     assert.strictEqual(renderPositionsFile(1, { ...EMPTY_PROVINCE_POSITIONS, unit: { x: '1', y: '2' } }), '1 = {\r\n\tunit = {\r\n\t\tx = 1.000000\r\n\t\ty = 2.000000\r\n\t}\r\n}\r\n');
   });
 
