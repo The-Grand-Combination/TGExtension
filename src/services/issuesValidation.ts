@@ -8,6 +8,7 @@ import {
   eachAssignment,
   modifierKeyNames,
   report,
+  reportKeysAnywhere,
   reportUnknownKey,
   walkBlockValue,
   walkEffectEntries,
@@ -16,8 +17,20 @@ import {
   type Walk,
 } from './validationWalker.js';
 
+/**
+ * Country modifiers have no place in issues.txt: the game does not apply or
+ * test them from a reform, wherever in the file they are written.
+ */
+const FORBIDDEN_COUNTRY_MODIFIER_KEYS: ReadonlySet<string> = new Set([
+  'add_country_modifier',
+  'remove_country_modifier',
+  'has_country_modifier',
+]);
+
 /** common/issues.txt — `<category> = { <class> = { <option> = { ... } } }`. */
 export function validateIssuesFile(walk: Walk, document: Document): void {
+  reportKeysAnywhere(walk, document.entries, FORBIDDEN_COUNTRY_MODIFIER_KEYS, 'issue-country-modifier',
+    (key) => `'${key}' cannot be used in issues.txt: country modifiers do not work in a reform.`);
   for (const category of blockKeysOf(document)) {
     const categoryBlock = asBlock(category.value);
     if (!categoryBlock) {

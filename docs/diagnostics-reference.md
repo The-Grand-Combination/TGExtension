@@ -112,6 +112,7 @@ codes below, the map CSVs and the cross-file duplicates alike. Being a comment, 
 | `unknown-government` | A rebel-type `government` map key/value isn't a known government. |
 | `unknown-on-action` | An `on_actions.txt` top-level key isn't one of the engine's fixed hooks (it would never fire). |
 | `unknown-issue-option-field` | An unrecognized field inside an `issues.txt` option body. |
+| `issue-country-modifier` | `add_country_modifier`, `remove_country_modifier` or `has_country_modifier` anywhere in `issues.txt`, at any depth: country modifiers do not work in a reform. Error. |
 | `unknown-rule` | An `issues.txt` option's `rules` block has a key outside the fixed 33 game-rule toggles. |
 | `unknown-country` | A `country_colors.txt` top-level key isn't a known TAG. |
 | `reserved-country-tag` | A `common/countries.txt` tag is one the engine reads as a keyword elsewhere (`RESERVED_COUNTRY_TAGS` in `data/commonStructure.ts`), so a country cannot claim it. |
@@ -128,6 +129,7 @@ codes below, the map CSVs and the cross-file duplicates alike. Being a comment, 
 | `unknown-trait-stat` | A `traits.txt` leader stat isn't one of the fixed stat names. |
 | `unknown-production-field` | An unrecognized field in a `production_types.txt` body. |
 | `unknown-pop-chance` | A `pop_types.txt` top-level key isn't one of the seven fixed chance names. |
+| `pop-chance-country-modifier` | `has_country_modifier` anywhere in `common/pop_types.txt`, at any depth: it crashes the game in the pop screen. Error. The `poptypes/` files are not affected. |
 | `unknown-party-field` | An unrecognized field in a country definition's `party` body. |
 | `unknown-unit` | A `unit_names` key isn't a known unit type. |
 | `unknown-country-def-field` | An unrecognized top-level field in `common/countries/<name>.txt`. |

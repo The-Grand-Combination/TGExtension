@@ -78,6 +78,23 @@ suite('common/ file validators — common/ files', () => {
     assert.ok(codes(badKey, 'issues', 'common/issues.txt').includes('unknown-field'));
   });
 
+  test('issues: country modifiers are errors anywhere in the file', () => {
+    const text = `political_reforms = { slavery = { no_slavery = {
+      allow = { has_country_modifier = corrupt_army }
+      on_execute = {
+        trigger = { has_country_modifier = corrupt_army }
+        effect = {
+          add_country_modifier = { name = corrupt_army duration = -1 }
+          any_owned_province = { owner = { remove_country_modifier = corrupt_army } }
+        }
+      }
+    } } }`;
+    const found = codes(text, 'issues', 'common/issues.txt').filter((code) => code === 'issue-country-modifier');
+    assert.strictEqual(found.length, 4);
+    const elsewhere = 'test_event = { option = { add_country_modifier = { name = corrupt_army duration = -1 } } }';
+    assert.ok(!codes(elsewhere, 'decision', 'decisions/Test.txt').includes('issue-country-modifier'));
+  });
+
   test('national_focus: limit is evaluated per province of the state', () => {
     const text = 'focus_group = { my_focus = { ideology = liberal limit = { port = yes } } }';
     assert.deepStrictEqual(codes(text, 'nationalFocus', 'common/national_focus.txt'), []);
@@ -151,6 +168,17 @@ suite('common/ file validators — common data files', () => {
   test('pop chances, bookmarks, and technology folders/schools', () => {
     assert.deepStrictEqual(codes('promotion_chance = { factor = 1 modifier = { factor = 2 literacy = 0.5 } }', 'popChances', 'common/pop_types.txt'), []);
     assert.ok(codes('promotion_chanse = { factor = 1 }', 'popChances', 'common/pop_types.txt').includes('unknown-pop-chance'));
+  });
+
+  test('pop_types: a has_country_modifier check is an error at any depth', () => {
+    const text = `promotion_chance = { factor = 1
+      modifier = { factor = 2 country = { has_country_modifier = corrupt_army } }
+      modifier = { factor = 0 NOT = { has_country_modifier = corrupt_army } }
+    }`;
+    const found = codes(text, 'popChances', 'common/pop_types.txt').filter((code) => code === 'pop-chance-country-modifier');
+    assert.strictEqual(found.length, 2);
+    const popType = 'issues = { slavery = { factor = 1 modifier = { factor = 2 country = { has_country_modifier = corrupt_army } } } }';
+    assert.ok(!codes(popType, 'popType', 'poptypes/farmers.txt').includes('pop-chance-country-modifier'));
     assert.deepStrictEqual(codes('bookmark = { name = "GC" date = 1836.1.1 }', 'bookmarks', 'common/bookmarks.txt'), []);
     assert.deepStrictEqual(codes('folders = { army_tech = { army_doctrine } navy_tech = { naval_doctrine } } schools = { s = { supply_limit = 1 } }', 'techFolders', 'common/technology.txt'), []);
     assert.ok(codes('schools = { s = { nope = 1 } }', 'techFolders', 'common/technology.txt').includes('unknown-modifier-key'));

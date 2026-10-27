@@ -120,6 +120,8 @@ Three levels of grouping: category → reform/issue class → option. Each optio
   (all numeric), `is_jingoism` (`yesno`).
 - Any remaining key that is a known modifier key → checked as numeric.
 - Anything else → `unknown-issue-option-field`.
+- `add_country_modifier`, `remove_country_modifier` or `has_country_modifier` anywhere in the file →
+  `issue-country-modifier` (error): country modifiers do not work in a reform.
 
 ## `country_colors.txt` (HoD) → `validateCountryColorsFile`
 
@@ -224,6 +226,8 @@ Only `bookmark` blocks are allowed at the top level; each holds `BOOKMARK_FIELDS
 Top-level keys must be one of the seven fixed `POP_CHANCE_KEYS` (`promotion_chance`,
 `demotion_chance`, `migration_chance`, `colonialmigration_chance`, `emigration_chance`,
 `assimilation_chance`, `conversion_chance`), each walked as a **pop-scope weight block**.
+`has_country_modifier` anywhere in the file → `pop-chance-country-modifier` (error): it crashes the
+game in the pop screen.
 
 ## `technology.txt` → `validateTechFoldersFile`
 

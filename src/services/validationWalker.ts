@@ -757,6 +757,28 @@ export function report(walk: Walk, at: Assignment, code: string, message: string
   walk.diagnostics.push(diagnostic('error', code, message, at.key.range));
 }
 
+/** Report every assignment whose key is in `keys`, at any depth under `entries`. */
+export function reportKeysAnywhere(
+  walk: Walk,
+  entries: readonly Entry[],
+  keys: ReadonlySet<string>,
+  code: string,
+  message: (key: string) => string,
+): void {
+  for (const entry of entries) {
+    if (entry.kind !== 'assignment') {
+      continue;
+    }
+    if (keys.has(entry.key.value.toLowerCase())) {
+      report(walk, entry, code, message(entry.key.value));
+    }
+    const block = asBlock(entry.value);
+    if (block) {
+      reportKeysAnywhere(walk, block.entries, keys, code, message);
+    }
+  }
+}
+
 /** Point at the value when there is one; a block has no single token to blame. */
 function valueRange(assignment: Assignment): Range {
   return assignment.value.kind === 'scalar' ? assignment.value.range : assignment.key.range;
