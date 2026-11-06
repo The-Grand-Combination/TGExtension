@@ -86,6 +86,9 @@ starts `v2game.exe` (or `victoria2.exe`) from the game root with one `-mod=mod/X
 in load order (`services/gameLaunch.ts`), detached from the editor. The pick is for that launch
 only; the working selection is not changed. The old extension did the same through a PowerShell
 terminal with `'-mod=…'` quoting that broke under other shells; spawning the process avoids that.
+The arguments go to the game unquoted, as the launcher writes them (`-mod=mod/GFM Grid Map.mod`):
+the game reads its raw command line, and the quotes Node would put around an argument with a space
+would end up in the path.
 
 **Full report** — **Generate Full Report** opens the same dialog as Launch Game (checkouts
 included) and reports on the ticked mods, one section each, every file validated against one stack

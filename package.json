@@ -2,7 +2,7 @@
   "name": "victorian-tools",
   "displayName": "Victorian Tools",
   "description": "Tooling for Victoria 2 mod files: a language server that parses Paradox script and validates it inline.",
-  "version": "5.4.1",
+  "version": "5.4.2",
   "publisher": "TGCModdingTeam",
   "private": true,
   "license": "MIT",
@@ -316,7 +316,9 @@
     "typescript-eslint": "^8.69.0"
   },
   "overrides": {
-    "mocha": "$mocha"
+    "mocha": "$mocha",
+    "minimatch@>=7 <11.0.1": "^11.0.5",
+    "glob@>=9 <14.0.2": "^14.0.4"
   },
   "dependencies": {
     "vscode-languageclient": "^10.1.1",

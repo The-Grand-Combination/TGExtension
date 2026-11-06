@@ -7,6 +7,7 @@ export const GAME_EXECUTABLES: readonly string[] = ['v2game.exe', 'victoria2.exe
 /**
  * The command line the launcher passes: one `-mod=mod/X.mod` per mod, the
  * descriptor path relative to the game root with forward slashes, in load order.
+ * A name with spaces stays unquoted, as the launcher writes it.
  */
 export function gameLaunchArguments(gameRoot: string, stack: readonly ModDescriptor[]): string[] {
   return stack.flatMap((mod) =>

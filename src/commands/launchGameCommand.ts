@@ -33,7 +33,17 @@ export function launchGameCommand(
     const stack = resolveSelection(outcome.mods, outcome.picked);
     const launchArguments = gameLaunchArguments(gameRoot, stack);
     try {
-      const child = spawn(executable, launchArguments, { cwd: gameRoot, detached: true, stdio: 'ignore' });
+      // The game reads its raw command line, as the launcher writes it: `-mod=mod/My Mod.mod`
+      // unquoted. Node would quote an argument holding a space, and the game would read the
+      // quote as part of the path, so the line is passed as it is; only the executable,
+      // whose folder has a space, is quoted.
+      const child = spawn(executable, launchArguments, {
+        cwd: gameRoot,
+        detached: true,
+        stdio: 'ignore',
+        windowsVerbatimArguments: true,
+        argv0: `"${executable}"`,
+      });
       child.unref();
     } catch (error: unknown) {
       const reason = error instanceof Error ? error.message : 'unknown error';

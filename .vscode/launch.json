@@ -7,10 +7,10 @@
       "request": "launch",
       "args": [
         "--disable-extensions",
-        "--extensionDevelopmentPath=${workspaceFolder:Victorian Tools V2}"
+        "--extensionDevelopmentPath=${workspaceFolder}"
       ],
       "outFiles": [
-        "${workspaceFolder:Victorian Tools V2}/dist/**/*.js"
+        "${workspaceFolder}/dist/**/*.js"
       ],
       "preLaunchTask": "watch"
     },
@@ -22,7 +22,7 @@
       "restart": true,
       "sourceMaps": true,
       "outFiles": [
-        "${workspaceFolder:Victorian Tools V2}/dist/**/*.js"
+        "${workspaceFolder}/dist/**/*.js"
       ]
     },
     {
@@ -30,12 +30,12 @@
       "type": "extensionHost",
       "request": "launch",
       "args": [
-        "--extensionDevelopmentPath=${workspaceFolder:Victorian Tools V2}",
-        "--extensionTestsPath=${workspaceFolder:Victorian Tools V2}/out/test/suite/index"
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "--extensionTestsPath=${workspaceFolder}/out/test/suite/index"
       ],
       "outFiles": [
-        "${workspaceFolder:Victorian Tools V2}/out/**/*.js",
-        "${workspaceFolder:Victorian Tools V2}/dist/**/*.js"
+        "${workspaceFolder}/out/**/*.js",
+        "${workspaceFolder}/dist/**/*.js"
       ],
       "preLaunchTask": "npm: watch-tests"
     }
