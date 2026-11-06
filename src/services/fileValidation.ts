@@ -3,6 +3,7 @@ import { CSV_FILE_TYPES, type FileType } from '../model/fileType.js';
 import type { ModIndex } from '../model/modIndex.js';
 import { DEFAULT_VALIDATION_OPTIONS, type ValidationOptions } from '../model/validationOptions.js';
 import { duplicateDiagnosticsFor } from './duplicateDiagnostics.js';
+import { validateDefinitionsPath } from './definitionsPathValidation.js';
 import { validateLocalisation } from './localisationValidation.js';
 import { validateMapCsv } from './mapCsvValidation.js';
 import { validateSemantics } from './semanticValidation.js';
@@ -25,16 +26,32 @@ export function validateFileText(
   return validateAnalyzed(analyze(text), fileType, index, relativePath, options);
 }
 
-/** `validateFileText` over a document already lexed. */
+/**
+ * `validateFileText` over a document already lexed. `modPath` is the `path` of
+ * the `.mod` descriptor owning the file (`mod/TGC`), undefined for a base-game
+ * file or one outside any mod.
+ */
 export function validateAnalyzed(
   analysis: AnalyzedDocument,
   fileType: FileType,
   index: ModIndex | undefined,
   relativePath: string | undefined,
   options: ValidationOptions = DEFAULT_VALIDATION_OPTIONS,
+  modPath?: string,
 ): Diagnostic[] {
-  const found = [...fileNameFindings(relativePath), ...findingsOf(analysis, fileType, index, relativePath, options)];
+  const found = [
+    ...fileNameFindings(relativePath),
+    ...findingsOf(analysis, fileType, index, relativePath, options),
+    ...modFolderFindings(analysis, fileType, modPath),
+  ];
   return dropIgnoredLines(analysis.text, found, options.ignoreMarker);
+}
+
+function modFolderFindings(analysis: AnalyzedDocument, fileType: FileType, modPath: string | undefined): Diagnostic[] {
+  if (fileType !== 'mapDefault' || modPath === undefined) {
+    return [];
+  }
+  return validateDefinitionsPath(analysis.parse().document, modPath);
 }
 
 /**

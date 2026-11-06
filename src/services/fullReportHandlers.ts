@@ -3,6 +3,7 @@ import type { FullReportParams, FullReportResult, ModReport } from '../model/ful
 import {
   COUNTRY_HISTORY_FOLDER,
   COUNTRY_LIST_FILE,
+  DEFAULT_MAP_FILE,
   DEFINES_FILE,
   FLAG_EXTENSION,
   FLAG_FOLDER,
@@ -19,6 +20,8 @@ import type { Diagnostic } from '../model/diagnostic.js';
 import type { ModIndex } from '../model/modIndex.js';
 import type { Range } from '../model/range.js';
 import type { ValidationOptions } from '../model/validationOptions.js';
+import { validateDefinitionsPath } from './definitionsPathValidation.js';
+import { analyze } from './documentAnalysis.js';
 import { auditEssentialTags } from './essentialTagsValidation.js';
 import { auditFlags } from './flagValidation.js';
 import { buildModReport, type ExtraFileFindings, type ReportFileProvider } from './fullReport.js';
@@ -114,6 +117,7 @@ async function crossFileFindings(
     ...(await greatPowerFindings(host, target, index, countries, provinceFiles, signal)),
     ...(await provinceHistoryFindings(host, target, index, provinceFiles, signal)),
     ...(await descriptorFindings(host, target)),
+    ...(await definitionsPathFindings(host, target)),
   ].filter((entry) => entry.diagnostics.length > 0);
 }
 
@@ -219,6 +223,21 @@ async function descriptorFindings(host: FullReportHost, target: FileLocation): P
       ],
     },
   ];
+}
+
+/** The mod's own default.map against its descriptor: `definitions` must name this mod's folder. */
+async function definitionsPathFindings(host: FullReportHost, target: FileLocation): Promise<ExtraFileFindings[]> {
+  const modPath = target.root === target.layers.gameRoot ? undefined : host.descriptorOf(target.root)?.path;
+  if (modPath === undefined) {
+    return [];
+  }
+  const absolutePath = path.join(target.root, DEFAULT_MAP_FILE);
+  const text = await host.readText(absolutePath);
+  if (text === undefined) {
+    return [];
+  }
+  const diagnostics = validateDefinitionsPath(analyze(text).parse().document, modPath);
+  return [{ path: DEFAULT_MAP_FILE, uri: host.fileUri(absolutePath), text, diagnostics }];
 }
 
 /** Whether a mod layer — never the game root — ships the file. */

@@ -29,7 +29,16 @@ The `province` identifier category itself comes from `definition.csv`, and `defa
 - `border_heights`, `terrain_sheet_heights` — lists of numbers.
 - File-name fields (`definitions`, `provinces`, `positions`, `terrain`, `rivers`,
   `terrain_definition`, `tree_definition`, `continent`, `adjacencies`, `region`, `region_sea`,
-  `province_flag_sprite`) — accepted unchecked (NCE discards them and uses fixed names).
+  `province_flag_sprite`) — accepted unchecked (NCE discards them and uses fixed names), except
+  `definitions` below.
+- `definitions` in a mod (`definitionsPathValidation.ts`). The original game resolves this one name
+  against its own `map/` folder, not through the mod's `path`, so a mod writes
+  `"../mod/<folder>/map/definition.csv"`, with `<folder>` from the `.mod` descriptor's `path`. Anything
+  else is `definitions-outside-mod` (error): a plain `"definition.csv"` loads the base game's
+  provinces, `"../mod/Other/..."` another mod's. The province table then misses this mod's provinces,
+  and the game crashes when a game starts (seen with a mod pointing at another mod's file: two
+  provinces past the other file's end). Needs the descriptor, so it runs in the editor for a file
+  under a mod with a `.mod` and in the Full Report; the base game's own `default.map` is not checked.
 - `tree`, `border_cutoff` — numbers.
 - Anything else → `unknown-field`.
 

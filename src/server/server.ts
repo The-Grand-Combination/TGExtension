@@ -663,8 +663,17 @@ function validate(document: TextDocument): void {
     modContext?.index,
     modContext?.relativePath,
     validationOptions(),
+    modPathOf(modContext),
   );
   void connection.sendDiagnostics({ uri: document.uri, diagnostics: toLspDiagnostics(findings, document) });
+}
+
+/** The descriptor `path` of the mod a file sits in; undefined for the base game or a folder without a `.mod`. */
+function modPathOf(modContext: ModContext | undefined): string | undefined {
+  if (modContext === undefined || modContext.root === layout.gameRoot) {
+    return undefined;
+  }
+  return layout.mods.find((mod) => mod.folder === modContext.root)?.path;
 }
 
 function trackRootless(uri: string, modContext: ModContext | undefined): void {

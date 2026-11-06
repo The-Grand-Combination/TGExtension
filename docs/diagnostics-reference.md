@@ -169,6 +169,7 @@ Shared codes reused here with map-specific messages: `unknown-field`, `unknown-m
 | Code | Severity | Meaning |
 |---|---|---|
 | `province-id-too-large` | error | A province id is at or above `default.map` `max_provinces`. |
+| `definitions-outside-mod` | error | A mod's `default.map` `definitions` does not name `../<the mod's path>/map/...`: the game reads it from its own `map/` folder, so a plain `definition.csv` loads the base game's provinces and another mod's folder loads that mod's (`definitionsPathValidation.ts`; editor and Full Report). |
 | `unknown-province` | error | A province id is not defined in `map/definition.csv`. |
 | `duplicate-province` | warning | The same id is listed twice in one state/continent/climate/`sea_starts`, or has two `positions.txt` blocks. |
 | `province-already-assigned` | warning | A province appears in two continents or two climates; the engine keeps the last. |
