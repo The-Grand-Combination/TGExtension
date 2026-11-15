@@ -59,6 +59,8 @@ accepts it, the extension does too.
 
 <img width="2560" height="1392" alt="image" src="https://github.com/user-attachments/assets/5eeedaa3-8023-4dea-9df1-5c9727230e8a" />
 
+Full map editor with drawing tools.
+
 Victorian Tools is built by
 [The Grand Combination](https://github.com/The-Grand-Combination) modding team
 and released under the MIT license.
