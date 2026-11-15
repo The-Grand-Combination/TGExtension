@@ -1,3 +1,7 @@
+
+
+https://github.com/user-attachments/assets/0a68a52d-f7db-4e2e-bcf5-20043d0c8d05
+
 # Victorian Tools
 
 **A language server for Victoria 2 modding.** Victorian Tools reads your mod the
@@ -57,7 +61,7 @@ accepts it, the extension does too.
 
 ## Map Editor
 
-<img width="2560" height="1392" alt="image" src="https://github.com/user-attachments/assets/5eeedaa3-8023-4dea-9df1-5c9727230e8a" />
+https://github.com/user-attachments/assets/d565160f-428e-402c-8fc7-bf8c1050d428
 
 Full map editor with drawing tools.
 
