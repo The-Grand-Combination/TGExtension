@@ -58,7 +58,7 @@ accepts it, the extension does too.
 ## Map Editor
 Full map editor with drawing tools with province editing:
 
-https://github.com/user-attachments/assets/d565160f-428e-402c-8fc7-bf8c1050d428
+https://github.com/user-attachments/assets/7daf7425-3a1c-4916-ac74-94dde72fd168
 
 Victorian Tools is built by
 [The Grand Combination](https://github.com/The-Grand-Combination) modding team
